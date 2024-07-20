@@ -1,0 +1,31 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#!import ..\dotenv.cs
+#!import ..\common.cs
+#r "nuget: Microsoft.SemanticKernel"
+#r "nuget: Microsoft.SemanticKernel.Abstractions"
+
+#r "nuget: Microsoft.Extensions.Logging"
+#r "nuget: Microsoft.Extensions.Logging.Console"
+#r "nuget: Microsoft.Extensions.Logging.Debug"
+
+var kernel = Common.GetKernel(enableLogging: false);
+
+#!csharp
+
+using Microsoft.SemanticKernel.ChatCompletion;
+var chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
+
+ChatHistory chatMessages = new();
+chatMessages.AddUserMessage("Hi what is your name?");
+chatMessages.AddAssistantMessage("I am an Assistant ai but you can call me Jarvis");
+chatMessages.AddUserMessage("My name is Gian Maria");
+chatMessages.AddAssistantMessage("Hi Gian Maria how can I help you?");
+chatMessages.AddUserMessage("Tell my name and repeat how can I call you!");
+
+var result = await chatCompletionService.GetChatMessageContentAsync(chatMessages);
+Console.WriteLine(result);
