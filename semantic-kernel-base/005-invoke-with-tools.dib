@@ -1,0 +1,109 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#!import ..\dotenv.cs
+#!import ..\common.cs
+
+#r "nuget: Microsoft.SemanticKernel"
+#r "nuget: Microsoft.SemanticKernel.Abstractions"
+#r "nuget: Microsoft.SemanticKernel.PromptTemplates.Handlebars"
+#r "nuget: Microsoft.Extensions.Logging"
+#r "nuget: Microsoft.Extensions.Logging.Console"
+#r "nuget: Microsoft.Extensions.Logging.Debug"
+
+#!csharp
+
+var kernel = Common.GetKernel(enableLogging: false);
+
+#!csharp
+
+using System.ComponentModel;
+
+// We are simply defining a function from a method that contains Description
+// for the entire functino and also for the parameters
+var function = KernelFunctionFactory.CreateFromMethod(
+    [Description("Calculate a formula that contains standard operators")](
+        [Description("The formula, something like 4 / (5 ^ 2)")] string formula
+    ) =>
+{
+    return $"Called with formula {formula}";
+}, "math_formula");
+
+#!csharp
+
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+var plugin = KernelPluginFactory.CreateFromFunctions("MyPlugin", [function]);
+var openAIFunction = plugin.GetFunctionsMetadata().First().ToOpenAIFunction();
+
+#!csharp
+
+  var chat = kernel.CreateFunctionFromPrompt(new PromptTemplateConfig()
+  {
+      Name = "Chat",
+      Description = "Chat with the assistant.",
+      Template = "{{$history}} User: {{$request}} Assistant: ",
+      TemplateFormat = "semantic-kernel",
+      InputVariables =
+      [
+          new() { Name = "history", Description = "The history of the conversation.", IsRequired = false, Default = "" },
+          new() { Name = "request", Description = "The user's request.", IsRequired = true }
+      ],
+      ExecutionSettings =
+      {
+          { "default", new OpenAIPromptExecutionSettings()
+              {
+                  MaxTokens = 1000,
+                  Temperature = 0,
+                  ModelId = "gpt4o",
+                  ToolCallBehavior = ToolCallBehavior.RequireFunction(openAIFunction, autoInvoke: false),
+              }
+          },
+      }
+  });
+
+#!csharp
+
+StringBuilder history = new();
+history.AppendLine("You are an assistant that help user to find answer and your name is Jarvis");
+KernelArguments ka = new();
+ka["history"] = history.ToString();
+ka["request"] = "Do you know the solution of (4 + 6) / 5?";
+var result = await kernel.InvokeAsync(chat, ka);
+
+#!csharp
+
+Console.WriteLine(result.GetValue<string>());
+
+#!csharp
+
+using Azure.AI.OpenAI;
+
+Console.WriteLine("Result: {0}", result.ValueType);
+var openaiMessageContent = result.GetValue<OpenAIChatMessageContent>();
+
+Console.WriteLine(openaiMessageContent.ToolCalls[0].Display());
+
+#!csharp
+
+Console.WriteLine("ModelId: {0}", openaiMessageContent.ModelId);
+var completionsUsage = openaiMessageContent.Metadata["Usage"] as CompletionsUsage;
+
+Console.WriteLine("PromptTokens: {0}", completionsUsage.PromptTokens);
+Console.WriteLine("CompletionTokens: {0}", completionsUsage.CompletionTokens);
+Console.WriteLine("TotalTokens: {0}", completionsUsage.TotalTokens);
+
+Console.WriteLine("FinishReason: {0}", openaiMessageContent.Metadata["FinishReason"]);
+
+#!csharp
+
+if (result is FunctionResult fre)
+{
+    var toolCall = openaiMessageContent.GetOpenAIFunctionToolCalls().Single();
+    Console.WriteLine(
+        "Function call: {0}({1})",
+        toolCall.FunctionName,
+        string.Join(',', toolCall.Arguments.Select(a => $"{a.Key}:'{a.Value}'")));
+}

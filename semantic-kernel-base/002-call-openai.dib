@@ -13,6 +13,9 @@
 #r "nuget: Microsoft.Extensions.Logging.Console"
 #r "nuget: Microsoft.Extensions.Logging.Debug"
 
+#!csharp
+
+// Configure and create the kernel with a common utility
 var kernel = Common.GetKernel(enableLogging: false);
 
 #!csharp

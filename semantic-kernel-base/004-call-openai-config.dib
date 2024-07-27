@@ -1,0 +1,97 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#!import ..\dotenv.cs
+#!import ..\common.cs
+
+#r "nuget: Microsoft.SemanticKernel"
+#r "nuget: Microsoft.SemanticKernel.Abstractions"
+#r "nuget: Microsoft.SemanticKernel.PromptTemplates.Handlebars"
+#r "nuget: Microsoft.Extensions.Logging"
+#r "nuget: Microsoft.Extensions.Logging.Console"
+#r "nuget: Microsoft.Extensions.Logging.Debug"
+
+#!csharp
+
+var kernel = Common.GetKernel(enableLogging: false);
+
+#!csharp
+
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+
+var chatFunction = kernel.CreateFunctionFromPrompt(new PromptTemplateConfig()
+{
+    Name = "Chat",
+    Description = "Chat with the assistant.",
+    Template = "{{$history}} User: {{$request}} Assistant: ",
+    TemplateFormat = "semantic-kernel",
+    InputVariables =
+    [
+        new() { Name = "history", Description = "The history of the conversation.", IsRequired = false, Default = "" },
+        new() { Name = "request", Description = "The user's request.", IsRequired = true }
+    ],
+    ExecutionSettings =
+    {
+        { "default", new OpenAIPromptExecutionSettings()
+            {
+                MaxTokens = 1000,
+                Temperature = 0,
+                ModelId = "gpt4o",
+            }
+        },
+    }
+});
+
+#!csharp
+
+ StringBuilder history = new();
+ history.AppendLine(@"You are an assistant that help user to find answer.
+ Your name is Jarvis");
+ KernelArguments ka = new();
+ ka["history"] = history.ToString();
+ ka["request"] = "My name is Gian Maria, what is your name and purpose?";
+
+ var result = await kernel.InvokeAsync(chatFunction, ka);
+ Console.WriteLine(result.GetValue<string>());
+
+#!csharp
+
+history.AppendLine($"User: {ka["request"]} ");
+history.AppendLine($"Assistant: {result.GetValue<string>()} ");
+Console.WriteLine(history.ToString());
+
+#!csharp
+
+ka = new();
+ka["history"] = history.ToString();
+ka["request"] = "I'd like to know which is the nearest star from our solar system?";
+result = await kernel.InvokeAsync(chatFunction, ka);
+
+Console.WriteLine(result.GetValue<string>());
+
+#!csharp
+
+history.AppendLine($"User: {ka["request"]} ");
+history.AppendLine($"Assistant: {result.GetValue<string>()} ");
+Console.WriteLine(history.ToString());
+
+#!csharp
+
+ ka = new();
+ ka["history"] = history.ToString();
+ ka["request"] = "Do you know which is the position on hersprung russel diagram?";
+ ka.ExecutionSettings = new Dictionary<string, PromptExecutionSettings>()
+ {
+     ["default"] = new OpenAIPromptExecutionSettings()
+     {
+         MaxTokens = 1000,
+         Temperature = 0,
+         ModelId = "gpt35",
+     }
+ };
+ result = await kernel.InvokeAsync(chatFunction, ka);
+
+ Console.WriteLine(result.GetValue<string>());
