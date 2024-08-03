@@ -29,7 +29,7 @@ public static class Common
     {
         var kernelBuilder = _sc.AddKernel();
 
-        kernelBuilder.Services.AddLogging(config =>
+        _sc.AddLogging(config =>
         {
             config
                 .SetMinimumLevel(LogLevel.Trace)
@@ -46,15 +46,15 @@ public static class Common
 
         if (enableDumpProvider)
         {
-            kernelBuilder.Services.ConfigureHttpClientDefaults(c => c
+            _sc.ConfigureHttpClientDefaults(c => c
                 .AddLogger(s => DumpLoggingProvider.CreateHttpRequestBodyLogger(s.GetRequiredService<ILogger<DumpLoggingProvider>>())));
         }
 
-        kernelBuilder.Services.AddAzureOpenAIChatCompletion(
+        _sc.AddAzureOpenAIChatCompletion(
             "GPT4o", //"GPT35_2",//"GPT42",
             Dotenv.Get("OPENAI_API_BASE"),
             Dotenv.Get("OPENAI_API_KEY"),
-            serviceId: "default",
+            serviceId: null, //this is used as keyed service
             modelId: "gpt4o");
 
         return kernelBuilder;
@@ -70,6 +70,25 @@ public static class Common
         }
 
         return _serviceProvider.GetRequiredService<T>();
+    }
+
+
+    public static void DumpServices()
+    {
+        foreach (var serviceDescriptor in _sc)
+        {
+            Console.WriteLine($"Service Type: {serviceDescriptor.ServiceType.FullName}");
+            if (!serviceDescriptor.IsKeyedService)
+            {
+                Console.WriteLine($"Implementation Type: {serviceDescriptor.ImplementationType?.FullName}");
+            }
+            else
+            {
+                Console.WriteLine($"Keyed [{serviceDescriptor.ServiceKey}] Implementation Type: {serviceDescriptor.KeyedImplementationType?.FullName}");
+            }
+            Console.WriteLine($"Lifetime: {serviceDescriptor.Lifetime}");
+            Console.WriteLine();
+        }
     }
 }
 

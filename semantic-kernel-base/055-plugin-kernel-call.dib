@@ -13,29 +13,43 @@
 
 #!import ../dotenv.cs
 #!import ../pythonWrapper.cs
-#!import ../commonFull.cs
+#!import ../commonFullDi.cs
 #!import plugins/AudioVideoPlugin/AudioVideo.cs
 
 #!csharp
 
-var kernel = Common.GetKernel(enableLogging: true, enableDumpProvider: false);
+var kernelBuilder = Common.ConfigureKernelBuilder(enableLogging: true, enableDumpProvider: false);
+
+var audioVideoPluginConfig = new AudioVideoPluginConfig("setting");
+Common.Services.AddSingleton(audioVideoPluginConfig);  
+
+kernelBuilder
+    .Plugins
+        .AddFromType<AudioVideoPlugin>("AudioVideoPlugin");
 
 #!csharp
 
-var logger = LogFactory.CreateLogger<AudioVideoPlugin>();
-var concreteAvPlugin = new AudioVideoPlugin(logger);
-KernelPlugin audioVideoPlugin = kernel.ImportPluginFromObject(concreteAvPlugin, "AudioVideoPlugin");
+Common.DumpServices();
 
 #!csharp
 
-// we can directly invoke functions directly from plugin
-//var videoFile = "C:/temp/ssh.mp4";
-var videoFile = "/Users/gianmariaricci/Downloads/Untitled.mp4";
-audioVideoPlugin.TryGetFunction("ExtractAudio", out var extractAudio);
-KernelArguments args = new KernelArguments();
-args["videofile"] = videoFile;
-var callresult = await extractAudio.InvokeAsync(kernel, args);
+var kernel = Common.Resolve<Kernel>();
 
-Console.WriteLine("ExtractAudio result Type {0}", callresult.ValueType);
+#!csharp
 
-Console.WriteLine("ExtractAudio result {0}", callresult.GetValue<string>());
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+OpenAIPromptExecutionSettings openAIPromptExecutionSettings = new()
+{
+    ToolCallBehavior = ToolCallBehavior.AutoInvokeKernelFunctions,
+    Temperature = 0,
+};
+
+#!csharp
+
+using Microsoft.SemanticKernel.ChatCompletion;
+var r = Common.Resolve<IChatCompletionService>();
+
+#!csharp
+
+var chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
+var result = await kernel.InvokePromptAsync("I want to extract audio from the video file /Users/gianmariaricci/Downloads/Untitled.mp4");
