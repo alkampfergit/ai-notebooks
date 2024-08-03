@@ -1,0 +1,13 @@
+{
+    "image":"mcr.microsoft.com/devcontainers/universal:2",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "GitHub.copilot",
+                "GitHub.copilot-chat",
+                "ms-dotnettools.dotnet-interactive-vscode"
+            ]
+        }
+    }
+    ,"postCreateCommand": "apt-get update && apt-get install -y ffmpeg"
+}

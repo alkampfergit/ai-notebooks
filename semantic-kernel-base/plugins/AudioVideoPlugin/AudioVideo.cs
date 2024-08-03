@@ -4,13 +4,16 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
+public record AudioVideoPluginConfig(string Configuration);
 
 [Description("Audio and video plugin for the Semantic Kernel")] 
 public class AudioVideoPlugin
 {
-    public AudioVideoPlugin(ILogger logger)
+    public AudioVideoPlugin(AudioVideoPluginConfig config, ILogger logger = null)
     {
-        this._logger = logger;
+        this._logger = logger ?? NullLogger.Instance;
     }
 
     private ILogger _logger;

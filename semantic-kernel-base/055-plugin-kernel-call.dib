@@ -23,21 +23,8 @@ var kernel = Common.GetKernel(enableLogging: true, enableDumpProvider: false);
 #!csharp
 
 var logger = LogFactory.CreateLogger<AudioVideoPlugin>();
-var audioVideoPluginConfig = new AudioVideoPluginConfig("setting");
-var concreteAvPlugin = new AudioVideoPlugin(audioVideoPluginConfig, logger);
+var concreteAvPlugin = new AudioVideoPlugin(logger);
 KernelPlugin audioVideoPlugin = kernel.ImportPluginFromObject(concreteAvPlugin, "AudioVideoPlugin");
-
-#!csharp
-
-Console.WriteLine(
-    "AudioVideoPlugin loaded - description {0} number of functions {1}", 
-    audioVideoPlugin.Description,
-    audioVideoPlugin.FunctionCount);   
-
-foreach (var function in audioVideoPlugin)
-{
-    Console.WriteLine("Function {0} - {1}", function.Name, function.Description);
-}
 
 #!csharp
 

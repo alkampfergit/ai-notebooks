@@ -4,7 +4,7 @@
 
 #!csharp
 
-#!import ..\dotenv.cs
+#!import ../dotenv.cs
 #r "nuget: Microsoft.SemanticKernel"
 #r "nuget: Microsoft.Extensions.Logging"
 #r "nuget: Microsoft.Extensions.Logging.Console"

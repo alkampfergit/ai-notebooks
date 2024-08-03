@@ -11,8 +11,8 @@
 #r "nuget: Microsoft.Extensions.Http"
 #r "nuget: Microsoft.SemanticKernel.PromptTemplates.Handlebars"
 
-#!import ..\dotenv.cs
-#!import ..\commonFull.cs
+#!import ../dotenv.cs
+#!import ../commonFull.cs
 
 #!csharp
 

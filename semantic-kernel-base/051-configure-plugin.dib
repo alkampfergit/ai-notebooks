@@ -13,19 +13,23 @@
 
 #!import ../dotenv.cs
 #!import ../pythonWrapper.cs
-#!import ../commonFull.cs
+#!import ../commonFullDi.cs
 #!import plugins/AudioVideoPlugin/AudioVideo.cs
 
 #!csharp
 
-var kernel = Common.GetKernel(enableLogging: true, enableDumpProvider: false);
+var kernelBuilder = Common.ConfigureKernelBuilder(enableLogging: true, enableDumpProvider: false);
+var audioVideoPluginConfig = new AudioVideoPluginConfig("setting");
+
+Common.Services.AddSingleton(audioVideoPluginConfig);  
+kernelBuilder
+    .Plugins
+        .AddFromType<AudioVideoPlugin>("AudioVideoPlugin");
 
 #!csharp
 
-var logger = LogFactory.CreateLogger<AudioVideoPlugin>();
-var audioVideoPluginConfig = new AudioVideoPluginConfig("setting");
-var concreteAvPlugin = new AudioVideoPlugin(audioVideoPluginConfig, logger);
-KernelPlugin audioVideoPlugin = kernel.ImportPluginFromObject(concreteAvPlugin, "AudioVideoPlugin");
+var kernel = Common.Resolve<Kernel>();
+kernel.Plugins.TryGetPlugin("AudioVideoPlugin", out var audioVideoPlugin);
 
 #!csharp
 

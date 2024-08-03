@@ -14,22 +14,20 @@ using System.Threading.Tasks;
 
 public static class Common
 {
-    public static DumpLoggingProvider DumpLoggingProvider = new DumpLoggingProvider();
+    private static readonly ServiceCollection _sc;
 
-    public static Kernel GetKernel(
-        bool enableLogging, 
-        bool enableDumpProvider = false) 
+    static Common()
     {
-        
-        var kernelBuilder = ConfigureKernelBuilder(enableLogging, enableDumpProvider);
-        var kernel = kernelBuilder.Build();
-
-        return kernel;
+        _sc = new ServiceCollection();
     }
+
+    public static ServiceCollection Services => _sc;
+
+    public static DumpLoggingProvider DumpLoggingProvider = new DumpLoggingProvider();
 
     public static IKernelBuilder ConfigureKernelBuilder(bool enableLogging, bool enableDumpProvider)
     {
-        var kernelBuilder = Kernel.CreateBuilder();
+        var kernelBuilder = _sc.AddKernel();
 
         kernelBuilder.Services.AddLogging(config =>
         {
@@ -60,6 +58,18 @@ public static class Common
             modelId: "gpt4o");
 
         return kernelBuilder;
+    }
+
+    private static ServiceProvider _serviceProvider;
+
+    public static T Resolve<T>()
+    {
+        if (_serviceProvider == null) 
+        {
+            _serviceProvider = _sc.BuildServiceProvider();
+        }
+
+        return _serviceProvider.GetRequiredService<T>();
     }
 }
 
