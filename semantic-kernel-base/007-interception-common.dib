@@ -1,0 +1,36 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#r "nuget: Microsoft.SemanticKernel"
+#r "nuget: Microsoft.Extensions.Logging"
+#r "nuget: Microsoft.Extensions.Logging.Console"
+#r "nuget: Microsoft.Extensions.Logging.Debug"
+#r "nuget: Microsoft.Extensions.Http"
+
+#!import ..\dotenv.cs
+#!import ..\commonFull.cs
+
+#!csharp
+
+var kernel = Common.GetKernel(enableLogging: false, enableDumpProvider: true);
+
+#!csharp
+
+var result = await kernel.InvokePromptAsync("Which is the capital of France. Answer as pirate Barbossa!!!");
+Console.WriteLine(result);
+
+#!csharp
+
+var calls = Common.DumpLoggingProvider.GetLLMCalls();
+
+Console.WriteLine("Number of Calls: {0}", calls.Count());
+foreach (LLMCall call in calls)
+{
+    Console.WriteLine("Url: " + call.Url);
+    Console.WriteLine("FullPrompt:\n" + call.FullRequest + "\n\n");
+    Console.WriteLine("ResponseFunctionCall: " + call.ResponseFunctionCall);
+    Console.WriteLine("Response: " + call.Response);
+}
