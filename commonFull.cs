@@ -16,25 +16,26 @@ using System.Threading.Tasks;
 public static class Common
 {
     public static DumpLoggingProvider DumpLoggingProvider = new DumpLoggingProvider();
+
     public static Kernel GetKernel(
         bool enableLogging, 
         bool enableDumpProvider = false) 
     {
         var kernelBuilder = Kernel.CreateBuilder();
-            kernelBuilder.Services.AddLogging(config => {
-                    config
-                        .SetMinimumLevel(LogLevel.Trace)
-                        .AddDebug();
-                    if (enableDumpProvider)
-                    {
-                        config.AddProvider(DumpLoggingProvider);
-                    }
-                    if (enableLogging)
-                    {
-                        config.AddConsole();
-                    }
+        kernelBuilder.Services.AddLogging(config => {
+                config
+                    .SetMinimumLevel(LogLevel.Trace)
+                    .AddDebug();
+                if (enableDumpProvider)
+                {
+                    config.AddProvider(DumpLoggingProvider);
                 }
-            );
+                if (enableLogging)
+                {
+                    config.AddConsole();
+                }
+            }
+        );
 
         if (enableDumpProvider)
         {
@@ -49,8 +50,36 @@ public static class Common
             serviceId: "default",
             modelId: "gpt4o");
 
-        return kernelBuilder.Build();
+        var kernel = kernelBuilder.Build();
+
+        return kernel;
     }
+}
+
+public static class LogFactory
+{
+    private static readonly ILoggerFactory _loggerFactory;
+
+    static LogFactory()
+    {
+        _loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder
+                .AddDebug()
+                .AddConsole()
+                .SetMinimumLevel(LogLevel.Trace);
+        });
+    }
+
+    public static ILogger CreateLogger(string category)
+    {
+        return _loggerFactory.CreateLogger(category);
+    }   
+
+    public static ILogger<T> CreateLogger<T>()
+    {
+        return _loggerFactory.CreateLogger<T>();
+    } 
 }
 
 public class LLMCall

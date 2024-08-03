@@ -1,0 +1,52 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#r "nuget: Microsoft.Extensions.Logging"
+#r "nuget: Microsoft.SemanticKernel"
+#r "nuget: Microsoft.Extensions.Logging.Console"
+#r "nuget: Microsoft.Extensions.Logging.Debug"
+#r "nuget: Microsoft.Extensions.Http"
+#r "nuget: Microsoft.SemanticKernel.PromptTemplates.Handlebars"
+
+#!import ../dotenv.cs
+#!import ../pythonWrapper.cs
+#!import ../commonFull.cs
+#!import plugins/AudioVideoPlugin/AudioVideo.cs
+
+#!csharp
+
+var kernel = Common.GetKernel(enableLogging: true, enableDumpProvider: false);
+
+#!csharp
+
+var logger = LogFactory.CreateLogger<AudioVideoPlugin>();
+var concreteAvPlugin = new AudioVideoPlugin(logger);
+KernelPlugin audioVideoPlugin = kernel.ImportPluginFromObject(concreteAvPlugin, "AudioVideoPlugin");
+
+#!csharp
+
+Console.WriteLine(
+    "AudioVideoPlugin loaded - description {0} number of functions {1}", 
+    audioVideoPlugin.Description,
+    audioVideoPlugin.FunctionCount);   
+
+foreach (var function in audioVideoPlugin)
+{
+    Console.WriteLine("Function {0} - {1}", function.Name, function.Description);
+}
+
+#!csharp
+
+// we can directly invoke functions directly from plugin
+var videoFile = "C:/temp/ssh.mp4";
+audioVideoPlugin.TryGetFunction("ExtractAudio", out var extractAudio);
+KernelArguments args = new KernelArguments();
+args["videofile"] = videoFile;
+var callresult = await extractAudio.InvokeAsync(kernel, args);
+
+Console.WriteLine("ExtractAudio result Type {0}", callresult.ValueType);
+
+Console.WriteLine("ExtractAudio result {0}", callresult.GetValue<string>());
