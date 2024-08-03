@@ -4,9 +4,6 @@
 
 #!csharp
 
-#!import ..\dotenv.cs
-#!import ..\common.cs
-
 #r "nuget: Microsoft.SemanticKernel"
 #r "nuget: Microsoft.SemanticKernel.Abstractions"
 #r "nuget: Microsoft.SemanticKernel.PromptTemplates.Handlebars"
@@ -14,6 +11,9 @@
 #r "nuget: Microsoft.Extensions.Logging"
 #r "nuget: Microsoft.Extensions.Logging.Console"
 #r "nuget: Microsoft.Extensions.Logging.Debug"
+
+#!import ..\dotenv.cs
+#!import ..\common.cs
 
 #!csharp
 

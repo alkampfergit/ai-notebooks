@@ -1,0 +1,79 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#r "nuget: Microsoft.SemanticKernel"
+#r "nuget: Microsoft.Extensions.Logging"
+#r "nuget: Microsoft.Extensions.Logging.Console"
+#r "nuget: Microsoft.Extensions.Logging.Debug"
+#r "nuget: Microsoft.Extensions.Http"
+#r "nuget: Microsoft.SemanticKernel.PromptTemplates.Handlebars"
+
+#!import ..\dotenv.cs
+#!import ..\commonFull.cs
+
+#!csharp
+
+var kernel = Common.GetKernel(enableLogging: false, enableDumpProvider: true);
+
+#!csharp
+
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+using Microsoft.SemanticKernel.PromptTemplates.Handlebars;
+
+var chat = kernel.CreateFunctionFromPrompt(new PromptTemplateConfig()
+{
+    Name = "TestRewrite",
+    Description = "Chat with the assistant.",
+    Template = @"system: 
+* Given the following conversation history and the users next question,rephrase the question to be a stand alone question.
+If the conversation is irrelevant or empty, just restate the original question.
+Do not add more details than necessary to the question.
+
+chat history: 
+{{#each history}}
+question: 
+{{question}}
+answer: 
+{{answer}}
+{{/each}}
+
+Follow up Input: {{ chat_input }} 
+Standalone Question:",
+    TemplateFormat = "handlebars",
+    InputVariables =
+    [
+        new() { Name = "chat_input", Description = "New question of the user", IsRequired = false, Default = "" },
+        new() { Name = "history", Description = "The history of the RAG CHAT.", IsRequired = true }
+    ],
+    ExecutionSettings =
+    {
+        { "default", new OpenAIPromptExecutionSettings()
+            {
+                MaxTokens = 1000,
+                Temperature = 0,
+                ModelId = "gpt35",
+            }
+        },
+    }
+},
+promptTemplateFactory: new HandlebarsPromptTemplateFactory());
+
+#!csharp
+
+public record RagChatElement(string Question, string Answer);
+
+#!csharp
+
+  KernelArguments ka = new();
+  ka["chat_input"] = "Do you know a similar technique?";
+
+  ka["history"] = new RagChatElement[]
+  {
+      new ("Can you please explain complete mediation?", "Certainly! In the context of mediation, complete mediation refers to a situation where a mediator variable fully explains the relationship between an independent variable and a dependent variable. Without this mediator variable, no direct relationship is observed between the independent and dependent variables")
+  };
+
+  var result = await kernel.InvokeAsync(chat, ka);
+  Console.WriteLine("result: {0}", result.ToString());
