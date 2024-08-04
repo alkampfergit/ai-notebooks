@@ -1,0 +1,74 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#r "nuget: Microsoft.Extensions.Logging"
+#r "nuget: Microsoft.SemanticKernel"
+#r "nuget: Microsoft.Extensions.Logging.Console"
+#r "nuget: Microsoft.Extensions.Logging.Debug"
+#r "nuget: Microsoft.Extensions.Http"
+#r "nuget: Microsoft.SemanticKernel.PromptTemplates.Handlebars"
+
+#!import ../dotenv.cs
+#!import ../pythonWrapper.cs
+#!import ../commonFullDi.cs
+#!import plugins/AudioVideoPlugin/AudioVideo.cs
+
+#!csharp
+
+var kernelBuilder = Common.ConfigureKernelBuilder(enableLogging: true, enableDumpProvider: true);
+
+var audioVideoPluginConfig = new AudioVideoPluginConfig("setting");
+Common.Services.AddSingleton(audioVideoPluginConfig);  
+
+kernelBuilder
+    .Plugins
+        .AddFromType<AudioVideoPlugin>("AudioVideoPlugin");
+
+#!csharp
+
+var kernel = Common.Resolve<Kernel>();
+
+#!csharp
+
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+OpenAIPromptExecutionSettings openAIPromptExecutionSettings = new()
+{
+    ToolCallBehavior = ToolCallBehavior.AutoInvokeKernelFunctions,
+    Temperature = 0,
+};
+
+#!csharp
+
+using Microsoft.SemanticKernel.ChatCompletion;
+var r = Common.Resolve<IChatCompletionService>();
+
+#!csharp
+
+Common.DumpLoggingProvider.ClearLLMCalls();
+var chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
+var videoFile = "/Users/gianmariaricci/Downloads/Untitled.mp4";
+ChatHistory chatMessages = new();
+chatMessages.AddUserMessage($"I want to extract audio from video file {videoFile}");
+var results = await chatCompletionService.GetChatMessageContentsAsync(
+        chatMessages,
+        executionSettings: openAIPromptExecutionSettings,
+        kernel: kernel);
+
+var llmCalls = Common.DumpLoggingProvider.GetLLMCalls();
+foreach (var llmCall in llmCalls)
+{
+    Console.WriteLine("-----------------");
+    if (llmCall.ResponseFunctionCall != null)
+    {
+        //This is a function call, the LLM answer and tell us to call a plugin, it will invoked automatically
+        Console.WriteLine($"Function call: {llmCall.ResponseFunctionCall} with arguments {llmCall.ResponseFunctionCallParameters}");
+    }
+    else
+    {
+        //we have a simple call we can dump the response
+        Console.WriteLine($"Response: {llmCall.Response}");
+    }
+}

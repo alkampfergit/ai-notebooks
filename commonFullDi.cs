@@ -135,7 +135,7 @@ public class LLMCall
 
     public string Response { get; set; }
 
-    public string ResponseFunctionCall { get; set; }
+    public string? ResponseFunctionCall { get; set; }
 
     public string ResponseFunctionCallParameters { get; set; }
 
@@ -187,6 +187,11 @@ internal class DumpLoggingProvider : ILoggerProvider
         return _logger.GetLLMCalls();
     }
 
+    internal void ClearLLMCalls() 
+    {
+        _logger.Clear();
+    }
+
     class AccumulatorLogger : ILogger
     {
         private readonly List<string> _logs;
@@ -199,6 +204,8 @@ internal class DumpLoggingProvider : ILoggerProvider
         }
 
         public IEnumerable<LLMCall> GetLLMCalls() => _llmCalls; 
+
+        internal void Clear() => _llmCalls.Clear();
 
         public void AddLLMCall(LLMCall lLMCall)
         {

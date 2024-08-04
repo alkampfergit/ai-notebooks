@@ -35,6 +35,7 @@ public class AudioVideoPlugin
         string command = $"-i {videofile} -vn -acodec pcm_s16le -ar 44100 -ac 2 {audioPath}";
 
         _logger.LogInformation("Running ffmpeg with command {command}", command);
+        Console.WriteLine("Running ffmpeg with command {0}", command);
         using (var process = new Process())
         {
             process.StartInfo.FileName = "ffmpeg";

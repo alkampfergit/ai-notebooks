@@ -29,10 +29,6 @@ kernelBuilder
 
 #!csharp
 
-Common.DumpServices();
-
-#!csharp
-
 var kernel = Common.Resolve<Kernel>();
 
 #!csharp
@@ -52,4 +48,15 @@ var r = Common.Resolve<IChatCompletionService>();
 #!csharp
 
 var chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
-var result = await kernel.InvokePromptAsync("I want to extract audio from the video file /Users/gianmariaricci/Downloads/Untitled.mp4");
+var videoFile = "/Users/gianmariaricci/Downloads/Untitled.mp4";
+ChatHistory chatMessages = new();
+chatMessages.AddUserMessage($"I want to extract audio from video file {videoFile}");
+var results = await chatCompletionService.GetChatMessageContentsAsync(
+        chatMessages,
+        executionSettings: openAIPromptExecutionSettings,
+        kernel: kernel);
+
+foreach (var result in results)
+{
+    Console.WriteLine(result);
+}
