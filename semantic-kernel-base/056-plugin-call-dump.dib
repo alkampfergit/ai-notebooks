@@ -55,7 +55,20 @@ chatMessages.AddUserMessage($"I want to extract audio from video file {videoFile
 var results = await chatCompletionService.GetChatMessageContentsAsync(
         chatMessages,
         executionSettings: openAIPromptExecutionSettings,
-        kernel: kernel);
+        kernel: kernel);     
+
+#!csharp
+
+using System.Text.Json;
+
+Console.WriteLine("Results count: {0}", results.Count);
+//dump all result types
+foreach (OpenAIChatMessageContent result in results)
+{
+    Console.WriteLine(JsonSerializer.Serialize(result));
+}
+
+#!csharp
 
 var llmCalls = Common.DumpLoggingProvider.GetLLMCalls();
 foreach (var llmCall in llmCalls)
@@ -64,11 +77,16 @@ foreach (var llmCall in llmCalls)
     if (llmCall.ResponseFunctionCall != null)
     {
         //This is a function call, the LLM answer and tell us to call a plugin, it will invoked automatically
+        Console.WriteLine($"Request: {llmCall.FullRequest}");
         Console.WriteLine($"Function call: {llmCall.ResponseFunctionCall} with arguments {llmCall.ResponseFunctionCallParameters}");
     }
     else
     {
         //we have a simple call we can dump the response
-        Console.WriteLine($"Response: {llmCall.Response}");
+        //we can deserialize json into an object and get the content
+        var response = (JsonElement) JsonSerializer.Deserialize<dynamic>(llmCall.Response);
+        var choices = response.GetProperty("choices");
+        var firstChoice = choices[0];
+        Console.WriteLine($"Response: {firstChoice.GetProperty("message")}");
     }
 }

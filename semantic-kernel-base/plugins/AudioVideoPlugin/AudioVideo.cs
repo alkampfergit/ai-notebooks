@@ -39,16 +39,13 @@ public class AudioVideoPlugin
         using (var process = new Process())
         {
             process.StartInfo.FileName = "ffmpeg";
-            process.StartInfo.Arguments = $"{command}";
+            process.StartInfo.Arguments = command;
             process.StartInfo.RedirectStandardOutput = false;
             process.StartInfo.RedirectStandardError = false;
             process.StartInfo.UseShellExecute = false;
-            process.StartInfo.CreateNoWindow = true;
+            process.StartInfo.CreateNoWindow = false;
 
             process.Start();
-
-            //loop waiting for process to finish
-
             process.WaitForExit();
         }
 
