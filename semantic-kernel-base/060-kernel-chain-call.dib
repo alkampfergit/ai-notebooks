@@ -1,0 +1,67 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#r "nuget: Microsoft.Extensions.Logging"
+#r "nuget: Microsoft.SemanticKernel"
+#r "nuget: Microsoft.Extensions.Logging.Console"
+#r "nuget: Microsoft.Extensions.Logging.Debug"
+#r "nuget: Microsoft.Extensions.Http"
+#r "nuget: Microsoft.SemanticKernel.PromptTemplates.Handlebars"
+
+#!import ../dotenv.cs
+#!import ../pythonWrapper.cs
+#!import ../commonFullDi.cs
+#!import plugins/AudioVideoPlugin/AudioVideo.cs
+
+#!csharp
+
+var kernelBuilder = Common.ConfigureKernelBuilder(enableLogging: true, enableDumpProvider: true);
+
+var audioVideoPluginConfig = new AudioVideoPluginConfig("setting");
+Common.Services.AddSingleton(audioVideoPluginConfig);  
+
+kernelBuilder
+    .Plugins
+        .AddFromType<AudioVideoPlugin>("AudioVideoPlugin");
+
+#!csharp
+
+var kernel = Common.Resolve<Kernel>();
+
+#!csharp
+
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+var assistant = kernel.CreateFunctionFromPrompt(new PromptTemplateConfig()
+{
+    Name = "Assistant",
+    Description = "Your assistant will resolve problems.",
+    Template = "User: {{$request}}",
+    TemplateFormat = "semantic-kernel",
+    InputVariables =
+    [
+        new() { Name = "request", Description = "The user's request.", IsRequired = true }
+    ],
+    ExecutionSettings =
+    {
+        { "default", new OpenAIPromptExecutionSettings()
+            {
+                MaxTokens = 1000,
+                Temperature = 0,
+                ModelId = "gpt4o",
+                ToolCallBehavior = ToolCallBehavior.AutoInvokeKernelFunctions,
+            }
+        },
+    }
+});
+
+#!csharp
+
+var videoFile = "/Users/gianmariaricci/Downloads/Untitled.mp4";
+
+KernelArguments ka = new();
+ka["request"] = $"I want to extract audio from video file {videoFile}";
+
+var result = await kernel.InvokeAsync(assistant, ka);

@@ -58,6 +58,7 @@ public class AudioVideoPlugin
     [return: Description("Transcript of an audio file with time markers")]
     public string TranscriptTimeline([Description("Full path to the wav file")] string audioFile)
     {
+        Console.WriteLine("Transcripting audio file {0}", audioFile);
         var python = new PythonWrapper(@"C:\develop\github\SemanticKernelPlayground\skernel\Scripts\python.exe");
         var script = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "python", "transcript_timeline.py");
         var result = python.Execute(script, audioFile);
