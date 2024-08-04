@@ -62,6 +62,6 @@ var assistant = kernel.CreateFunctionFromPrompt(new PromptTemplateConfig()
 var videoFile = "/Users/gianmariaricci/Downloads/Untitled.mp4";
 
 KernelArguments ka = new();
-ka["request"] = $"I want to extract audio from video file {videoFile}";
+ka["request"] = $"I want to transcript audio from video file {videoFile}";
 
 var result = await kernel.InvokeAsync(assistant, ka);

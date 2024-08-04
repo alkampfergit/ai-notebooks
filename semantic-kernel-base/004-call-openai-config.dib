@@ -47,15 +47,15 @@ var chatFunction = kernel.CreateFunctionFromPrompt(new PromptTemplateConfig()
 
 #!csharp
 
- StringBuilder history = new();
- history.AppendLine(@"You are an assistant that help user to find answer.
- Your name is Jarvis");
- KernelArguments ka = new();
- ka["history"] = history.ToString();
- ka["request"] = "My name is Gian Maria, what is your name and purpose?";
+StringBuilder history = new();
+history.AppendLine(@"You are an assistant that help user to find answer.
+Your name is Jarvis");
+KernelArguments ka = new();
+ka["history"] = history.ToString();
+ka["request"] = "My name is Gian Maria, what is your name and purpose?";
 
- var result = await kernel.InvokeAsync(chatFunction, ka);
- Console.WriteLine(result.GetValue<string>());
+var result = await kernel.InvokeAsync(chatFunction, ka);
+Console.WriteLine(result.GetValue<string>());
 
 #!csharp
 
