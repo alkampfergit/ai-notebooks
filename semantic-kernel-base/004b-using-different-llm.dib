@@ -1,0 +1,85 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#r "nuget: Microsoft.SemanticKernel"
+#r "nuget: Microsoft.SemanticKernel.Abstractions"
+#r "nuget: Microsoft.SemanticKernel.PromptTemplates.Handlebars"
+#r "nuget: Microsoft.Extensions.Logging"
+#r "nuget: Microsoft.Extensions.Logging.Console"
+#r "nuget: Microsoft.Extensions.Logging.Debug"
+
+#!import ..\dotenv.cs
+#!import ..\common.cs
+
+#!csharp
+
+using Microsoft.SemanticKernel;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+var kernelBuilder = Kernel.CreateBuilder();
+
+kernelBuilder.Services.AddLogging(l => l
+    .SetMinimumLevel(LogLevel.Trace)
+    .AddConsole()
+    .AddDebug()
+);
+
+kernelBuilder.Services.AddAzureOpenAIChatCompletion(
+    "GPT4o", 
+    Dotenv.Get("OPENAI_API_BASE"),
+    Dotenv.Get("OPENAI_API_KEY"),
+    serviceId: "default",
+    modelId: "gpt4o");
+
+kernelBuilder.Services.AddAzureOpenAIChatCompletion(
+    "GPT35_2", 
+    Dotenv.Get("OPENAI_API_BASE"),
+    Dotenv.Get("OPENAI_API_KEY"),
+    serviceId: "default",
+    modelId: "gpt35");
+
+var kernel = kernelBuilder.Build();
+
+#!csharp
+
+using Azure.AI.OpenAI;
+FunctionResult result = await kernel.InvokePromptAsync("Which is the capital of France. Answer as pirate Barbossa!!!");
+if (result.Metadata.TryGetValue("Usage", out var usage)) 
+{
+    if (usage is CompletionsUsage cu) 
+    {
+        Console.WriteLine("Usage total token {0}, completion tokens {1} prompt tokens {2}", cu.TotalTokens, cu.CompletionTokens, cu.PromptTokens);
+    }
+}
+
+var value = result.GetValue<OpenAIChatMessageContent>();
+Console.WriteLine("Model used: {0}", value.ModelId);
+
+#!csharp
+
+ KernelArguments ka = new();
+ka.ExecutionSettings = new Dictionary<string, PromptExecutionSettings>()
+{
+    ["default"] = new OpenAIPromptExecutionSettings()
+    {
+        MaxTokens = 1000,
+        Temperature = 0,
+        ModelId = "gpt4o",
+    }
+};
+
+FunctionResult result = await kernel.InvokePromptAsync("Which is the capital of France. Answer as pirate Barbossa!!!", arguments: ka);
+if (result.Metadata.TryGetValue("Usage", out var usage)) 
+{
+    if (usage is CompletionsUsage cu) 
+    {
+        Console.WriteLine("Usage total token {0}, completion tokens {1} prompt tokens {2}", cu.TotalTokens, cu.CompletionTokens, cu.PromptTokens);
+    }
+}
+
+var value = result.GetValue<OpenAIChatMessageContent>();
+Console.WriteLine("Model used: {0}", value.ModelId);
