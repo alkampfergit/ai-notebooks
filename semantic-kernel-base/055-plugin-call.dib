@@ -43,18 +43,19 @@ OpenAIPromptExecutionSettings openAIPromptExecutionSettings = new()
 #!csharp
 
 using Microsoft.SemanticKernel.ChatCompletion;
-var r = Common.Resolve<IChatCompletionService>();
+var chatCompletionService = Common.Resolve<IChatCompletionService>();
 
 #!csharp
 
+//you can alwasy get the interface from kernel, but from global DI is better
 var chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
-var videoFile = "/Users/gianmariaricci/Downloads/Untitled.mp4";
+var videoFile = @"c:\temp\sk\ssh.mp4";
 ChatHistory chatMessages = new();
-chatMessages.AddUserMessage($"I want to extract audio from video file {videoFile}");
+chatMessages.AddUserMessage($@"I want to extract audio from video file {videoFile}");
 var results = await chatCompletionService.GetChatMessageContentsAsync(
-        chatMessages,
-        executionSettings: openAIPromptExecutionSettings,
-        kernel: kernel);
+    chatMessages,
+    executionSettings: openAIPromptExecutionSettings,
+    kernel: kernel);
 
 foreach (var result in results)
 {

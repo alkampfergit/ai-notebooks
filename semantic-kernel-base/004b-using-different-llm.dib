@@ -32,7 +32,7 @@ kernelBuilder.Services.AddAzureOpenAIChatCompletion(
     "GPT4o", 
     Dotenv.Get("OPENAI_API_BASE"),
     Dotenv.Get("OPENAI_API_KEY"),
-    serviceId: "default",
+    serviceId: "gpt4o",
     modelId: "gpt4o");
 
 kernelBuilder.Services.AddAzureOpenAIChatCompletion(
@@ -47,6 +47,7 @@ var kernel = kernelBuilder.Build();
 #!csharp
 
 using Azure.AI.OpenAI;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
 FunctionResult result = await kernel.InvokePromptAsync("Which is the capital of France. Answer as pirate Barbossa!!!");
 if (result.Metadata.TryGetValue("Usage", out var usage)) 
 {
@@ -61,7 +62,7 @@ Console.WriteLine("Model used: {0}", value.ModelId);
 
 #!csharp
 
- KernelArguments ka = new();
+KernelArguments ka = new();
 ka.ExecutionSettings = new Dictionary<string, PromptExecutionSettings>()
 {
     ["default"] = new OpenAIPromptExecutionSettings()

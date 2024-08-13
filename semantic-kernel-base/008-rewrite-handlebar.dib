@@ -72,7 +72,9 @@ public record RagChatElement(string Question, string Answer);
 
   ka["history"] = new RagChatElement[]
   {
-      new ("Can you please explain complete mediation?", "Certainly! In the context of mediation, complete mediation refers to a situation where a mediator variable fully explains the relationship between an independent variable and a dependent variable. Without this mediator variable, no direct relationship is observed between the independent and dependent variables")
+      new (
+        "Can you please explain complete mediation?", 
+        "Certainly! In the context of mediation, complete mediation refers to a situation where a mediator variable fully explains the relationship between an independent variable and a dependent variable. Without this mediator variable, no direct relationship is observed between the independent and dependent variables")
   };
 
   var result = await kernel.InvokeAsync(chat, ka);

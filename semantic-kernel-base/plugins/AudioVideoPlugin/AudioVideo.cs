@@ -19,8 +19,11 @@ public class AudioVideoPlugin
     private ILogger _logger;
 
     [KernelFunction, Description("extract audio in wav format from an mp4 file")]
-    public string ExtractAudio([Description("Full path to the mp4 file")] string videofile)
+    public async Task<string> ExtractAudio(
+        [Description("Full path to the mp4 file")] string videofile,
+        CancellationToken cancellationToken = default)
     {
+        Console.WriteLine("Calling plugin with videofile {1}", videofile);
         _logger.LogDebug("Extracting audio file from video {videofile}", videofile);
         // First of all, change the extension of the video file to create the output path
         string audioPath = videofile.Replace(".mp4", ".wav", StringComparison.OrdinalIgnoreCase);
@@ -40,13 +43,33 @@ public class AudioVideoPlugin
         {
             process.StartInfo.FileName = "ffmpeg";
             process.StartInfo.Arguments = command;
-            process.StartInfo.RedirectStandardOutput = false;
-            process.StartInfo.RedirectStandardError = false;
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.RedirectStandardError = true;
             process.StartInfo.UseShellExecute = false;
-            process.StartInfo.CreateNoWindow = false;
+            process.StartInfo.CreateNoWindow = true;
 
             process.Start();
-            process.WaitForExit();
+
+            Task<string> outputTask = process.StandardOutput.ReadToEndAsync();
+            Task<string> errorTask = process.StandardError.ReadToEndAsync();
+
+            //Create a cancellation token for 30 seconds
+            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await process.WaitForExitAsync(cancellationToken: cts.Token).ConfigureAwait(false);
+
+            //now that the process exited I can read the output tasks
+            string output = await outputTask.ConfigureAwait(false);
+            string error = await errorTask.ConfigureAwait(false);
+
+            //need to check if the exit code is ok.
+            if (process.ExitCode != 0)
+            {
+                string exceptionCode = $"Unable to extract audio with ffmpeg\n\nOutput:\n{output}\n\nError:\n{error}";
+                Console.WriteLine(exceptionCode);
+                throw new Exception(exceptionCode);
+            }
+
+            Console.WriteLine("Output: {0}", output);
         }
 
         // Now ffmpeg has created the audio file, return the path to it
