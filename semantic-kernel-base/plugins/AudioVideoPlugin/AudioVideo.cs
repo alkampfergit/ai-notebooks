@@ -11,22 +11,34 @@ public record AudioVideoPluginConfig(string Configuration);
 [Description("Audio and video plugin for the Semantic Kernel")] 
 public class AudioVideoPlugin
 {
-    public AudioVideoPlugin(AudioVideoPluginConfig config, ILogger logger = null)
+    public AudioVideoPlugin(
+        AudioVideoPluginConfig config, 
+        PythonWrapper pythonWrapper = null,
+        ILogger logger = null)
     {
         this._logger = logger ?? NullLogger.Instance;
+        this._pythonWrapper = pythonWrapper;
     }
 
     private ILogger _logger;
+    private PythonWrapper _pythonWrapper;
 
     [KernelFunction, Description("extract audio in wav format from an mp4 file")]
     public async Task<string> ExtractAudio(
         [Description("Full path to the mp4 file")] string videofile,
         CancellationToken cancellationToken = default)
     {
-        Console.WriteLine("Calling plugin with videofile {1}", videofile);
+        Console.WriteLine("Calling plugin with videofile {0}", videofile);
         _logger.LogDebug("Extracting audio file from video {videofile}", videofile);
         // First of all, change the extension of the video file to create the output path
         string audioPath = videofile.Replace(".mp4", ".wav", StringComparison.OrdinalIgnoreCase);
+
+        if (!File.Exists(videofile))
+        {
+            string exceptionCode = $"Video file {videofile} does not exist";
+            Console.WriteLine(exceptionCode);
+            throw new Exception(exceptionCode);
+        }
 
         // If the audio file exists, delete it, maybe it is an old version
         if (File.Exists(audioPath))
@@ -79,12 +91,13 @@ public class AudioVideoPlugin
 
     [KernelFunction, Description("Transcript audio from a wav file to a timeline extracting a transcript")]
     [return: Description("Transcript of an audio file with time markers")]
-    public string TranscriptTimeline([Description("Full path to the wav file")] string audioFile)
+    public async Task<string> TranscriptTimeline([Description("Full path to the wav file")] string audioFile)
     {
-        Console.WriteLine("Transcripting audio file {0}", audioFile);
-        var python = new PythonWrapper(@"C:\develop\github\SemanticKernelPlayground\skernel\Scripts\python.exe");
-        var script = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "python", "transcript_timeline.py");
-        var result = python.Execute(script, audioFile);
+        // find the location of current script
+
+        var script = Path.Combine(Environment.CurrentDirectory, "..", "python", "transcript_timeline.py");
+        Console.WriteLine("Transcripting audio file {0} with script {1}", audioFile, script);
+        var result = await this._pythonWrapper.Execute(script, audioFile);
         return result;
     }
 }

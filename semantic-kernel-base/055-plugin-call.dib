@@ -61,3 +61,7 @@ foreach (var result in results)
 {
     Console.WriteLine(result);
 }
+
+#!csharp
+
+Console.WriteLine(results.First());

@@ -42,8 +42,8 @@ foreach (var function in audioVideoPlugin)
 #!csharp
 
 // we can directly invoke functions directly from plugin
-var videoFile = "C:/temp/sk/ssh.mp4";
-//var videoFile = "/Users/gianmariaricci/Downloads/Untitled.mp4";
+//var videoFile = "C:/temp/sk/ssh.mp4";
+var videoFile = "/Users/gianmariaricci/Downloads/Untitled.mp4";
 audioVideoPlugin.TryGetFunction("ExtractAudio", out var extractAudio);
 KernelArguments args = new KernelArguments();
 args["videofile"] = videoFile;

@@ -14,7 +14,16 @@
 #!import ../dotenv.cs
 #!import ../pythonWrapper.cs
 #!import ../commonFullDi.cs
+#!import ../pythonWrapper.cs
 #!import plugins/AudioVideoPlugin/AudioVideo.cs
+
+#!markdown
+
+### Calling python from C#
+
+To call python from C# you can simply use the `PythonWrapper` class that in turn simply using the basic Process object to invoke python as command line, intercepting the output.
+
+You can simply use a virtual environment where you previously installed all you need to execute your code (**pip**)
 
 #!csharp
 
@@ -22,6 +31,10 @@ var kernelBuilder = Common.ConfigureKernelBuilder(enableLogging: true, enableDum
 
 var audioVideoPluginConfig = new AudioVideoPluginConfig("setting");
 Common.Services.AddSingleton(audioVideoPluginConfig);  
+
+// now install python wrapper
+PythonWrapper wrapper = new ("/Users/gianmariaricci/develop/github/ai-playground/src/python/langchainVarious/langchain/bin/python3");
+kernelBuilder.Services.AddSingleton(wrapper);
 
 kernelBuilder
     .Plugins
@@ -31,44 +44,15 @@ kernelBuilder
 
 var kernel = Common.Resolve<Kernel>();
 
+#!markdown
+
+Now we can simply let the kernel resolve complex task, that involves calling **multiple time various plugin until the task of the user is not resolved**. 
+
 #!csharp
 
 using Microsoft.SemanticKernel.Connectors.OpenAI;
-var assistant = kernel.CreateFunctionFromPrompt(new PromptTemplateConfig()
-{
-    Name = "Assistant",
-    Description = "Your assistant will resolve problems.",
-    Template = "User: {{$request}}",
-    TemplateFormat = "semantic-kernel",
-    InputVariables =
-    [
-        new() { Name = "request", Description = "The user's request.", IsRequired = true }
-    ],
-    ExecutionSettings =
-    {
-        { "default", new OpenAIPromptExecutionSettings()
-            {
-                MaxTokens = 1000,
-                Temperature = 0,
-                ModelId = "gpt4o",
-                ToolCallBehavior = ToolCallBehavior.AutoInvokeKernelFunctions,
-            }
-        },
-    }
-});
-
-#!csharp
 
 var videoFile = "/Users/gianmariaricci/Downloads/Untitled.mp4";
-
-KernelArguments ka = new();
-ka["request"] = $"I want to extract audio from video file {videoFile}";
-
-var result = await kernel.InvokeAsync(assistant, ka);
-
-Console.WriteLine(result);
-
-#!csharp
 
 // Now you can call directly with the prompt
 KernelArguments ka = new();
@@ -83,4 +67,12 @@ ka.ExecutionSettings =  new Dictionary<string, PromptExecutionSettings>()
         }
     };
 
-result = await kernel.InvokePromptAsync($"I want to extract audio from video file {videoFile}", ka); 
+var result = await kernel.InvokePromptAsync($"I want to extract text transcription from video file {videoFile}", ka); 
+
+#!markdown
+
+Result is now a simple FunctionResult that in turns contains the textual answer.
+
+#!csharp
+
+Console.WriteLine(result);
