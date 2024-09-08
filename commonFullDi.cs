@@ -280,76 +280,112 @@ internal class DumpLoggingProvider : ILoggerProvider
         }
     }
 
-    sealed class RequestBodyLogger(ILogger logger) : IHttpClientAsyncLogger
+    sealed class RequestBodyLogger : IHttpClientAsyncLogger
     {
+        private ILogger logger;
+
+        public RequestBodyLogger(ILogger logger) 
+        {
+            this.logger = logger;
+        }
+
         public async ValueTask<object?> LogRequestStartAsync(HttpRequestMessage request, CancellationToken cancellationToken = default)
         {
             var requestContent = await request.Content!.ReadAsStringAsync(cancellationToken);
             StringBuilder sb = new();
 
-            if (request.RequestUri.Host.Contains("openai"))
+            try
             {
-                // I need to pase the request content as json object to extract some informations.
-                var jsonObject = JsonDocument.Parse(requestContent).RootElement;
-                var messages = jsonObject.GetProperty("messages");
-
-                sb.AppendLine($"Call LLM: {request.RequestUri}");
-
-                foreach (var message in messages.EnumerateArray())
+                if (request.RequestUri.Host.Contains("openai"))
                 {
-                    var content = message.GetProperty("content").GetString();
-                    sb.AppendLine($"{message.GetProperty("role").GetString()}: {content}");
-                }
+                    // I need to pase the request content as json object to extract some informations.
+                    var jsonObject = JsonDocument.Parse(requestContent).RootElement;
 
-                if (jsonObject.TryGetProperty("tools", out var tools))
-                {
+                    var messages = jsonObject.GetProperty("messages");
 
-                    sb.AppendLine("Functions:");
-                    foreach (JsonElement tool in tools.EnumerateArray())
+                    sb.AppendLine($"Call LLM: {request.RequestUri}");
+
+                    foreach (var message in messages.EnumerateArray())
                     {
-                        // Extracting function object
-                        JsonElement function = tool.GetProperty("function");
-
-                        // Extracting function name and description
-                        string functionName = function.GetProperty("name").GetString();
-                        string functionDescription = function.GetProperty("description").GetString();
-
-                        sb.AppendLine($"Function Name: {functionName}");
-                        sb.AppendLine($"Description: {functionDescription}");
-
-                        // Extracting parameters
-                        JsonElement parameters = function.GetProperty("parameters");
-                        foreach (JsonProperty parameter in parameters.EnumerateObject())
+                        var role = message.GetProperty("role").GetString();
+                        string content = "";
+                        if (message.TryGetProperty("content", out var contentJson)) 
                         {
-                            sb.AppendLine($"Parameter name {parameter.Name} Value; {parameter.Value}");
+                            content = contentJson.GetString();
                         }
-                        sb.AppendLine();
+                        else if (message.TryGetProperty("function", out var functionCall)) 
+                        {
+                            content = String.Format(
+                                "Function Call: {0} With arguments {1}",
+                                functionCall.GetProperty("name").GetString(),
+                                functionCall.GetProperty("arguments").GetString() 
+                            );
+                        }
+                        sb.AppendLine($"{role}: {content}");
                     }
-                }
-                foreach (var header in request.Headers)
-                {
-                    if (!header.Key.Contains("key", StringComparison.OrdinalIgnoreCase))
-                    {
-                        sb.AppendLine($"{header.Key}: {header.Value.First()}");
-                    }
-                }
 
-                LLMCall lLMCall = new LLMCall()
+                    if (jsonObject.TryGetProperty("tools", out var tools))
+                    {
+                        sb.AppendLine("Functions:");
+                        foreach (JsonElement tool in tools.EnumerateArray())
+                        {
+                            // Extracting function object
+                            JsonElement function = tool.GetProperty("function");
+
+                            // Extracting function name and description
+                            string functionName = function.GetProperty("name").GetString();
+                            string functionDescription = function.GetProperty("description").GetString();
+
+                            sb.AppendLine($"Function Name: {functionName}");
+                            sb.AppendLine($"Description: {functionDescription}");
+
+                            // Extracting parameters
+
+                            if (jsonObject.TryGetProperty("parameters", out var parameters)) 
+                            {
+                                foreach (JsonProperty parameter in parameters.EnumerateObject())
+                                {
+                                    sb.AppendLine($"Parameter name {parameter.Name} Value; {parameter.Value}");
+                                }
+                            }
+                            sb.AppendLine();
+                        }
+                    }
+                    foreach (var header in request.Headers)
+                    {
+                        if (!header.Key.Contains("key", StringComparison.OrdinalIgnoreCase))
+                        {
+                            sb.AppendLine($"{header.Key}: {header.Value.First()}");
+                        }
+                    }
+
+                    string prompt = "";
+                    if (jsonObject.TryGetProperty("messages", out var jsonPrompt)) 
+                    {
+                        prompt = jsonPrompt.ToString();
+                    }
+                    LLMCall lLMCall = new LLMCall()
+                    {
+                        Url = request.RequestUri.ToString(),    
+                        CorrelationKey = request.Headers.GetValues("x-ms-client-request-id").First(),
+                        Prompt = prompt,
+                        FullRequest = jsonObject.ToString(),
+                        PromptFunctions = tools.ToString(),
+                        CallStart = DateTime.UtcNow
+                    };
+
+                    DumpLoggingProvider.Instance._logger.AddLLMCall(lLMCall);
+                }
+                else
                 {
-                    Url = request.RequestUri.ToString(),    
-                    CorrelationKey = request.Headers.GetValues("x-ms-client-request-id").First(),
-                    Prompt = jsonObject.GetProperty("messages").ToString(),
-                    FullRequest = jsonObject.ToString(),
-                    PromptFunctions = tools.ToString(),
-                    CallStart = DateTime.UtcNow
-                };
-                DumpLoggingProvider.Instance._logger.AddLLMCall(lLMCall);
+                    sb.AppendLine($"Call HTTP: {request.RequestUri}");
+                    sb.AppendLine("CONTENT:");
+                    sb.AppendLine(requestContent);
+                }
             }
-            else
+            catch (Exception ex) 
             {
-                sb.AppendLine($"Call HTTP: {request.RequestUri}");
-                sb.AppendLine("CONTENT:");
-                sb.AppendLine(requestContent);
+                Console.WriteLine("Exception in dumping: {0}\n{1}\n{2}", request, ex, requestContent);
             }
 
             logger.LogTrace(sb.ToString());

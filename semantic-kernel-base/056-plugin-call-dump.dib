@@ -10,11 +10,14 @@
 #r "nuget: Microsoft.Extensions.Logging.Debug"
 #r "nuget: Microsoft.Extensions.Http"
 #r "nuget: Microsoft.SemanticKernel.PromptTemplates.Handlebars"
+#r "nuget: Microsoft.Extensions.DependencyInjection.Abstractions"
 
 #!import ../dotenv.cs
 #!import ../pythonWrapper.cs
 #!import ../commonFullDi.cs
 #!import plugins/AudioVideoPlugin/AudioVideo.cs
+
+ Console.WriteLine($"Framework Description: {System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription}");
 
 #!csharp
 
@@ -49,13 +52,15 @@ var r = Common.Resolve<IChatCompletionService>();
 
 Common.DumpLoggingProvider.ClearLLMCalls();
 var chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
-var videoFile = "/Users/gianmariaricci/Downloads/Untitled.mp4";
+var videoFile = "c:\\temp\\ssh.mp4";
 ChatHistory chatMessages = new();
 chatMessages.AddUserMessage($"I want to extract audio from video file {videoFile}");
 var results = await chatCompletionService.GetChatMessageContentsAsync(
         chatMessages,
         executionSettings: openAIPromptExecutionSettings,
-        kernel: kernel);     
+        kernel: kernel);   
+
+Console.WriteLine(results);  
 
 #!csharp
 
@@ -63,21 +68,34 @@ using System.Text.Json;
 
 Console.WriteLine("Results count: {0}", results.Count);
 //dump all result types
+var options = new JsonSerializerOptions
+{
+    WriteIndented = true
+};
+
 foreach (OpenAIChatMessageContent result in results)
 {
-    Console.WriteLine(JsonSerializer.Serialize(result));
+    Console.WriteLine("{0} = {1}", result.GetType(), result);
+    Console.WriteLine(JsonSerializer.Serialize(result, options));
 }
 
 #!csharp
 
 var llmCalls = Common.DumpLoggingProvider.GetLLMCalls();
+int requestCount = 1;
 foreach (var llmCall in llmCalls)
 {
-    Console.WriteLine("-----------------");
+    Console.WriteLine("\n----------------- Request {0} -----------------\n", requestCount);
+    JsonDocument requestJsonDocument = JsonDocument.Parse(llmCall.FullRequest);        
+    string requestJson = JsonSerializer.Serialize(requestJsonDocument, new JsonSerializerOptions { WriteIndented = true });
+    Console.WriteLine(requestJson);
+    Console.WriteLine("\n----------------- Response {0} -----------------\n", requestCount++);
+    
+    JsonDocument responseJsonDocument = JsonDocument.Parse(llmCall.Response);
+    string responseJson =  JsonSerializer.Serialize(responseJsonDocument, new JsonSerializerOptions { WriteIndented = true });
     if (llmCall.ResponseFunctionCall != null)
     {
         //This is a function call, the LLM answer and tell us to call a plugin, it will invoked automatically
-        Console.WriteLine($"Request: {llmCall.FullRequest}");
         Console.WriteLine($"Function call: {llmCall.ResponseFunctionCall} with arguments {llmCall.ResponseFunctionCallParameters}");
     }
     else
@@ -87,6 +105,8 @@ foreach (var llmCall in llmCalls)
         var response = (JsonElement) JsonSerializer.Deserialize<dynamic>(llmCall.Response);
         var choices = response.GetProperty("choices");
         var firstChoice = choices[0];
-        Console.WriteLine($"Response: {firstChoice.GetProperty("message")}");
+        Console.WriteLine("Message Response {0}:", firstChoice.GetProperty("message"));
     }
+
+    Console.WriteLine("Full Response:\n{0}", responseJson);
 }

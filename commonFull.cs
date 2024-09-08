@@ -145,7 +145,7 @@ internal class DumpLoggingProvider : ILoggerProvider
         _httpRequestBodyLogger = new RequestBodyLogger(logger);
 
     public ILogger CreateLogger(string categoryName)
-    {
+        {
         return _logger;
     }
 
