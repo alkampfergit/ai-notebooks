@@ -23,6 +23,10 @@ var kernelBuilder = Common.ConfigureKernelBuilder(enableLogging: true, enableDum
 var audioVideoPluginConfig = new AudioVideoPluginConfig("setting");
 Common.Services.AddSingleton(audioVideoPluginConfig);  
 
+// now install python wrapper
+PythonWrapper wrapper = new (@"C:\Develop\GitHub\ai-notebooks\python\venv\bin\python.exe");
+kernelBuilder.Services.AddSingleton(wrapper);
+
 kernelBuilder
     .Plugins
         .AddFromType<AudioVideoPlugin>("AudioVideoPlugin");
@@ -59,9 +63,42 @@ var assistant = kernel.CreateFunctionFromPrompt(new PromptTemplateConfig()
 
 #!csharp
 
-var videoFile = "/Users/gianmariaricci/Downloads/Untitled.mp4";
+var videoFile = "c:\\temp\\ssh.mp4";
 
 KernelArguments ka = new();
 ka["request"] = $"I want to transcript audio from video file {videoFile}";
 
 var result = await kernel.InvokeAsync(assistant, ka);
+Console.WriteLine(result);
+
+#!csharp
+
+var llmCalls = Common.DumpLoggingProvider.GetLLMCalls();
+int requestCount = 1;
+foreach (var llmCall in llmCalls)
+{
+    Console.WriteLine("\n----------------- Request {0} -----------------\n", requestCount);
+    JsonDocument requestJsonDocument = JsonDocument.Parse(llmCall.FullRequest);        
+    string requestJson = JsonSerializer.Serialize(requestJsonDocument, new JsonSerializerOptions { WriteIndented = true });
+    Console.WriteLine(requestJson);
+    Console.WriteLine("\n----------------- Response {0} -----------------\n", requestCount++);
+    
+    JsonDocument responseJsonDocument = JsonDocument.Parse(llmCall.Response);
+    string responseJson =  JsonSerializer.Serialize(responseJsonDocument, new JsonSerializerOptions { WriteIndented = true });
+    if (llmCall.ResponseFunctionCall != null)
+    {
+        //This is a function call, the LLM answer and tell us to call a plugin, it will invoked automatically
+        Console.WriteLine($"Function call: {llmCall.ResponseFunctionCall} with arguments {llmCall.ResponseFunctionCallParameters}");
+    }
+    else
+    {
+        //we have a simple call we can dump the response
+        //we can deserialize json into an object and get the content
+        var response = (JsonElement) JsonSerializer.Deserialize<dynamic>(llmCall.Response);
+        var choices = response.GetProperty("choices");
+        var firstChoice = choices[0];
+        Console.WriteLine("Message Response {0}:", firstChoice.GetProperty("message"));
+    }
+
+    Console.WriteLine("Full Response:\n{0}", responseJson);
+}

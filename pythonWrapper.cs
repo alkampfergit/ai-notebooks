@@ -55,7 +55,7 @@ public class PythonWrapper
             throw new Exception(exceptionCode);
         }
 
-        Console.WriteLine("Output: {0}", output);
+        Console.WriteLine("Output: {0} Error {1}", output, error);
 
         return output;
     }

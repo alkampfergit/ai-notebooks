@@ -21,7 +21,7 @@
 var kernelBuilder = Common.ConfigureKernelBuilder(enableLogging: true, enableDumpProvider: true);
 
 var audioVideoPluginConfig = new AudioVideoPluginConfig("setting");
-Common.Services.AddSingleton(audioVideoPluginConfig);  
+Common.Services.AddSingleton(audioVideoPluginConfig); 
 
 kernelBuilder
     .Plugins
@@ -59,7 +59,7 @@ var assistant = kernel.CreateFunctionFromPrompt(new PromptTemplateConfig()
 
 #!csharp
 
-var videoFile = "/Users/gianmariaricci/Downloads/Untitled.mp4";
+var videoFile = "c:\\temp\\ssh.mp4";
 
 KernelArguments ka = new();
 ka["request"] = $"I want to extract audio from video file {videoFile}";
@@ -84,3 +84,5 @@ ka.ExecutionSettings =  new Dictionary<string, PromptExecutionSettings>()
     };
 
 result = await kernel.InvokePromptAsync($"I want to extract audio from video file {videoFile}", ka); 
+
+Console.WriteLine(result);

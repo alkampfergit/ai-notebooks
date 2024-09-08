@@ -81,7 +81,7 @@ public class AudioVideoPlugin
                 throw new Exception(exceptionCode);
             }
 
-            Console.WriteLine("Output: {0}", output);
+            //Console.WriteLine("Output: {0} error: {1}", output, error);
         }
 
         // Now ffmpeg has created the audio file, return the path to it
@@ -93,11 +93,16 @@ public class AudioVideoPlugin
     [return: Description("Transcript of an audio file with time markers")]
     public async Task<string> TranscriptTimeline([Description("Full path to the wav file")] string audioFile)
     {
+        if (this._pythonWrapper == null) 
+        {
+            throw new Exception(@"Python wrapper is not present, we cannot transcript the timeline.
+            Ensure that python wrapper is present and it is configured correctly in your Dependency Injection ServiceCollection");
+        }
         // find the location of current script
-
         var script = Path.Combine(Environment.CurrentDirectory, "..", "python", "transcript_timeline.py");
         Console.WriteLine("Transcripting audio file {0} with script {1}", audioFile, script);
         var result = await this._pythonWrapper.Execute(script, audioFile);
+        Console.WriteLine(result);
         return result;
     }
 }
