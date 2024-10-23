@@ -51,9 +51,10 @@ using Microsoft.SemanticKernel.Connectors.OpenAI;
 FunctionResult result = await kernel.InvokePromptAsync("Which is the capital of France. Answer as pirate Barbossa!!!");
 if (result.Metadata.TryGetValue("Usage", out var usage)) 
 {
-    if (usage is CompletionsUsage cu) 
+    Console.WriteLine("Usage: {0}", usage.GetType().FullName);
+    if (usage is OpenAI.Chat.ChatTokenUsage cu) 
     {
-        Console.WriteLine("Usage total token {0}, completion tokens {1} prompt tokens {2}", cu.TotalTokens, cu.CompletionTokens, cu.PromptTokens);
+         Console.WriteLine("Usage total token {0}, completion tokens {1} prompt tokens {2}", cu.TotalTokenCount, cu.OutputTokenCount, cu.InputTokenCount);
     }
 }
 
@@ -76,9 +77,9 @@ ka.ExecutionSettings = new Dictionary<string, PromptExecutionSettings>()
 FunctionResult result = await kernel.InvokePromptAsync("Which is the capital of France. Answer as pirate Barbossa!!!", arguments: ka);
 if (result.Metadata.TryGetValue("Usage", out var usage)) 
 {
-    if (usage is CompletionsUsage cu) 
+    if (usage is OpenAI.Chat.ChatTokenUsage cu) 
     {
-        Console.WriteLine("Usage total token {0}, completion tokens {1} prompt tokens {2}", cu.TotalTokens, cu.CompletionTokens, cu.PromptTokens);
+         Console.WriteLine("Usage total token {0}, completion tokens {1} prompt tokens {2}", cu.TotalTokenCount, cu.OutputTokenCount, cu.InputTokenCount);
     }
 }
 
