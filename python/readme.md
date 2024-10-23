@@ -31,7 +31,7 @@ nvcc --version
 you can handle requirements with easy thanks to pip
 
 ```bash
-pip freeze > requirements.txt
+pip install -r requirements.txt
 ```
 
 If you modify references or upgrading pip packages or everything you can update the requirements file with
@@ -44,13 +44,13 @@ Then you can create a kernel for jupyter notebooks using the very same environmn
 
 ```bash
 pip install ipykernel
-python -m ipykernel install --user --name=various
+python -m ipykernel install --user --name=ainotebooks
 ```
 
 Kernel can be removed using 
 
 ```bash
-jupyter kernelspec remove langchain_experiments
+jupyter kernelspec remove ainotebooks
 ```
 
 

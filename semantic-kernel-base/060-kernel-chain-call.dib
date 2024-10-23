@@ -24,16 +24,28 @@ var audioVideoPluginConfig = new AudioVideoPluginConfig("setting");
 Common.Services.AddSingleton(audioVideoPluginConfig);  
 
 // now install python wrapper
-PythonWrapper wrapper = new (@"C:\Develop\GitHub\ai-notebooks\python\venv\bin\python.exe");
+PythonWrapper wrapper = new (@"C:\develop\github\ai-notebooks\python\pywrapper\Scripts\python.exe");
 kernelBuilder.Services.AddSingleton(wrapper);
 
 kernelBuilder
     .Plugins
-        .AddFromType<AudioVideoPlugin>("AudioVideoPlugin");
+        .AddFromType<AudioVideoPlugin>("AudioVideoPlugin")
+        .AddFromPromptDirectory("plugins/PublishingPlugin");
 
 #!csharp
 
 var kernel = Common.Resolve<Kernel>();
+
+#!csharp
+
+kernel.Plugins.TryGetPlugin("AudioVideoPlugin", out var audioVideoPlugin);
+
+kernel.Plugins.TryGetPlugin("PublishingPlugin", out var publishingPlugin);
+var functions = publishingPlugin.GetFunctionsMetadata() as System.Collections.Generic.List<Microsoft.SemanticKernel.KernelFunctionMetadata>;
+foreach (var function in functions) 
+{
+    Console.WriteLine(function.Description);
+}
 
 #!csharp
 
@@ -66,7 +78,8 @@ var assistant = kernel.CreateFunctionFromPrompt(new PromptTemplateConfig()
 var videoFile = "c:\\temp\\ssh.mp4";
 
 KernelArguments ka = new();
-ka["request"] = $"I want to transcript audio from video file {videoFile}";
+//ka["request"] = $"I want to transcript audio from video file {videoFile}. If power is too much try reducing power by 10, for each tool call create an haiku, then output all haiku after the answer";
+ka["request"] = $"I want to transcript audio from video file {videoFile}.";
 
 var result = await kernel.InvokeAsync(assistant, ka);
 Console.WriteLine(result);
