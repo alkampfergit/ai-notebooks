@@ -27,7 +27,7 @@ using Microsoft.SemanticKernel.PromptTemplates.Handlebars;
 var chatPrompt = Path.Combine(
     Directory.GetCurrentDirectory(),
     "prompts",
-    "chat.yaml");
+    "chat2.yaml");
 var promptContent = File.ReadAllText(chatPrompt);
 KernelFunction prompt = kernel.CreateFunctionFromPromptYaml(
     promptContent,
