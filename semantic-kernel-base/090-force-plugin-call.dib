@@ -39,7 +39,9 @@ var changeTitle = [Description("Change title to a task and return the version")]
 };
 
 var function = KernelFunctionFactory.CreateFromMethod(changeTitle, "changetitle");
-kernelBuilder.Plugins.AddFromFunctions("tasks", [function]);
+//we do not add the plugin to the builder
+var plugin = KernelPluginFactory.CreateFromFunctions("MyPlugin", [function]);
+var openAIFunction = plugin.GetFunctionsMetadata().First().ToOpenAIFunction();
 
 #!csharp
 
@@ -55,7 +57,7 @@ ka.ExecutionSettings =  new Dictionary<string, PromptExecutionSettings>()
                 MaxTokens = 1000,
                 Temperature = 0,
                 ModelId = "gpt4o",
-                ToolCallBehavior = ToolCallBehavior.EnableKernelFunctions,
+                ToolCallBehavior = ToolCallBehavior.RequireFunction(openAIFunction, autoInvoke: false),
         }
 };
 
@@ -64,12 +66,6 @@ ka.ExecutionSettings =  new Dictionary<string, PromptExecutionSettings>()
 FunctionResult results = await kernel.InvokePromptAsync(
         "I want to change title of task 234 to 'this is a new title'",
         ka);    
-
-#!csharp
-
-// FunctionResult results = await kernel.InvokePromptAsync(
-//         "tell me about leonardo da vinci",
-//         ka);  
 
 #!csharp
 

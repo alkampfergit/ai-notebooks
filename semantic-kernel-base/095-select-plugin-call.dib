@@ -37,9 +37,19 @@ var changeTitle = [Description("Change title to a task and return the version")]
     Console.WriteLine($"Changing title of task {taskid} to {newTitle}");
     return "23"; //this is the new version
 };
+var changeState = [Description("Change state to a task and return the version")] (
+    [Description("Id of the task")] string taskid,
+    [Description("new state for the task")] string newState
+) =>
+{
+    Console.WriteLine($"Changing state of task {taskid} to {newState}");
+    return "24"; //this is the new version
+};
+var changeTitleFunction = KernelFunctionFactory.CreateFromMethod(changeTitle, "changetitle");
+var changeStateFunction = KernelFunctionFactory.CreateFromMethod(changeState, "changestate");
 
-var function = KernelFunctionFactory.CreateFromMethod(changeTitle, "changetitle");
-kernelBuilder.Plugins.AddFromFunctions("tasks", [function]);
+var changeTitleOpenai = changeTitleFunction.Metadata.ToOpenAIFunction();
+var changeStateOpenai = changeStateFunction.Metadata.ToOpenAIFunction();
 
 #!csharp
 
@@ -55,21 +65,15 @@ ka.ExecutionSettings =  new Dictionary<string, PromptExecutionSettings>()
                 MaxTokens = 1000,
                 Temperature = 0,
                 ModelId = "gpt4o",
-                ToolCallBehavior = ToolCallBehavior.EnableKernelFunctions,
+                ToolCallBehavior = ToolCallBehavior.EnableFunctions([changeStateOpenai, changeTitleOpenai ], autoInvoke: false),
         }
 };
 
 #!csharp
 
 FunctionResult results = await kernel.InvokePromptAsync(
-        "I want to change title of task 234 to 'this is a new title'",
+        "I want to change state of task 234 to in progress",
         ka);    
-
-#!csharp
-
-// FunctionResult results = await kernel.InvokePromptAsync(
-//         "tell me about leonardo da vinci",
-//         ka);  
 
 #!csharp
 
