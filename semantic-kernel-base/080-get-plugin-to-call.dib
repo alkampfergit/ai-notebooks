@@ -1,0 +1,108 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#r "nuget: Microsoft.Extensions.Logging, 8.*"
+#r "nuget: Microsoft.SemanticKernel, 1.31.0"
+#r "nuget: Microsoft.Extensions.Logging.Console, 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Debug, 8.*"
+#r "nuget: Microsoft.Extensions.Http, 8.*"
+#r "nuget: Microsoft.SemanticKernel.PromptTemplates.Handlebars, 1.31.0"
+#r "nuget: Microsoft.SemanticKernel.Connectors.OpenAI, 1.31.0"
+
+#!import ../dotenv.cs
+#!import ../pythonWrapper.cs
+#!import ../commonFullDi.cs
+#!import plugins/AudioVideoPlugin/AudioVideo.cs
+
+#!csharp
+
+var kernelBuilder = Common.ConfigureKernelBuilder(
+    enableLogging: false, 
+    enableDumpProvider: false);
+    
+
+#!csharp
+
+// now define a tool directly from a lambda with all the information
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+
+var changeTitle = [Description("Change title to a task")] (
+    [Description("Id of the task")] string taskid,
+    [Description("new title for the task")] string newTitle
+) =>
+{
+    Console.WriteLine($"Changing title of task {taskid} to {newTitle}");
+    return "23"; //this is the new version
+};
+
+var function = KernelFunctionFactory.CreateFromMethod(changeTitle, "changetitle");
+kernelBuilder.Plugins.AddFromFunctions("tasks", [function]);
+
+#!csharp
+
+var kernel = Common.Resolve<Kernel>();
+
+#!csharp
+
+var ka = new KernelArguments();
+ka.ExecutionSettings =  new Dictionary<string, PromptExecutionSettings>()
+{
+        ["default"] = new OpenAIPromptExecutionSettings()
+        {
+                MaxTokens = 1000,
+                Temperature = 0,
+                ModelId = "gpt4o",
+                ToolCallBehavior = ToolCallBehavior.EnableKernelFunctions,
+        }
+};
+
+#!csharp
+
+FunctionResult results = await kernel.InvokePromptAsync(
+        "I want to change title of task 234 to 'this is a new title'",
+        ka);    
+
+#!csharp
+
+// FunctionResult results = await kernel.InvokePromptAsync(
+//         "tell me about leonardo da vinci",
+//         ka);  
+
+#!csharp
+
+var mc = results.GetValue<OpenAIChatMessageContent>();
+// check if the answer is a tool call or a standard Answer
+var isToolAnswer = mc.ToolCalls?.Any() == true;
+
+if (!isToolAnswer)
+{
+    Console.WriteLine("No tool call found");
+    TextContent content = mc.Items.First() as TextContent;
+    // serialize the answer
+    Console.WriteLine(content.Text);
+    return;
+}
+else
+{
+    Console.WriteLine("Tool call found");
+    var toolCall = mc.ToolCalls.Single();
+    
+    Console.WriteLine("toolid: " + toolCall.Id);
+    Console.WriteLine("tool.kind: " + toolCall.Kind);
+    Console.WriteLine("function: " + toolCall.FunctionName);
+    Console.WriteLine("arguments: " + toolCall.FunctionArguments);
+
+
+    if (kernel.Plugins.TryGetFunctionAndArguments(toolCall, out KernelFunction? function, out KernelArguments? arguments))
+    {
+        var result = await function.InvokeAsync(kernel, arguments);
+        string content = JsonSerializer.Serialize(result.GetValue<object>());
+    }
+    else
+    {
+        Console.WriteLine("Error ... tool call not found");
+    }
+}
