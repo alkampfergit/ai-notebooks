@@ -1,0 +1,83 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#r "nuget: Adobe.PDFServicesSDK, 4.1.0"
+
+#!import ../dotenv.cs
+
+#!csharp
+
+using Adobe.PDFServicesSDK.auth;
+using Adobe.PDFServicesSDK;
+using System.IO.Compression;
+
+ICredentials credentials = new ServicePrincipalCredentials(
+    Dotenv.Get("ADOBE_CLIENT_ID"),
+    Dotenv.Get("ADOBE_CLIENT_SECRET"));
+
+PDFServices pdfServices = new PDFServices(credentials);
+
+#!csharp
+
+using System.IO;
+using System.IO.Compression;
+using Adobe.PDFServicesSDK.io;
+using Adobe.PDFServicesSDK.pdfjobs.parameters.extractpdf;
+using Adobe.PDFServicesSDK.pdfjobs.jobs;
+using Adobe.PDFServicesSDK.pdfjobs.results;
+
+    // Save the content of the zip file in the current directory
+    var outputDirectory = Path.Combine(Environment.CurrentDirectory, "output");
+    // if the directory exists, delete, then create 
+    if (Directory.Exists(outputDirectory))
+    {
+        Directory.Delete(outputDirectory, true);
+    }
+    Directory.CreateDirectory(outputDirectory);
+
+using (Stream sourceStream = File.OpenRead(@"C:\temp\extractPDFInput.pdf"))
+{
+    IAsset asset = pdfServices.Upload(sourceStream, PDFServicesMediaType.PDF.GetMIMETypeValue());
+
+    // Create parameters for the job
+    ExtractPDFParams extractPDFParams = ExtractPDFParams.ExtractPDFParamsBuilder()
+    .AddElementsToExtract(new List<ExtractElementType>(new[]
+        { ExtractElementType.TEXT, ExtractElementType.TABLES }))
+    .AddElementsToExtractRenditions(
+        new List<ExtractRenditionsElementType>(new[] {
+            ExtractRenditionsElementType.FIGURES,
+            ExtractRenditionsElementType.TABLES }))
+    .AddTableStructureFormat(TableStructureType.CSV)
+    .Build();
+
+    ExtractPDFJob extractPDFJob = new ExtractPDFJob(asset).SetParams(extractPDFParams);
+
+    string location = pdfServices.Submit(extractPDFJob);
+    PDFServicesResponse<ExtractPDFResult> pdfServicesResponse =
+        pdfServices.GetJobResult<ExtractPDFResult>(location, typeof(ExtractPDFResult));
+
+    // Get content from the resulting asset(s)
+    IAsset resultAsset = pdfServicesResponse.Result.Resource;
+    StreamAsset streamAsset = pdfServices.GetContent(resultAsset);
+
+    //ok output is a zip file, we are interested only in the real content.
+    using var resultStream = streamAsset.Stream;
+
+    using (var archive = new ZipArchive(resultStream))
+    {
+        foreach (var entry in archive.Entries)
+        {
+            var destinationPath = Path.Combine(outputDirectory, entry.FullName);
+            var directoryName = Path.GetDirectoryName(destinationPath);
+            //if not exists, create the directory
+            if (!Directory.Exists(directoryName))
+            {
+                Directory.CreateDirectory(directoryName);
+            }
+            entry.ExtractToFile(destinationPath, overwrite: true);
+        }
+    }
+}
