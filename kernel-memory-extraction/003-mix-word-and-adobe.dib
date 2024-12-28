@@ -324,3 +324,34 @@ using (var writer = new StreamWriter(markdownFile))
     }
     Console.WriteLine($"Markdown file generated at {markdownFile}");
 }
+
+#!markdown
+
+## Image extraction
+
+#!csharp
+
+var imagesDirectory = Path.Combine(outputDirectory, "images");
+if (Directory.Exists(imagesDirectory))
+{
+    Directory.Delete(imagesDirectory, true);
+}
+Directory.CreateDirectory(imagesDirectory);
+
+using (WordprocessingDocument wordDoc = WordprocessingDocument.Open(outputFile, false))
+{
+    var imageParts = wordDoc.MainDocumentPart.ImageParts;
+    int imageIndex = 1;
+    foreach (var imagePart in imageParts)
+    {
+        var imageFileName = Path.Combine(imagesDirectory, $"image{imageIndex}.png");
+        using (var stream = imagePart.GetStream())
+        using (var fileStream = new FileStream(imageFileName, FileMode.Create, FileAccess.Write))
+        {
+            stream.CopyTo(fileStream);
+        }
+        imageIndex++;
+    }
+}
+
+Console.WriteLine($"Images extracted to {imagesDirectory}");
