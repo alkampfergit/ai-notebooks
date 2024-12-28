@@ -25,7 +25,8 @@ if (Directory.Exists(outputDirectory))
 }
 Directory.CreateDirectory(outputDirectory);
 
-var inputFile = @"C:/temp/extractPDFInput.pdf";
+// var inputFile = @"C:/temp/extractPDFInput.pdf";
+var inputFile = @"C:/temp/manualeDreame.pdf";
 
 #!csharp
 
@@ -45,7 +46,7 @@ ICredentials credentials = new ServicePrincipalCredentials(
 
 PDFServices pdfServices = new PDFServices(credentials);
 
-using (Stream sourceStream = File.OpenRead(@"C:\temp\extractPDFInput.pdf"))
+using (Stream sourceStream = File.OpenRead(inputFile))
 {
     IAsset asset = pdfServices.Upload(sourceStream, PDFServicesMediaType.PDF.GetMIMETypeValue());
 
@@ -125,7 +126,6 @@ if (System.IO.File.Exists(outputFile))
     System.IO.File.Delete(outputFile);
 }
 
-var inputFile = @"C:/temp/extractPDFInput.pdf";
 
 var requestUri = "http://localhost:5000/api/convert/local";
 var jsonContent = @$"{{
@@ -179,6 +179,14 @@ using (var writer = new StreamWriter(markdownFile))
         {
             if (element is Paragraph paragraph)
             {
+                var isHeader = paragraph.Ancestors<Header>().Any();
+                var isFooter = paragraph.Ancestors<Footer>().Any();
+
+                if (isHeader || isFooter)
+                {
+                    continue;
+                }
+
                 var text = paragraph.InnerText;
                 if (string.IsNullOrWhiteSpace(text))
                 {
@@ -198,10 +206,16 @@ using (var writer = new StreamWriter(markdownFile))
                 var numberingProperties = paragraph.ParagraphProperties?.NumberingProperties;
                 if (numberingProperties != null)
                 {
+                    var valReference = numberingProperties.NumberingLevelReference.Val;
                     var numberingId = numberingProperties.NumberingId.Val;
 
                     // Determine if it's a bullet or numbered list
-                    if (numberingId != null)
+                    if (valReference != null)
+                    {
+                        // for now ... numbered list
+                        preamble = "1. ";
+                    }
+                    else if (numberingId != null)
                     {
                         // for now ... bullet list
                         preamble = "- ";
@@ -220,21 +234,33 @@ using (var writer = new StreamWriter(markdownFile))
                 foreach (var kvp in csvDictionary)
                 {
                     var csvContent = kvp.Value;
-                    var cells = ((Table)element).Descendants<TableCell>().Select(tc => tc.InnerText).ToList();
-                    var matchCount = cells.Count(cell => csvContent.Contains(cell));
+                    var cells = ((Table)element)
+                        .Descendants<TableCell>()
+                        .Select(tc => tc.InnerText)
+                        .Where (c => !string.IsNullOrWhiteSpace(c))
+                        .ToList();
+                    var matchCount = cells.Count(cell => csvContent.Contains(cell, StringComparison.OrdinalIgnoreCase));
                     var score = (double)matchCount / cells.Count;
 
-                    if (score > bestScore && score > 0.8)
+                    if (score > bestScore)
                     {
                         bestScore = score;
                         bestMatch = csvContent;
                     }
+
+                    // var allCellText = string.Join(" ", cells);
+                    // var checker = "Every 6 to 12 months";
+                    // if (csvContent.Contains(checker, StringComparison.OrdinalIgnoreCase) && allCellText.Contains(checker, StringComparison.OrdinalIgnoreCase))
+                    // {
+                    //     Console.WriteLine("CSV file: {0}, Score: {1}, Content {2} Word text: {3}", kvp.Key, score, csvContent, allCellText);
+                    // }
                 }
 
                 var tableMarkdown = new System.Text.StringBuilder();
 
-                if (!string.IsNullOrEmpty(bestMatch))
+                if (!string.IsNullOrEmpty(bestMatch) && bestScore > 0.7)
                 {
+                    Console.WriteLine("MATCH CSV file found with score {0}.", bestScore);
                     using (var reader = new StringReader(bestMatch))
                     using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
                     {
@@ -256,7 +282,7 @@ using (var writer = new StreamWriter(markdownFile))
                 }
                 else
                 {
-                    Console.WriteLine("No matching CSV file found with more than 80% match.");
+                    Console.WriteLine("No matching CSV file found with more than 80% match, best score is {0}.", bestScore);
                     bool isHeaderRow = true;
                     foreach (var row in ((Table)element).Elements<TableRow>())
                     {
