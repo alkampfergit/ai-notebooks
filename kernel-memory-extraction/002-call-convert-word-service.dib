@@ -110,3 +110,64 @@ using (WordprocessingDocument wordDoc = WordprocessingDocument.Open(outputFile, 
         }
     }
 }
+
+#!csharp
+
+// generate markdown file
+using System.IO;
+
+var markdownFile = @"C:/temp/converted.md";
+using (var writer = new StreamWriter(markdownFile))
+{
+    using (WordprocessingDocument wordDoc = WordprocessingDocument.Open(outputFile, false))
+    {
+        Body body = wordDoc.MainDocumentPart.Document.Body;
+        foreach (var element in body.Elements())
+        {
+            if (element is Paragraph paragraph)
+            {
+                var text = paragraph.InnerText;
+                if (text.Length > 80)
+                {
+                    text = text.Substring(0, 80);
+                }
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    continue;
+                }
+
+                var styleId = paragraph.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
+                var style = styleId != null ? $" (Style: {styleId})" : string.Empty;
+
+                writer.WriteLine($"para: {text}{style}");
+            }
+            else if (element is Table)
+            {
+                writer.WriteLine("Table:");
+                var tableMarkdown = new System.Text.StringBuilder();
+                foreach (var row in ((Table)element).Elements<TableRow>())
+                {
+                    var rowMarkdown = new System.Text.StringBuilder();
+                    foreach (var cell in row.Elements<TableCell>())
+                    {
+                        rowMarkdown.Append("| " + cell.InnerText + " ");
+                    }
+                    rowMarkdown.Append("|");
+                    tableMarkdown.AppendLine(rowMarkdown.ToString());
+                }
+                writer.WriteLine(tableMarkdown.ToString());
+            }
+            else if (element is Drawing)
+            {
+                writer.WriteLine("Image:");
+                var drawing = (Drawing)element;
+                var blip = drawing.Descendants<DocumentFormat.OpenXml.Drawing.Blip>().FirstOrDefault();
+                if (blip != null)
+                {
+                    writer.WriteLine("Image ID: " + blip.Embed);
+                }
+            }
+        }
+    }
+    Console.WriteLine($"Markdown file generated at {markdownFile}");
+}
