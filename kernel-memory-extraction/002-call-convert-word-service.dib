@@ -1,0 +1,112 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#r "nuget: Microsoft.Extensions.DependencyInjection, 8.*"
+#r "nuget: Microsoft.Extensions.Http, 8.*"
+#r "nuget: DocumentFormat.OpenXml, 3.2.0"
+
+#!csharp
+
+using Microsoft.Extensions.DependencyInjection;
+using System;
+using System.Net.Http;
+
+var serviceCollection = new ServiceCollection();
+serviceCollection.AddHttpClient();
+var serviceProvider = serviceCollection.BuildServiceProvider();
+
+var httpClient = serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient();
+
+var outputFile = @"C:/temp/converted.docx";
+// if exists Delete
+if (System.IO.File.Exists(outputFile))
+{
+    System.IO.File.Delete(outputFile);
+}
+
+var inputFile = @"C:/temp/extractPDFInput.pdf";
+
+var requestUri = "http://localhost:5000/api/convert/local";
+var jsonContent = @$"{{
+    ""LocalPdfFile"": ""{inputFile}"",
+    ""LocalOutputDocxFile"": ""{outputFile}""
+}}";
+
+Console.WriteLine("Sending request to convert PDF to DOCX with dto {0}", jsonContent);
+var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+Console.WriteLine($"Sending request to {requestUri}...");
+var response = await httpClient.PostAsync(requestUri, content);
+
+Console.WriteLine("Status code: " + response.StatusCode);
+if (response.IsSuccessStatusCode)
+{
+    Console.WriteLine("Request successful.");
+}
+else
+{
+    Console.WriteLine($"Request failed with status code: {response.StatusCode}");
+}
+
+#!csharp
+
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Wordprocessing;
+using System;
+
+using (WordprocessingDocument wordDoc = WordprocessingDocument.Open(outputFile, false))
+{
+    Body body = wordDoc.MainDocumentPart.Document.Body;
+    foreach (var element in body.Elements())
+    {
+        if (element is Paragraph paragraph)
+        {
+            // take the first 80 char of the text
+            var text = paragraph.InnerText;
+            if (text.Length > 80)
+            {
+                text = text.Substring(0, 80);
+            }
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                continue;
+            }
+
+            // Get the style if present
+            var styleId = paragraph.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
+            var style = styleId != null ? $" (Style: {styleId})" : string.Empty;
+
+            Console.WriteLine("para: " + text + style);
+        }
+        else if (element is Table)
+        {
+            Console.WriteLine("Table:");
+            var tableMarkdown = new System.Text.StringBuilder();
+            foreach (var row in ((Table)element).Elements<TableRow>())
+            {
+                var rowMarkdown = new System.Text.StringBuilder();
+                foreach (var cell in row.Elements<TableCell>())
+                {
+                    rowMarkdown.Append("| " + cell.InnerText + " ");
+                }
+                rowMarkdown.Append("|");
+                tableMarkdown.AppendLine(rowMarkdown.ToString());
+            }
+            Console.WriteLine(tableMarkdown.ToString());
+        }
+        else if (element is Drawing)
+        {
+            Console.WriteLine("Image:");
+            var drawing = (Drawing)element;
+            var blip = drawing.Descendants<DocumentFormat.OpenXml.Drawing.Blip>().FirstOrDefault();
+            if (blip != null)
+            {
+                Console.WriteLine("Image ID: " + blip.Embed);
+            }
+        }
+    }
+}
