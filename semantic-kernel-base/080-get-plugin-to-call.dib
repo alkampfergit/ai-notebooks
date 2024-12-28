@@ -5,12 +5,12 @@
 #!csharp
 
 #r "nuget: Microsoft.Extensions.Logging, 8.*"
-#r "nuget: Microsoft.SemanticKernel, 1.31.0"
+#r "nuget: Microsoft.SemanticKernel, 1.16.0"
 #r "nuget: Microsoft.Extensions.Logging.Console, 8.*"
 #r "nuget: Microsoft.Extensions.Logging.Debug, 8.*"
 #r "nuget: Microsoft.Extensions.Http, 8.*"
-#r "nuget: Microsoft.SemanticKernel.PromptTemplates.Handlebars, 1.31.0"
-#r "nuget: Microsoft.SemanticKernel.Connectors.OpenAI, 1.31.0"
+#r "nuget: Microsoft.SemanticKernel.PromptTemplates.Handlebars, 1.16.0"
+#r "nuget: Microsoft.SemanticKernel.Connectors.OpenAI, 1.16.0"
 
 #!import ../dotenv.cs
 #!import ../pythonWrapper.cs
@@ -90,6 +90,7 @@ else
     Console.WriteLine("Tool call found");
     var toolCall = mc.ToolCalls.Single();
     
+    Console.WriteLine("toolCall type: " + toolCall.GetType().FullName);
     Console.WriteLine("toolid: " + toolCall.Id);
     Console.WriteLine("tool.kind: " + toolCall.Kind);
     Console.WriteLine("function: " + toolCall.FunctionName);
