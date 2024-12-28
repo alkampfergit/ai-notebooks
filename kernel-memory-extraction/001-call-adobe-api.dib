@@ -30,13 +30,13 @@ using Adobe.PDFServicesSDK.pdfjobs.jobs;
 using Adobe.PDFServicesSDK.pdfjobs.results;
 
     // Save the content of the zip file in the current directory
-    var outputDirectory = Path.Combine(Environment.CurrentDirectory, "output");
-    // if the directory exists, delete, then create 
-    if (Directory.Exists(outputDirectory))
-    {
-        Directory.Delete(outputDirectory, true);
-    }
-    Directory.CreateDirectory(outputDirectory);
+var outputDirectory = Path.Combine(Environment.CurrentDirectory, "output");
+// if the directory exists, delete, then create 
+if (Directory.Exists(outputDirectory))
+{
+    Directory.Delete(outputDirectory, true);
+}
+Directory.CreateDirectory(outputDirectory);
 
 using (Stream sourceStream = File.OpenRead(@"C:\temp\extractPDFInput.pdf"))
 {
@@ -48,7 +48,6 @@ using (Stream sourceStream = File.OpenRead(@"C:\temp\extractPDFInput.pdf"))
         { ExtractElementType.TEXT, ExtractElementType.TABLES }))
     .AddElementsToExtractRenditions(
         new List<ExtractRenditionsElementType>(new[] {
-            ExtractRenditionsElementType.FIGURES,
             ExtractRenditionsElementType.TABLES }))
     .AddTableStructureFormat(TableStructureType.CSV)
     .Build();

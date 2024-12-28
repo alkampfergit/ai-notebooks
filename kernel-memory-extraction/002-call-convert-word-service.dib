@@ -116,7 +116,15 @@ using (WordprocessingDocument wordDoc = WordprocessingDocument.Open(outputFile, 
 // generate markdown file
 using System.IO;
 
-var markdownFile = @"C:/temp/converted.md";
+// if the directory exists, delete, then create 
+var outputDirectory = Path.Combine(Environment.CurrentDirectory, "output");
+if (Directory.Exists(outputDirectory))
+{
+    Directory.Delete(outputDirectory, true);
+}
+Directory.CreateDirectory(outputDirectory);
+
+var markdownFile = Path.Combine(outputDirectory, "output.md");
 using (var writer = new StreamWriter(markdownFile))
 {
     using (WordprocessingDocument wordDoc = WordprocessingDocument.Open(outputFile, false))
@@ -127,24 +135,26 @@ using (var writer = new StreamWriter(markdownFile))
             if (element is Paragraph paragraph)
             {
                 var text = paragraph.InnerText;
-                if (text.Length > 80)
-                {
-                    text = text.Substring(0, 80);
-                }
                 if (string.IsNullOrWhiteSpace(text))
                 {
                     continue;
                 }
 
                 var styleId = paragraph.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
-                var style = styleId != null ? $" (Style: {styleId})" : string.Empty;
+                string markdownPrefix = styleId?.ToLower() switch
+                {
+                    "heading1" => "# ",
+                    "heading2" => "## ",
+                    "heading3" => "### ",
+                    _ => string.Empty
+                };
 
-                writer.WriteLine($"para: {text}{style}");
+                writer.WriteLine($"{markdownPrefix}{text}\n");
             }
             else if (element is Table)
             {
-                writer.WriteLine("Table:");
                 var tableMarkdown = new System.Text.StringBuilder();
+                bool isHeaderRow = true;
                 foreach (var row in ((Table)element).Elements<TableRow>())
                 {
                     var rowMarkdown = new System.Text.StringBuilder();
@@ -154,6 +164,18 @@ using (var writer = new StreamWriter(markdownFile))
                     }
                     rowMarkdown.Append("|");
                     tableMarkdown.AppendLine(rowMarkdown.ToString());
+
+                    if (isHeaderRow)
+                    {
+                        var headerSeparator = new System.Text.StringBuilder();
+                        foreach (var cell in row.Elements<TableCell>())
+                        {
+                            headerSeparator.Append("|---");
+                        }
+                        headerSeparator.Append("|");
+                        tableMarkdown.AppendLine(headerSeparator.ToString());
+                        isHeaderRow = false;
+                    }
                 }
                 writer.WriteLine(tableMarkdown.ToString());
             }

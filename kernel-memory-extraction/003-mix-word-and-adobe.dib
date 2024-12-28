@@ -1,0 +1,286 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#r "nuget: Microsoft.Extensions.DependencyInjection, 8.*"
+#r "nuget: Microsoft.Extensions.Http, 8.*"
+#r "nuget: DocumentFormat.OpenXml, 3.2.0"
+#r "nuget: Adobe.PDFServicesSDK, 4.1.0"
+#r "nuget: CsvHelper, 33.0.1"
+
+#!import ../dotenv.cs
+
+#!csharp
+
+// clear output folder.
+using System.IO;
+
+// if the directory exists, delete, then create 
+var outputDirectory = Path.Combine(Environment.CurrentDirectory, "output");
+if (Directory.Exists(outputDirectory))
+{
+    Directory.Delete(outputDirectory, true);
+}
+Directory.CreateDirectory(outputDirectory);
+
+var inputFile = @"C:/temp/extractPDFInput.pdf";
+
+#!csharp
+
+// now use adobe to extract structure for tables, this because pdf extract is better than word
+using Adobe.PDFServicesSDK.auth;
+using Adobe.PDFServicesSDK;
+using Adobe.PDFServicesSDK.io;
+using Adobe.PDFServicesSDK.pdfjobs.parameters.extractpdf;
+using Adobe.PDFServicesSDK.pdfjobs.jobs;
+using Adobe.PDFServicesSDK.pdfjobs.results;
+using System.IO;
+using System.IO.Compression;
+
+ICredentials credentials = new ServicePrincipalCredentials(
+    Dotenv.Get("ADOBE_CLIENT_ID"),
+    Dotenv.Get("ADOBE_CLIENT_SECRET"));
+
+PDFServices pdfServices = new PDFServices(credentials);
+
+using (Stream sourceStream = File.OpenRead(@"C:\temp\extractPDFInput.pdf"))
+{
+    IAsset asset = pdfServices.Upload(sourceStream, PDFServicesMediaType.PDF.GetMIMETypeValue());
+
+    // Create parameters for the job
+    ExtractPDFParams extractPDFParams = ExtractPDFParams.ExtractPDFParamsBuilder()
+    .AddElementsToExtract(new List<ExtractElementType>(new[]
+        { ExtractElementType.TEXT, ExtractElementType.TABLES }))
+    .AddElementsToExtractRenditions(
+        new List<ExtractRenditionsElementType>(new[] {
+            ExtractRenditionsElementType.TABLES }))
+    .AddTableStructureFormat(TableStructureType.CSV)
+    .Build();
+
+    ExtractPDFJob extractPDFJob = new ExtractPDFJob(asset).SetParams(extractPDFParams);
+
+    string location = pdfServices.Submit(extractPDFJob);
+    PDFServicesResponse<ExtractPDFResult> pdfServicesResponse =
+        pdfServices.GetJobResult<ExtractPDFResult>(location, typeof(ExtractPDFResult));
+
+    // Get content from the resulting asset(s)
+    IAsset resultAsset = pdfServicesResponse.Result.Resource;
+    StreamAsset streamAsset = pdfServices.GetContent(resultAsset);
+
+    //ok output is a zip file, we are interested only in the real content.
+    using var resultStream = streamAsset.Stream;
+
+    using (var archive = new ZipArchive(resultStream))
+    {
+        foreach (var entry in archive.Entries)
+        {
+            var destinationPath = Path.Combine(outputDirectory, entry.FullName);
+            var directoryName = Path.GetDirectoryName(destinationPath);
+            //if not exists, create the directory
+            if (!Directory.Exists(directoryName))
+            {
+                Directory.CreateDirectory(directoryName);
+            }
+            entry.ExtractToFile(destinationPath, overwrite: true);
+        }
+    }
+}
+
+#!csharp
+
+using CsvHelper;
+using System.Globalization;
+
+//now we need to find all csv files because they contains data about extracted table from the output folder
+var csvFiles = Directory.GetFiles(outputDirectory, "*.csv", SearchOption.AllDirectories);
+
+var csvDictionary = new Dictionary<string, string>();
+
+foreach (var csvFile in csvFiles)
+{
+    var content = await File.ReadAllTextAsync(csvFile);
+    csvDictionary[csvFile] = content;
+}
+Console.WriteLine($"Parsed {csvDictionary.Count} records from CSV files.");
+
+#!csharp
+
+// now proceed with Microsoft Word conversion code.
+using Microsoft.Extensions.DependencyInjection;
+using System;
+using System.Net.Http;
+
+var serviceCollection = new ServiceCollection();
+serviceCollection.AddHttpClient();
+var serviceProvider = serviceCollection.BuildServiceProvider();
+
+var httpClient = serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient();
+
+var outputFile = @"C:/temp/converted.docx";
+// if exists Delete
+if (System.IO.File.Exists(outputFile))
+{
+    System.IO.File.Delete(outputFile);
+}
+
+var inputFile = @"C:/temp/extractPDFInput.pdf";
+
+var requestUri = "http://localhost:5000/api/convert/local";
+var jsonContent = @$"{{
+    ""LocalPdfFile"": ""{inputFile}"",
+    ""LocalOutputDocxFile"": ""{outputFile}""
+}}";
+
+Console.WriteLine("Sending request to convert PDF to DOCX with dto {0}", jsonContent);
+var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+Console.WriteLine($"Sending request to {requestUri}...");
+var response = await httpClient.PostAsync(requestUri, content);
+
+Console.WriteLine("Status code: " + response.StatusCode);
+if (response.IsSuccessStatusCode)
+{
+    Console.WriteLine("Request successful.");
+}
+else
+{
+    Console.WriteLine($"Request failed with status code: {response.StatusCode}");
+}
+
+#!markdown
+
+# Final step
+
+Now we need to print in markdown using the converted Word file to maintain the structure, but when we find a table we will
+use the original table that was read from the pdf file
+
+#!csharp
+
+// generate markdown file
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Wordprocessing;
+using System.IO;
+
+var markdownFile = Path.Combine(outputDirectory, "output.md");
+// if file exists, delete
+if (System.IO.File.Exists(markdownFile))
+{
+    System.IO.File.Delete(markdownFile);
+}
+using (var writer = new StreamWriter(markdownFile))
+{
+    using (WordprocessingDocument wordDoc = WordprocessingDocument.Open(outputFile, false))
+    {
+        Body body = wordDoc.MainDocumentPart.Document.Body;
+        foreach (var element in body.Elements())
+        {
+            if (element is Paragraph paragraph)
+            {
+                var text = paragraph.InnerText;
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    continue;
+                }
+
+                var styleId = paragraph.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
+                string markdownPrefix = styleId?.ToLower() switch
+                {
+                    "heading1" => "# ",
+                    "heading2" => "## ",
+                    "heading3" => "### ",
+                    _ => string.Empty
+                };
+
+                writer.WriteLine($"{markdownPrefix}{text}\n");
+            }
+            else if (element is Table)
+            {
+                  //ok we need to understand if we have a corresponding table in the csv files
+            
+                var bestMatch = string.Empty;
+                var bestScore = 0.0;
+
+                foreach (var kvp in csvDictionary)
+                {
+                    var csvContent = kvp.Value;
+                    var cells = ((Table)element).Descendants<TableCell>().Select(tc => tc.InnerText).ToList();
+                    var matchCount = cells.Count(cell => csvContent.Contains(cell));
+                    var score = (double)matchCount / cells.Count;
+
+                    if (score > bestScore && score > 0.8)
+                    {
+                        bestScore = score;
+                        bestMatch = csvContent;
+                    }
+                }
+
+                var tableMarkdown = new System.Text.StringBuilder();
+
+                if (!string.IsNullOrEmpty(bestMatch))
+                {
+                    using (var reader = new StringReader(bestMatch))
+                    using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+                    {
+                        var records = csv.GetRecords<dynamic>().ToList();
+                        if (records.Any())
+                        {
+                            var headers = ((IDictionary<string, object>)records.First()).Keys;
+                            tableMarkdown.AppendLine(string.Join(" | ", headers.Select(h => h.ToString())));
+                            tableMarkdown.AppendLine(string.Join("", headers.Select(_ => "|---")).Substring(1));
+                            
+                            foreach (var record in records)
+                            {
+                                var values = ((IDictionary<string, object>)record).Values;
+                                tableMarkdown.AppendLine(string.Join(" | ", values.Select(v => v?.ToString() ?? "")));
+                            }
+                        }
+                    }
+                    
+                }
+                else
+                {
+                    Console.WriteLine("No matching CSV file found with more than 80% match.");
+                    bool isHeaderRow = true;
+                    foreach (var row in ((Table)element).Elements<TableRow>())
+                    {
+                        var rowMarkdown = new System.Text.StringBuilder();
+                        foreach (var cell in row.Elements<TableCell>())
+                        {
+                            rowMarkdown.Append("| " + cell.InnerText + " ");
+                        }
+                        rowMarkdown.Append("|");
+                        tableMarkdown.AppendLine(rowMarkdown.ToString());
+
+                        if (isHeaderRow)
+                        {
+                            var headerSeparator = new System.Text.StringBuilder();
+                            foreach (var cell in row.Elements<TableCell>())
+                            {
+                                headerSeparator.Append("|---");
+                            }
+                            headerSeparator.Append("|");
+                            tableMarkdown.AppendLine(headerSeparator.ToString());
+                            isHeaderRow = false;
+                        }
+                    }
+                }
+
+                writer.WriteLine(tableMarkdown.ToString());
+            }
+            else if (element is Drawing)
+            {
+                writer.WriteLine("Image:");
+                var drawing = (Drawing)element;
+                var blip = drawing.Descendants<DocumentFormat.OpenXml.Drawing.Blip>().FirstOrDefault();
+                if (blip != null)
+                {
+                    writer.WriteLine("Image ID: " + blip.Embed);
+                }
+            }
+        }
+    }
+    Console.WriteLine($"Markdown file generated at {markdownFile}");
+}
