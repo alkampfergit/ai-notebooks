@@ -194,7 +194,21 @@ using (var writer = new StreamWriter(markdownFile))
                     _ => string.Empty
                 };
 
-                writer.WriteLine($"{markdownPrefix}{text}\n");
+                string preamble = null;
+                var numberingProperties = paragraph.ParagraphProperties?.NumberingProperties;
+                if (numberingProperties != null)
+                {
+                    var numberingId = numberingProperties.NumberingId.Val;
+
+                    // Determine if it's a bullet or numbered list
+                    if (numberingId != null)
+                    {
+                        // for now ... bullet list
+                        preamble = "- ";
+                    }
+                }
+
+                writer.WriteLine($"{preamble}{markdownPrefix}{text}\n");
             }
             else if (element is Table)
             {
