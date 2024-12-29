@@ -1,0 +1,60 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#!import ../dotenv.cs
+#r "nuget: Microsoft.SemanticKernel, 1.32.0"
+#r "nuget: Microsoft.Extensions.Logging, 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Console, 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Debug, 8.*"
+
+#!markdown
+
+We will use simple configuration to just access openai api
+
+#!csharp
+
+using Microsoft.SemanticKernel;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+var kernelBuilder = Kernel.CreateBuilder();
+kernelBuilder.Services.AddLogging(l => l
+    .SetMinimumLevel(LogLevel.Trace)
+    .AddConsole()
+    .AddDebug()
+);
+
+kernelBuilder.Services.AddAzureOpenAIChatCompletion(
+    "GPT4omini", //"GPT35_2",//"GPT42",
+    Dotenv.Get("OPENAI_API_BASE"),
+    Dotenv.Get("OPENAI_API_KEY"),
+    serviceId: "default",
+    modelId: "gpt4o");
+
+#!csharp
+
+using Microsoft.SemanticKernel.ChatCompletion;
+
+var kernel = kernelBuilder.Build();
+var chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
+
+#!csharp
+
+ChatHistory chatMessages = new();
+chatMessages.AddSystemMessage("you are an expert technician that will extract information from images");
+
+var image = "/Users/gianmariaricci/develop/github/ai-notebooks/kernel-memory-extraction/output/tables/fileoutpart35.png";
+var bytes = System.IO.File.ReadAllBytes(image);
+var imageData = new ReadOnlyMemory<byte>(bytes);
+ var message = new ChatMessageContentItemCollection
+{
+    new TextContent("Extract a short description for this image then a longer markdown description"),
+    new ImageContent(imageData, "image/png")
+};
+
+chatMessages.AddUserMessage(message);
+var result = await chatCompletionService.GetChatMessageContentAsync(chatMessages);
+Console.WriteLine(result);

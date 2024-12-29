@@ -38,21 +38,27 @@ if (Directory.Exists(outputDirectory))
 }
 Directory.CreateDirectory(outputDirectory);
 
-using (Stream sourceStream = File.OpenRead(@"C:\temp\extractPDFInput.pdf"))
+//var inputFile = @"C:\temp\extractPDFInput.pdf";
+var inputFile = "/Users/gianmariaricci/Downloads/66250675-4G-EN.pdf/66250675-4G-EN.pdf";
+using (Stream sourceStream = File.OpenRead(inputFile))
 {
     IAsset asset = pdfServices.Upload(sourceStream, PDFServicesMediaType.PDF.GetMIMETypeValue());
 
     // Create parameters for the job
     ExtractPDFParams extractPDFParams = ExtractPDFParams.ExtractPDFParamsBuilder()
-    .AddElementsToExtract(new List<ExtractElementType>(new[]
-        { ExtractElementType.TEXT, ExtractElementType.TABLES }))
-    .AddElementsToExtractRenditions(
-        new List<ExtractRenditionsElementType>(new[] {
-            ExtractRenditionsElementType.TABLES }))
-    .AddTableStructureFormat(TableStructureType.CSV)
-    .Build();
+        .AddElementsToExtract(new List<ExtractElementType>(new[]
+            { 
+                ExtractElementType.TEXT, 
+                ExtractElementType.TABLES }))
+        .AddElementsToExtractRenditions(
+            new List<ExtractRenditionsElementType>(new[] {
+                ExtractRenditionsElementType.TABLES,
+                ExtractRenditionsElementType.FIGURES }))
+        .AddTableStructureFormat(TableStructureType.CSV)
+        .Build();
 
-    ExtractPDFJob extractPDFJob = new ExtractPDFJob(asset).SetParams(extractPDFParams);
+    ExtractPDFJob extractPDFJob = new ExtractPDFJob(asset)
+        .SetParams(extractPDFParams);
 
     string location = pdfServices.Submit(extractPDFJob);
     PDFServicesResponse<ExtractPDFResult> pdfServicesResponse =
