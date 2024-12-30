@@ -367,7 +367,11 @@ using System.Text.Json;
 public record ImageDescription(string ShortDescription, string LongDescription);
 
 //describe image with chatgpt
-public async Task<ImageDescription> InnerCreateDescription(string imagePath, string systemPrompt, string prompt, string cacheKey = ".gpt.txt") 
+public async Task<ImageDescription> InnerCreateDescription(
+    string imagePath, 
+    string systemPrompt, 
+    string prompt, 
+    string cacheKey = "gpt.txt") 
 {
     var fileName = System.IO.Path.GetFileName(imagePath);
     var cacheDirectory = System.IO.Path.Combine(outputDirectory, "gptCache");
@@ -414,6 +418,8 @@ public async Task<ImageDescription> InnerCreateDescription(string imagePath, str
     }
     //write the cache faile
     System.IO.File.WriteAllText(cacheFileName, jsonResponse);
+    //write prompt for dump
+    System.IO.File.WriteAllText($"{cacheFileName}.prompt.txt", prompt);
 
      //deserialize with system.text.json and then grab shortDescription and longDescription from the arguments json
     var descriptions = JsonDocument.Parse(jsonResponse).RootElement;
@@ -425,25 +431,30 @@ public async Task<ImageDescription> InnerCreateDescription(string imagePath, str
 
 #!csharp
 
-public Task<ImageDescription> CreateDescription(string imagePath) 
+public Task<ImageDescription> CreateDescription(string imagePath, string context) 
 {
     return InnerCreateDescription(
         imagePath, 
         "You are an expert assistant that will create detailed images description from an image", 
-        @"For the image extract a short description and a long description
+        $@"For the image extract a short description and a long description based on context.
 Please include the long description only if the image needs a long description, if the image is a logo or 
 a simple image, you can put a string empty in the long description field.
-If the image contains more element, try to describe each element with a separated title.        
-        ");
+If the image contains more element, try to describe each element with a separated title. 
+Context:
+{context}",
+        cacheKey: ".gpt.txt");
 }
 
-public Task<ImageDescription> CreateTableDescription(string imagePath) 
+public Task<ImageDescription> CreateTableDescription(string imagePath, string context) 
 {
     return InnerCreateDescription(
         imagePath, 
         "You are an expert assistant that will create detailed images description from an image", 
-        @"This image represents a table, you need to extract a short description of the table then a detailed 
-description of table content to be used by a model to answer questions about table content",
+        $@"This image represents a table, you need to extract a short description of the table then a detailed 
+description of table content to be used by a model to answer questions about table content. Consider the context
+when you describe the table.
+Context:
+{context}",
         cacheKey: ".table.gpt.txt"
         );
 }
@@ -453,9 +464,9 @@ description of table content to be used by a model to answer questions about tab
 using CsvHelper;
 using CsvHelper.Configuration;
 using System.Globalization;
+
 public List<List<string>> PoorManReadCsv(string fileName)
 {
-
     // some table has first line that is different from the rest
     var table = new List<List<string>>();
 
@@ -463,7 +474,11 @@ public List<List<string>> PoorManReadCsv(string fileName)
     {
         var firstLine = reader.ReadLine();
 
-        using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+        var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+        {
+            HasHeaderRecord = false,
+        };
+        using (var csv = new CsvReader(reader, config))
         {
             var records = csv.GetRecords<dynamic>();
             foreach (var record in records)
@@ -504,186 +519,331 @@ if (File.Exists(markdownForLLM))
 }
 
 int maxImageCount = 1000;
+
+//To generate markdown we simply create a list of lines, then output all lines into a file.
+public enum LineType
+{
+    Unknown = 0,
+    Table = 1,
+    Image = 2,
+    Text = 3,
+    Header1 = 4,
+    Header2 = 5,
+    Header3 = 6,
+    Header4 = 7,
+    Header5 = 8,
+    Header6 = 9,
+    UnorderedList = 10,
+}
+record Line(string Text, string filePath, int Page, LineType type);
+List<Line> lines = new ();
+
+foreach (var element in elements)
+{
+    var (path, index) = ProcessPath(element.Path);
+
+    if (path.StartsWith("Figure"))
+    {
+        //ok we have a picture... we need to find the path
+        var figurePath = element.FilePaths?.FirstOrDefault();
+        if (figurePath != null)
+        {
+            //Console.WriteLine($"Path: {path} Index: {index} Page: {element.Page}, FigurePath: {figurePath}");
+            var description = element.Text;
+            var fullPicturePath = Path.Combine(outputDirectory, figurePath);
+            lines.Add(new Line(description, figurePath, element.Page, LineType.Image));
+        }
+    }
+    else
+    {
+        LineType lineType = LineType.Text;
+        if (path.Contains("H1"))
+        {
+            lineType = LineType.Header1;
+        }
+        else if (path.Contains("H2"))
+        {
+            lineType = LineType.Header2;
+        }
+        else if (path.Contains("H3"))
+        {
+            lineType = LineType.Header3;
+        }
+        else if (path.Contains("H4"))
+        {
+            lineType = LineType.Header4;
+        }
+        else if (path.Contains("H5"))
+        {
+            lineType = LineType.Header5;
+        }
+        else if (path.Contains("H6"))
+        {
+            lineType = LineType.Header6;
+        }
+
+        //ok now verify the list item
+        else if (element.Path.Contains("/Lbl") 
+            || element.Path.Contains("/LBody/Figure")
+            || element.Path.Contains("LBody/ParagraphSpan/Figure"))
+        {
+            // this is the char that is used for a unordered list item, we need to skip, it is not important for the structure
+            //Console.WriteLine($"Skipping {element.Text}");
+            continue;
+        }
+
+        else if (element.Path.Contains("/LBody"))
+        {
+            //Console.WriteLine($"List item with content {element.Text}");
+            lineType = LineType.UnorderedList;
+        }
+        else if (path.Contains("Table"))
+        {
+            //ok this is a table, we can have the main record, (That contains the table files) or the simple elements, that need sto
+            //be skipped
+            var tableFileName = element.FilePaths?
+                .Where(f => !string.IsNullOrEmpty(f))
+                .Where(f => Path.GetExtension(f).ToLower() == ".csv")
+                .FirstOrDefault();
+
+            var tableImage = element.FilePaths?
+                .Where(f => !string.IsNullOrEmpty(f))
+                .Where(f => Path.GetExtension(f).ToLower() == ".png")
+                .FirstOrDefault();
+
+            if (tableFileName != null)
+            {
+                var realFile = Path.Combine(outputDirectory, tableFileName);
+                lines.Add(new Line(tableFileName, tableImage, element.Page, LineType.Table));
+                // var table = PoorManReadCsv(realFile);
+
+                // //ok now we take number of column
+                // var columnCount = table.Max(r => r.Count);
+
+                // //now we have two options, if the number of columns is equal for each row, we have a simple and normal table
+                // //otherwise we have a complex table, that need to be handled in html
+                // if (table.All(row => row.Count == columnCount))
+                // {
+                //     //ok standard markdown table
+                //     var header = table.First();
+                //     lines.Add("|" + string.Join("|", header) + "|");
+                //     lines.Add("|" + string.Join("|", header.Select(_ => "---")) + "|");
+
+                //     foreach (var row in table.Skip(1))
+                //     {
+                //         lines.Add("|" + string.Join("|", row) + "|");
+                //     }
+                // }
+                // else
+                // {
+                //     //ok this is a complex table, we will output the table as html, this will not generate a pure markdown but it is better than nothing.
+                //     lines.Add("<table>");
+
+                //     //the header is special, because some table have an header with less columns than the body, like single column we need to use colspan
+                //     var header = table.First();
+                //     lines.Add("<tr>");
+
+                //     //if we have less than columnCount we need to add a colspan in the last cell
+                //     var lastColSpan = columnCount - header.Count;
+                //     for (int i = 0; i < header.Count; i++)
+                //     {
+                //         string colspan = "";
+                //         if (lastColSpan > 0 && i == header.Count - 1)
+                //         {
+                //             colspan = $" colspan=\"{lastColSpan + 1}\"";
+                //         }
+                //         lines.Add($"<th{colspan}>{header[i]}</th>");
+                //     }
+                //     lines.Add("</tr>");
+
+                //     foreach (var row in table.Skip(1))
+                //     {
+                //         lines.Add("<tr>");
+                //         foreach (var cell in row)
+                //         {
+                //             lines.Add($"<td>{cell}</td>");
+                //         }
+                //         lines.Add("</tr>");
+                //     }
+
+                //     lines.Add("</table>  \n");
+                // }
+
+                // if (tableImage != null)
+                // {
+                //     var fullPicturePath = Path.Combine(outputDirectory, tableImage);
+                //     var gptDescription = await CreateTableDescription(fullPicturePath);
+
+                //     lines.Add($"TableSummary: {gptDescription.ShortDescription}  \n");
+                //     if (!string.IsNullOrEmpty(gptDescription.LongDescription))
+                //     {
+                //         lines.Add($"[*Table Description*:]  \n{gptDescription.LongDescription}  \n  \n[*End Table Description*:]  \n");
+                //     }
+                // }
+            }
+
+            continue;
+        }
+
+        lines.Add(new Line(element.Text, null, element.Page, lineType));
+        
+        //Debug path
+        //lines.Add(new Line(element.Text + $"[{element.Path}]", null, element.Page, lineType));
+    }
+}
+
 //open a file to write inside it
 using (var writer = new StreamWriter(markdownOutput))
 using (var writerLLM = new StreamWriter(markdownForLLM))
 {
-    foreach (var element in elements)
+    for (var lineNum = 0; lineNum < lines.Count; lineNum++) 
     {
-        var (path, index) = ProcessPath(element.Path);
-
-        if (path.StartsWith("Figure"))
+        var line = lines[lineNum];
+        switch (line.type)
         {
-            //ok we have a picture... we need to find the path
-            var figurePath = element.FilePaths?.FirstOrDefault();
-            if (figurePath != null) 
-            {
-                //Console.WriteLine($"Path: {path} Index: {index} Page: {element.Page}, FigurePath: {figurePath}");
-                var description = element.Text;
-                if (maxImageCount-- >= 0)
+            case LineType.Header1:
+                writer.WriteLine($"# {line.Text}");
+                writerLLM.WriteLine($"# {line.Text}");
+                break;
+
+            case LineType.Header2:
+                writer.WriteLine($"## {line.Text}");
+                writerLLM.WriteLine($"## {line.Text}");
+                break;
+
+            case LineType.Header3:
+                writer.WriteLine($"### {line.Text}");
+                writerLLM.WriteLine($"### {line.Text}");
+                break;
+
+            case LineType.Header4:
+                writer.WriteLine($"#### {line.Text}");
+                writerLLM.WriteLine($"#### {line.Text}");
+                break;
+
+            case LineType.Header5:
+                writer.WriteLine($"##### {line.Text}");
+                writerLLM.WriteLine($"##### {line.Text}");
+                break;
+
+            case LineType.Header6:
+                writer.WriteLine($"###### {line.Text}");
+                writerLLM.WriteLine($"###### {line.Text}");
+                break;
+
+            case LineType.UnorderedList:
+                writer.WriteLine($"- {line.Text}");
+                writerLLM.WriteLine($"- {line.Text}");
+                break;
+
+            case LineType.Text:
+                writer.WriteLine($"{line.Text}");
+                writerLLM.WriteLine($"{line.Text}");
+                break;
+
+            case LineType.Image:
+                writer.WriteLine($"![{line.Text}]({line.filePath})");
+                writerLLM.WriteLine($"![{line.Text}]({line.filePath})");
+
+                //now description
+                //now take up to 10 line before and after the image of type text for context
+                var contextLines = new List<string>();
+                
+                var context = string.Join("\n", contextLines);
+                var gptDescription = await CreateDescription(Path.Combine(outputDirectory, line.filePath), context: "");
+                writer.WriteLine($"ImageSummary: {gptDescription.ShortDescription}  \n");
+                if (!string.IsNullOrEmpty(gptDescription.LongDescription))
                 {
-                    var fullPicturePath = Path.Combine(outputDirectory, figurePath);
-                    var gptDescription = await CreateDescription(fullPicturePath);
-                    
-                    //ok we will create the description with chatgptù
-                    description = description ?? gptDescription.ShortDescription;
-                    writer.WriteLine($"![{description}]({figurePath})  \n");
-                    writerLLM.WriteLine($"![{gptDescription.ShortDescription}]({figurePath})  \n");
-                    if (!string.IsNullOrEmpty(gptDescription.LongDescription))
-                    {
-                        writerLLM.WriteLine($"[*Image Description*:]  \n{gptDescription.LongDescription}  \n  \n[*End Image Description*:]  \n");
-                    }
+                    writer.WriteLine($"[*Image Description*:]  \n{gptDescription.LongDescription}  \n  \n[*End Image Description*:]  \n");
                 }
-                else 
+                break;
+
+            case LineType.Table:
+                
+                //name of the file is the the text line
+                var fullFileTableName = Path.Combine(outputDirectory, line.Text);
+                var table = PoorManReadCsv(fullFileTableName);
+
+                //ok now we take number of column
+                var columnCount = table.Max(r => r.Count);
+
+                //now we have two options, if the number of columns is equal for each row, we have a simple and normal table
+                //otherwise we have a complex table, that need to be handled in html
+                writerLLM.WriteLine("TABLE: " + line.Text);
+                if (table.All(row => row.Count == columnCount))
                 {
-                    writer.WriteLine($"![{description}]({figurePath})");
-                    writerLLM.WriteLine($"![{description}]({figurePath})");
-                }
-            }
-        }
-        else
-        {
-            string preamble = "";
-            if (path.Contains("H1"))
-            {
-                preamble = "# ";
-            }
-            else if (path.Contains("H2"))
-            {
-                preamble = "## ";
-            }
-            else if (path.Contains("H3"))
-            {
-                preamble = "### ";
-            }
-            else if (path.Contains("H4"))
-            {
-                preamble = "#### ";
-            }
-            else if (path.Contains("H5"))
-            {
-                preamble = "##### ";
-            }
-            else if (path.Contains("H6"))
-            {
-                preamble = "###### ";
-            }
+                    //ok standard markdown table
+                    var header = table.First();
+                    writer.WriteLine("|" + string.Join("|", header) + "|");
+                    writer.WriteLine("|" + string.Join("|", header.Select(_ => "---")) + "|");
+                    writerLLM.WriteLine("|" + string.Join("|", header) + "|");
+                    writerLLM.WriteLine("|" + string.Join("|", header.Select(_ => "---")) + "|");
 
-            //ok now verify the list item
-            else if (element.Path.Contains("/Lbl"))
-            {
-                // this is the char that is used for a unordered list item, we need to skip, it is not important for the structure
-                //Console.WriteLine($"Skipping {element.Text}");
-                continue;
-            }
-            else if (element.Path.Contains("/LBody"))
-            {
-                //Console.WriteLine($"List item with content {element.Text}");
-                preamble = "- ";
-            }
-            else if (path.Contains("Table"))
-            {
-                //ok this is a table, we can have the main record, (That contains the table files) or the simple elements, that need sto 
-                //be skipped
-                var tableFileName = element.FilePaths?
-                    .Where(f => !string.IsNullOrEmpty(f))
-                    .Where(f => Path.GetExtension(f).ToLower() == ".csv")
-                    .FirstOrDefault();
-
-                var tableImage = element.FilePaths?
-                    .Where(f => !string.IsNullOrEmpty(f))
-                    .Where(f => Path.GetExtension(f).ToLower() == ".png")
-                    .FirstOrDefault();
-
-                if (tableImage != null)
-                {
-                    
-                }
-
-                if (tableFileName != null)
-                {
-                    var realFile = Path.Combine(outputDirectory, tableFileName);
-                    
-                    //writerLLM.WriteLine($"Table: {tableFileName}");
-
-                    var table = PoorManReadCsv(realFile);
-
-                    //ok now we take number of column 
-                    var columnCount = table.Max(r => r.Count);
-
-                    //now we have two options, if the number of columns is equal for each row, we have a simple and normal table
-                    //otherwise we have a complex table, that need to be handled in html
-                    if (table.All(row => row.Count == columnCount))
+                    foreach (var row in table.Skip(1))
                     {
-                        //ok standard markdown table
-                        var header = table.First();
-                        writer.WriteLine("|" + string.Join("|", header) + "|");
-                        writer.WriteLine("|" + string.Join("|", header.Select(_ => "---")) + "|");
-                        writerLLM.WriteLine("|" + string.Join("|", header) + "|");
-                        writerLLM.WriteLine("|" + string.Join("|", header.Select(_ => "---")) + "|");
-
-                        foreach (var row in table.Skip(1))
-                        {
-                            writer.WriteLine("|" + string.Join("|", row) + "|");
-                            writerLLM.WriteLine("|" + string.Join("|", row) + "|");
-                        }
+                        writer.WriteLine("|" + string.Join("|", row) + "|");
+                        writerLLM.WriteLine("|" + string.Join("|", row) + "|");
                     }
-                    else
-                    {
-                        //ok this is a complex table, we will output the table as html, this will not generate a pure markdown but it is better than nothing.
-                        writer.WriteLine("<table>");
-                        writerLLM.WriteLine("<table>");
-
-                        //the header is special, because some table have an header with less columns than the body, like single column we need to use colspan
-                        var header = table.First();
-                        writer.WriteLine("<tr>");
-                        writerLLM.WriteLine("<tr>");
-
-                        //if we have less than columnCount we need to add a colspan in the last cell
-                        var lastColSpan = columnCount - header.Count;
-                        for (int i = 0; i < header.Count; i++)
-                        {
-                            string colspan = "";
-                            if (lastColSpan > 0 && i == header.Count - 1)
-                            {
-                                colspan = $" colspan=\"{lastColSpan + 1}\"";
-                            }
-                            writer.WriteLine($"<th{colspan}>{header[i]}</th>");
-                            writerLLM.WriteLine($"<th{colspan}>{header[i]}</th>");
-                        }
-                        writer.WriteLine("</tr>");
-                        writerLLM.WriteLine("</tr>");
-
-                        foreach (var row in table.Skip(1))
-                        {
-                            writer.WriteLine("<tr>");
-                            writerLLM.WriteLine("<tr>");
-                            foreach (var cell in row)
-                            {
-                                writer.WriteLine($"<td>{cell}</td>");
-                                writerLLM.WriteLine($"<td>{cell}</td>");
-                            }
-                            writer.WriteLine("</tr>");
-                            writerLLM.WriteLine("</tr>");
-                        }
-
-                        writer.WriteLine("</table>");
-                        writerLLM.WriteLine("</table>");
-                    }
-
                 }
                 else
                 {
-                    continue;
+                    //ok this is a complex table, we will output the table as html, this will not generate a pure markdown but it is better than nothing.
+                    writer.WriteLine("<table>");
+                    writerLLM.WriteLine("<table>");
+
+                    //the header is special, because some table have an header with less columns than the body, like single column we need to use colspan
+                    var header = table.First();
+                    writer.WriteLine("<tr>");
+                    writerLLM.WriteLine("<tr>");
+
+                    //if we have less than columnCount we need to add a colspan in the last cell
+                    var lastColSpan = columnCount - header.Count;
+                    for (int i = 0; i < header.Count; i++)
+                    {
+                        string colspan = "";
+                        if (lastColSpan > 0 && i == header.Count - 1)
+                        {
+                            colspan = $" colspan=\"{lastColSpan + 1}\"";
+                        }
+                        writer.WriteLine($"<th{colspan}>{header[i]}</th>");
+                        writerLLM.WriteLine($"<th{colspan}>{header[i]}</th>");
+                    }
+                    writer.WriteLine("</tr>");
+                    writerLLM.WriteLine("</tr>");
+
+                    foreach (var row in table.Skip(1))
+                    {
+                       writer.WriteLine("<tr>");
+                       writerLLM.WriteLine("<tr>");
+                        foreach (var cell in row)
+                        {
+                            writer.WriteLine($"<td>{cell}</td>");
+                            writerLLM.WriteLine($"<td>{cell}</td>");
+                        }
+                        writer.WriteLine("</tr>");
+                        writerLLM.WriteLine("</tr>");
+                    }
+
+                   writer.WriteLine("</table>  \n");
+                   writerLLM.WriteLine("</table>  \n");
                 }
-            }
 
-            //Console.WriteLine($"Path: {path} Index: {index} Page: {element.Page}, Text: {element.Text}");
-            writer.WriteLine($"{preamble}{element.Text}  \n");
-            writerLLM.WriteLine($"{preamble}{element.Text}  \n");
+                // if (tableImage != null)
+                // {
+                //     var fullPicturePath = Path.Combine(outputDirectory, tableImage);
+                //     var gptDescription = await CreateTableDescription(fullPicturePath);
+
+                //     lines.Add($"TableSummary: {gptDescription.ShortDescription}  \n");
+                //     if (!string.IsNullOrEmpty(gptDescription.LongDescription))
+                //     {
+                //         lines.Add($"[*Table Description*:]  \n{gptDescription.LongDescription}  \n  \n[*End Table Description*:]  \n");
+                //     }
+                // }
+                break;
         }
-    }
 
-    writer.Close();
-    writerLLM.Close();
+        // write another \n
+        writer.WriteLine();
+        writerLLM.WriteLine();
+    }
 }
