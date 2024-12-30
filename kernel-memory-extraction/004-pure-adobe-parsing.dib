@@ -1,0 +1,575 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#r "nuget: Microsoft.Extensions.DependencyInjection, 8.*"
+#r "nuget: Microsoft.Extensions.Http, 8.*"
+#r "nuget: DocumentFormat.OpenXml, 3.2.0"
+#r "nuget: Adobe.PDFServicesSDK, 4.1.0"
+#r "nuget: CsvHelper, 33.0.1"
+#r "nuget: Microsoft.SemanticKernel, 1.32.0"
+#r "nuget: Microsoft.Extensions.Logging, 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Console, 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Debug, 8.*"
+#!import ../dotenv.cs
+
+#!csharp
+
+using System.IO;
+
+// if the directory exists, delete, then create 
+var outputDirectory = Path.Combine(Environment.CurrentDirectory, "output2");
+// var inputFile = @"C:/temp/extractPDFInput.pdf";
+//var inputFile = @"C:/temp/manualeDreame.pdf";
+var inputFile = @"s:\Downloads\66250675-4G-EN.pdf";
+
+#!csharp
+
+//clear output if you want to clear the output
+var clearOutput = false;
+if (clearOutput)
+{
+    if (Directory.Exists(outputDirectory))
+    {
+        Directory.Delete(outputDirectory, true);
+    }
+}
+//create dir if not exists
+if (!Directory.Exists(outputDirectory))
+{
+    Directory.CreateDirectory(outputDirectory);
+}
+
+#!csharp
+
+// now use adobe to extract structure for tables, this because pdf extract is better than word
+using Adobe.PDFServicesSDK.auth;
+using Adobe.PDFServicesSDK;
+using Adobe.PDFServicesSDK.io;
+using Adobe.PDFServicesSDK.pdfjobs.parameters.extractpdf;
+using Adobe.PDFServicesSDK.pdfjobs.jobs;
+using Adobe.PDFServicesSDK.pdfjobs.results;
+using System.IO;
+using System.IO.Compression;
+
+ICredentials credentials = new ServicePrincipalCredentials(
+    Dotenv.Get("ADOBE_CLIENT_ID"),
+    Dotenv.Get("ADOBE_CLIENT_SECRET"));
+
+PDFServices pdfServices = new PDFServices(credentials);
+
+var reanalyzePdf = false;
+
+if (reanalyzePdf) {
+    using (Stream sourceStream = File.OpenRead(inputFile))
+    {
+        IAsset asset = pdfServices.Upload(sourceStream, PDFServicesMediaType.PDF.GetMIMETypeValue());
+
+        // Create parameters for the job
+        ExtractPDFParams extractPDFParams = ExtractPDFParams.ExtractPDFParamsBuilder()
+        .AddElementsToExtract(new List<ExtractElementType>(new[]
+            { ExtractElementType.TEXT, ExtractElementType.TABLES }))
+        .AddElementsToExtractRenditions(
+            new List<ExtractRenditionsElementType>(new[] {
+                ExtractRenditionsElementType.FIGURES,
+                ExtractRenditionsElementType.TABLES }))
+        .AddTableStructureFormat(TableStructureType.CSV)
+        .Build();
+
+        ExtractPDFJob extractPDFJob = new ExtractPDFJob(asset).SetParams(extractPDFParams);
+
+        string location = pdfServices.Submit(extractPDFJob);
+        PDFServicesResponse<ExtractPDFResult> pdfServicesResponse =
+            pdfServices.GetJobResult<ExtractPDFResult>(location, typeof(ExtractPDFResult));
+
+        // Get content from the resulting asset(s)
+        IAsset resultAsset = pdfServicesResponse.Result.Resource;
+        StreamAsset streamAsset = pdfServices.GetContent(resultAsset);
+
+        //ok output is a zip file, we are interested only in the real content.
+        using var resultStream = streamAsset.Stream;
+
+        using (var archive = new ZipArchive(resultStream))
+        {
+            foreach (var entry in archive.Entries)
+            {
+                var destinationPath = Path.Combine(outputDirectory, entry.FullName);
+                var directoryName = Path.GetDirectoryName(destinationPath);
+                //if not exists, create the directory
+                if (!Directory.Exists(directoryName))
+                {
+                    Directory.CreateDirectory(directoryName);
+                }
+                entry.ExtractToFile(destinationPath, overwrite: true);
+            }
+        }
+    }
+}
+
+#!csharp
+
+using System;
+using System.Collections.Generic;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+public class VersionInfo
+{
+    [JsonPropertyName("json_export")]
+    public string JsonExport { get; set; }
+
+    [JsonPropertyName("page_segmentation")]
+    public string PageSegmentation { get; set; }
+
+    [JsonPropertyName("schema")]
+    public string Schema { get; set; }
+
+    [JsonPropertyName("structure")]
+    public string Structure { get; set; }
+
+    [JsonPropertyName("table_structure")]
+    public string TableStructure { get; set; }
+}
+
+public class ExtendedMetadata
+{
+    [JsonPropertyName("ID_instance")]
+    public string IDInstance { get; set; }
+
+    [JsonPropertyName("ID_permanent")]
+    public string IDPermanent { get; set; }
+
+    [JsonPropertyName("has_acroform")]
+    public bool HasAcroform { get; set; }
+
+    [JsonPropertyName("has_embedded_files")]
+    public bool HasEmbeddedFiles { get; set; }
+
+    [JsonPropertyName("is_XFA")]
+    public bool IsXFA { get; set; }
+
+    [JsonPropertyName("is_certified")]
+    public bool IsCertified { get; set; }
+
+    [JsonPropertyName("is_encrypted")]
+    public bool IsEncrypted { get; set; }
+
+    [JsonPropertyName("is_digitally_signed")]
+    public bool IsDigitallySigned { get; set; }
+
+    [JsonPropertyName("language")]
+    public string Language { get; set; }
+
+    [JsonPropertyName("page_count")]
+    public int PageCount { get; set; }
+
+    [JsonPropertyName("pdf_version")]
+    public string PdfVersion { get; set; }
+
+    [JsonPropertyName("pdfa_compliance_level")]
+    public string PdfaComplianceLevel { get; set; }
+
+    [JsonPropertyName("pdfua_compliance_level")]
+    public string PdfuaComplianceLevel { get; set; }
+}
+
+public class FontInfo
+{
+    [JsonPropertyName("alt_family_name")]
+    public string AltFamilyName { get; set; }
+
+    [JsonPropertyName("embedded")]
+    public bool Embedded { get; set; }
+
+    [JsonPropertyName("encoding")]
+    public string Encoding { get; set; }
+
+    [JsonPropertyName("family_name")]
+    public string FamilyName { get; set; }
+
+    [JsonPropertyName("font_type")]
+    public string FontType { get; set; }
+
+    [JsonPropertyName("italic")]
+    public bool Italic { get; set; }
+
+    [JsonPropertyName("monospaced")]
+    public bool Monospaced { get; set; }
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; }
+
+    [JsonPropertyName("subset")]
+    public bool Subset { get; set; }
+
+    [JsonPropertyName("weight")]
+    public int Weight { get; set; }
+}
+
+public class Attributes
+{
+    [JsonPropertyName("LineHeight")]
+    public double? LineHeight { get; set; }
+
+    [JsonPropertyName("SpaceAfter")]
+    public double? SpaceAfter { get; set; }
+
+    [JsonPropertyName("TextAlign")]
+    public string TextAlign { get; set; }
+
+    [JsonPropertyName("BBox")]
+    public List<double> BBox { get; set; }
+
+    [JsonPropertyName("Placement")]
+    public string Placement { get; set; }
+}
+
+public class Element
+{
+    [JsonPropertyName("Bounds")]
+    public List<double> Bounds { get; set; }
+
+    [JsonPropertyName("Font")]
+    public FontInfo Font { get; set; }
+
+    [JsonPropertyName("HasClip")]
+    public bool HasClip { get; set; }
+
+    [JsonPropertyName("Lang")]
+    public string Lang { get; set; }
+
+    [JsonPropertyName("ObjectID")]
+    public int ObjectID { get; set; }
+
+    [JsonPropertyName("Page")]
+    public int Page { get; set; }
+
+    [JsonPropertyName("Path")]
+    public string Path { get; set; }
+
+    [JsonPropertyName("Text")]
+    public string Text { get; set; }
+
+    [JsonPropertyName("TextSize")]
+    public double? TextSize { get; set; }
+
+    [JsonPropertyName("attributes")]
+    public Attributes Attributes { get; set; }
+
+    [JsonPropertyName("filePaths")]
+    public String[] FilePaths { get; set; } = Array.Empty<string>();
+}
+
+public class Root
+{
+    [JsonPropertyName("version")]
+    public VersionInfo Version { get; set; }
+
+    [JsonPropertyName("extended_metadata")]
+    public ExtendedMetadata ExtendedMetadata { get; set; }
+
+    [JsonPropertyName("elements")]
+    public List<Element> Elements { get; set; }
+}
+
+
+public Root DeserializeContent(string fileName)
+{
+    var jsonString = File.ReadAllText(fileName);
+    return JsonSerializer.Deserialize<Root>(jsonString);
+}
+
+#!csharp
+
+var fileName = Path.Combine(outputDirectory, "structuredData.json");
+var structuredData = DeserializeContent(fileName);
+
+#!csharp
+
+using System.Text.RegularExpressions;
+
+public (string Path, int Index) ProcessPath(string documentPath)
+{
+    // Remove the "//Document" part
+    string modifiedPath = documentPath.Replace("//Document/", "");
+
+    // Extract the number within square brackets if it exists
+    string bracketPattern = @"(?<path>.*)\[(?<number>\d+)\]";
+    Match bracketMatch = Regex.Match(modifiedPath, bracketPattern);
+    if (bracketMatch.Success)
+    {
+        string path = bracketMatch.Groups["path"].Value;
+        int index = int.Parse(bracketMatch.Groups["number"].Value);
+        return (path, index);
+    }
+    
+    return (modifiedPath, -1);    
+}
+
+#!csharp
+
+using Microsoft.SemanticKernel.ChatCompletion;
+//Prepare Semantic Kernel
+using Microsoft.SemanticKernel;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+var kernelBuilder = Kernel.CreateBuilder();
+kernelBuilder.Services.AddLogging(l => l
+    .SetMinimumLevel(LogLevel.Trace)
+    .AddConsole()
+    .AddDebug()
+);
+
+kernelBuilder.Services.AddAzureOpenAIChatCompletion(
+    "GPT4omini", //"GPT35_2",//"GPT42",
+    Dotenv.Get("OPENAI_API_BASE"),
+    Dotenv.Get("OPENAI_API_KEY"),
+    serviceId: "default",
+    modelId: "gpt4o");
+
+var kernel = kernelBuilder.Build();
+var chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
+
+#!csharp
+
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+using System.ComponentModel;
+
+//Define the function
+var describeLambda = [Description("Describe image")] (
+    [Description("Short description")] string shortDescription,
+    [Description("Long description")] string longDescription
+) =>
+{
+   return;
+};
+
+var function = KernelFunctionFactory.CreateFromMethod(describeLambda, "describe");
+var openAIFunction = function.Metadata.ToOpenAIFunction();
+
+var settings = new OpenAIPromptExecutionSettings()
+{
+        MaxTokens = 1000,
+        Temperature = 0,
+        ModelId = "gpt4o",
+        ToolCallBehavior = ToolCallBehavior.RequireFunction(openAIFunction, autoInvoke: false),
+};
+
+#!csharp
+
+using System.Text.Json;
+
+public record ImageDescription(string ShortDescription, string LongDescription);
+
+//describe image with chatgpt
+public async Task<ImageDescription> CreateDescription(string imagePath) 
+{
+    var fileName = System.IO.Path.GetFileName(imagePath);
+    var cacheDirectory = System.IO.Path.Combine(outputDirectory, "gptCache");
+    if (!System.IO.Directory.Exists(cacheDirectory))
+    {
+        System.IO.Directory.CreateDirectory(cacheDirectory);
+    }
+    var cacheFileName = System.IO.Path.Combine(cacheDirectory, $"{fileName}.gpt.txt");
+    string jsonResponse = null;
+    // verify if the file exists
+    if (System.IO.File.Exists(cacheFileName))
+    {
+        jsonResponse = System.IO.File.ReadAllText(cacheFileName);
+    }
+    else {
+        //ok we need to call gpt
+        string imageDescription;
+        if (!File.Exists(imagePath))
+        {
+            imageDescription = $"Image not found {imagePath}";
+        }
+        else
+        {
+            var bytes = System.IO.File.ReadAllBytes(imagePath);
+            var imageData = new ReadOnlyMemory<byte>(bytes);
+            var message = new ChatMessageContentItemCollection
+            {
+                new TextContent(@"For the image extract a short description and a long description
+Please include the long description only if the image needs a long description, if the image is a logo or 
+a simple image, you can put a string empty in the long description field.
+If the image contains more element, try to describe each element with a separated title.        
+        "),
+                new ImageContent(imageData, "image/png")
+            };
+
+            ChatHistory chatMessages = new();
+            chatMessages.AddSystemMessage("You are an expert assistant that will create detailed images description from an image");
+            chatMessages.AddUserMessage(message);
+            var result = await chatCompletionService.GetChatMessageContentAsync(chatMessages, settings);
+
+            var mc = result as OpenAIChatMessageContent;
+            var toolCall = mc.ToolCalls.Single();
+            
+            //now deserialize the tool call argumetns
+            jsonResponse = toolCall.FunctionArguments.ToString();
+           
+        }
+    }
+    //write the cache faile
+    System.IO.File.WriteAllText(cacheFileName, jsonResponse);
+
+     //deserialize with system.text.json and then grab shortDescription and longDescription from the arguments json
+    var descriptions = JsonDocument.Parse(jsonResponse).RootElement;
+    var shortDescription = descriptions.GetProperty("shortDescription").GetString();
+    var longDescription = descriptions.GetProperty("longDescription").GetString();
+
+    return new ImageDescription(shortDescription, longDescription);
+}
+
+#!csharp
+
+using CsvHelper;
+using System.Globalization;
+
+var elements = structuredData.Elements;
+string markdownOutput = Path.Combine(outputDirectory, "output.md");
+string markdownForLLM = Path.Combine(outputDirectory, "outputForLLM.md");
+
+//if output exists, delete it
+if (File.Exists(markdownOutput))
+{
+    File.Delete(markdownOutput);
+}
+
+if (File.Exists(markdownForLLM))
+{
+    File.Delete(markdownForLLM);
+}
+
+int maxImageCount = 10;
+//open a file to write inside it
+using (var writer = new StreamWriter(markdownOutput))
+using (var writerLLM = new StreamWriter(markdownForLLM))
+{
+    foreach (var element in elements)
+    {
+        var (path, index) = ProcessPath(element.Path);
+
+        if (path.StartsWith("Figure"))
+        {
+            //ok we have a picture... we need to find the path
+            var figurePath = element.FilePaths?.FirstOrDefault();
+            if (figurePath != null) 
+            {
+                //Console.WriteLine($"Path: {path} Index: {index} Page: {element.Page}, FigurePath: {figurePath}");
+                var description = element.Text;
+                if (maxImageCount-- >= 0)
+                {
+                    var fullPicturePath = Path.Combine(outputDirectory, figurePath);
+                    var gptDescription = await CreateDescription(fullPicturePath);
+                    
+                    //ok we will create the description with chatgptù
+                    description = description ?? gptDescription.ShortDescription;
+                    writer.WriteLine($"![{description}]({figurePath})");
+                    writerLLM.WriteLine($"![{gptDescription.ShortDescription}]({figurePath})");
+                    if (!string.IsNullOrEmpty(gptDescription.LongDescription))
+                    {
+                        writerLLM.WriteLine($"[*Image Description*:]  \n{gptDescription.LongDescription}  \n  \n[*End Image Description*:]  \n");
+                    }
+                }
+                else 
+                {
+                    writer.WriteLine($"![{description}]({figurePath})");
+                }
+            }
+        }
+        else
+        {
+            string preamble = "";
+            if (path.Contains("H1"))
+            {
+                preamble = "# ";
+            }
+            else if (path.Contains("H2"))
+            {
+                preamble = "## ";
+            }
+            else if (path.Contains("H3"))
+            {
+                preamble = "### ";
+            }
+            else if (path.Contains("H4"))
+            {
+                preamble = "#### ";
+            }
+            else if (path.Contains("H5"))
+            {
+                preamble = "##### ";
+            }
+            else if (path.Contains("H6"))
+            {
+                preamble = "###### ";
+            }
+
+            //ok now verify the list item
+            else if (element.Path.Contains("/Lbl"))
+            {
+                // this is the char that is used for a unordered list item, we need to skip, it is not important for the structure
+                //Console.WriteLine($"Skipping {element.Text}");
+                continue;
+            }
+            else if (element.Path.Contains("/LBody"))
+            {
+                //Console.WriteLine($"List item with content {element.Text}");
+                preamble = "- ";
+            }
+            else if (path.Contains("Table"))
+            {
+                //ok this is a table, we can have the main record, (That contains the table files) or the simple elements, that need sto 
+                //be skipped
+                var tableFileName = element.FilePaths?
+                    .Where(f => !string.IsNullOrEmpty(f))
+                    .Where(f => Path.GetExtension(f).ToLower() == ".csv")
+                    .FirstOrDefault();
+
+                if (tableFileName != null)
+                {
+                    var realFile = Path.Combine(outputDirectory, tableFileName);
+                    writerLLM.WriteLine($"Table: {tableFileName}");
+                    
+                    // now we read the table ins
+                    using (var reader = new StreamReader(File.Open(realFile, FileMode.Open)))
+                    using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+                    {
+                        var records = csv.GetRecords<dynamic>().ToList();
+                        if (records.Any())
+                        {
+                            var headers = ((IDictionary<string, object>)records.First()).Keys;
+                            writer.WriteLine(string.Join(" | ", headers.Select(h => h.ToString())));
+                            writer.WriteLine(string.Join("", headers.Select(_ => "|---")).Substring(1));
+                            writerLLM.WriteLine(string.Join(" | ", headers.Select(h => h.ToString())));
+                            writerLLM.WriteLine(string.Join("", headers.Select(_ => "|---")).Substring(1));
+                            
+                            foreach (var record in records)
+                            {
+                                var values = ((IDictionary<string, object>)record).Values;
+                                writer.WriteLine(string.Join(" | ", values.Select(v => v?.ToString() ?? "")));
+                                writerLLM.WriteLine(string.Join(" | ", values.Select(v => v?.ToString() ?? "")));
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    continue;
+                }
+            }
+
+            //Console.WriteLine($"Path: {path} Index: {index} Page: {element.Page}, Text: {element.Text}");
+            writer.WriteLine($"{preamble}{element.Text}  \n");
+            writerLLM.WriteLine($"{preamble}{element.Text}  \n");
+        }
+    }
+
+    writer.Close();
+    writerLLM.Close();
+}

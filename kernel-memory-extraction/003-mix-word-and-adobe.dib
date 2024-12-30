@@ -26,7 +26,8 @@ if (Directory.Exists(outputDirectory))
 Directory.CreateDirectory(outputDirectory);
 
 // var inputFile = @"C:/temp/extractPDFInput.pdf";
-var inputFile = @"C:/temp/manualeDreame.pdf";
+//var inputFile = @"C:/temp/manualeDreame.pdf";
+var inputFile = @"s:\Downloads\66250675-4G-EN.pdf";
 
 #!csharp
 
@@ -91,18 +92,59 @@ using (Stream sourceStream = File.OpenRead(inputFile))
 
 #!csharp
 
+public HashSet<string> CreateBagOfWord(string content) 
+{
+    var sb = new StringBuilder();
+    HashSet<string> bagOfWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    //identify words by taking only letter and digit
+    foreach (var c in content)
+    {
+        if (char.IsLetterOrDigit(c))
+        {
+            sb.Append(c);
+        }
+        else
+        {
+            //ok word is finished
+            if (sb.Length > 0)
+            {
+                bagOfWords.Add(sb.ToString());
+                sb.Clear();
+            }
+        }
+    }
+
+    return bagOfWords;
+}
+
+public double PercentageOfBagOfWords(HashSet<string> bagOfWords1, HashSet<string> bagOfWords2)
+{
+    var intersection = bagOfWords1.Intersect(bagOfWords2);
+    var maxCount = Math.Max(bagOfWords1.Count, bagOfWords2.Count);
+    return (double)intersection.Count() / maxCount;
+}
+
+#!csharp
+
 using CsvHelper;
 using System.Globalization;
 
 //now we need to find all csv files because they contains data about extracted table from the output folder
 var csvFiles = Directory.GetFiles(outputDirectory, "*.csv", SearchOption.AllDirectories);
 
-var csvDictionary = new Dictionary<string, string>();
+// we store a dictionary in which the key is the file name and the value is a bag of word that are contained in the table
+// the trick is this.. we have tables but we do not exactly know if the word converted structure keeps the order of the
+// table (some table could be missing). So.. whenever we find a table in the pdf (we are SURE that this is a table because
+// adobe SDK is better in parsing tables) we like to match word found table with the adobe extracted table so we compare the
+// number of word.
+var csvDictionary = new Dictionary<string, HashSet<string>>();
 
 foreach (var csvFile in csvFiles)
 {
     var content = await File.ReadAllTextAsync(csvFile);
-    csvDictionary[csvFile] = content;
+    // now split by everything that is not a letter or digit, remove empty and create the bag of word
+    
+    csvDictionary[csvFile] = CreateBagOfWord(content);
 }
 Console.WriteLine($"Parsed {csvDictionary.Count} records from CSV files.");
 
@@ -129,7 +171,7 @@ if (System.IO.File.Exists(outputFile))
 
 var requestUri = "http://localhost:5000/api/convert/local";
 var jsonContent = @$"{{
-    ""LocalPdfFile"": ""{inputFile}"",
+    ""LocalPdfFile"": ""{inputFile.Replace("\\", "\\\\")}"",
     ""LocalOutputDocxFile"": ""{outputFile}""
 }}";
 
@@ -163,6 +205,26 @@ using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Wordprocessing;
 using System.IO;
+
+public HashSet<string> CreateBagOfWordFromDocxTable(Table table)
+{
+    var bagOfWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+   
+     foreach (var row in (table).Elements<TableRow>())
+     {
+        var rowMarkdown = new System.Text.StringBuilder();
+        foreach (var cell in row.Elements<TableCell>())
+        {
+            var text = cell.InnerText;
+            bagOfWords.UnionWith(CreateBagOfWord(text));
+        }
+        
+    }
+
+    return bagOfWords;
+}
+
+#!csharp
 
 var markdownFile = Path.Combine(outputDirectory, "output.md");
 // if file exists, delete
@@ -226,42 +288,31 @@ using (var writer = new StreamWriter(markdownFile))
             }
             else if (element is Table)
             {
-                  //ok we need to understand if we have a corresponding table in the csv files
-            
+                //ok we need to understand if we have a corresponding table in the csv files
+                // need to create the bag of word from word table
                 var bestMatch = string.Empty;
                 var bestScore = 0.0;
 
+                var tableBagOfWord = CreateBagOfWordFromDocxTable((Table)element);
+
                 foreach (var kvp in csvDictionary)
                 {
-                    var csvContent = kvp.Value;
-                    var cells = ((Table)element)
-                        .Descendants<TableCell>()
-                        .Select(tc => tc.InnerText)
-                        .Where (c => !string.IsNullOrWhiteSpace(c))
-                        .ToList();
-                    var matchCount = cells.Count(cell => csvContent.Contains(cell, StringComparison.OrdinalIgnoreCase));
-                    var score = (double)matchCount / cells.Count;
+                    var score = PercentageOfBagOfWords(kvp.Value, tableBagOfWord);
 
                     if (score > bestScore)
                     {
                         bestScore = score;
-                        bestMatch = csvContent;
+                        bestMatch = kvp.Key;
                     }
-
-                    // var allCellText = string.Join(" ", cells);
-                    // var checker = "Every 6 to 12 months";
-                    // if (csvContent.Contains(checker, StringComparison.OrdinalIgnoreCase) && allCellText.Contains(checker, StringComparison.OrdinalIgnoreCase))
-                    // {
-                    //     Console.WriteLine("CSV file: {0}, Score: {1}, Content {2} Word text: {3}", kvp.Key, score, csvContent, allCellText);
-                    // }
                 }
 
+                // now we will create table markdown using the best match if possible.
                 var tableMarkdown = new System.Text.StringBuilder();
 
-                if (!string.IsNullOrEmpty(bestMatch) && bestScore > 0.7)
+                if (!string.IsNullOrEmpty(bestMatch) && bestScore > 0.9)
                 {
                     Console.WriteLine("MATCH CSV file found with score {0}.", bestScore);
-                    using (var reader = new StringReader(bestMatch))
+                    using (var reader = new StreamReader(File.Open(bestMatch, FileMode.Open)))
                     using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
                     {
                         var records = csv.GetRecords<dynamic>().ToList();
