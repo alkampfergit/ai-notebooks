@@ -1,0 +1,99 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#r "nuget: Microsoft.Extensions.Logging, 8.*"
+#r "nuget: Microsoft.SemanticKernel, 1.34.0
+#r "nuget: Microsoft.Extensions.Logging.Console, 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Debug, 8.*"
+#r "nuget: Microsoft.Extensions.Http, 8.*"
+
+#!import ../dotenv.cs
+#!import ../pythonWrapper.cs
+#!import ../commonFullDi.cs
+#!import plugins/AudioVideoPlugin/AudioVideo.cs
+
+#!csharp
+
+var kernelBuilder = Common.ConfigureKernelBuilder(enableLogging: true, enableDumpProvider: false);
+
+var audioVideoPluginConfig = new AudioVideoPluginConfig("setting");
+Common.Services.AddSingleton(audioVideoPluginConfig);  
+
+kernelBuilder
+    .Plugins
+        .AddFromType<AudioVideoPlugin>("AudioVideoPlugin");
+
+#!csharp
+
+var kernel = Common.Resolve<Kernel>();
+
+#!csharp
+
+var videoFile = @"c:\temp\sk\ssh.mp4";
+var prompt = $@"I want to extract audio from video file {videoFile}";
+
+var settings = new PromptExecutionSettings
+{
+    FunctionChoiceBehavior = FunctionChoiceBehavior.Auto(autoInvoke: true)
+};
+
+#!csharp
+
+// directly use the kernel object, no need to do anything else.
+var result = await kernel.InvokePromptAsync(prompt, new(settings));
+Console.WriteLine(result);
+
+#!csharp
+
+using Microsoft.SemanticKernel.ChatCompletion;
+var chatCompletionService = Common.Resolve<IChatCompletionService>();
+
+#!csharp
+
+using Microsoft.SemanticKernel.ChatCompletion;
+
+//now pass for the internal chat completion service
+ChatHistory chatMessages = new();
+chatMessages.AddUserMessage($@"I want to extract audio from video file {videoFile}");
+var results = await chatCompletionService.GetChatMessageContentsAsync(
+    chatMessages,
+    executionSettings: settings,
+    kernel: kernel);
+
+foreach (var result in results)
+{
+    Console.WriteLine(result);
+}
+
+#!csharp
+
+//now suppose we do not want to automatically call the plugin
+var settings = new PromptExecutionSettings
+{
+    FunctionChoiceBehavior = FunctionChoiceBehavior.Auto(autoInvoke: false)
+};
+
+var result = await kernel.InvokePromptAsync(prompt, new(settings));
+Console.WriteLine("string result {0}", result); //this is empty result is function call
+
+var content = result.GetValue<ChatMessageContent>();
+var firstContent = content.Items.First();
+
+// dump type of result
+Console.WriteLine(firstContent.GetType().FullName);
+if (firstContent is FunctionCallContent fr)
+{
+    Console.WriteLine("PluginName {0}", fr.FunctionName);
+    Console.WriteLine("Function {0}", fr.PluginName);
+    foreach (var arg in fr.Arguments)
+    {
+        Console.WriteLine("Arg {0}", arg);
+    }
+}
+else
+{
+    Console.WriteLine("Not a function call: {0}", firstContent.ToString());
+}
