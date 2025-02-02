@@ -56,16 +56,12 @@ var describeLambda = [Description("Describe image")] (
 };
 
 var function = KernelFunctionFactory.CreateFromMethod(describeLambda, "describe");
-var openAIFunction = function.Metadata.ToOpenAIFunction();
 
 #!csharp
 
-var settings = new OpenAIPromptExecutionSettings()
+var settings = new PromptExecutionSettings
 {
-        MaxTokens = 1000,
-        Temperature = 0,
-        ModelId = "gpt4o",
-        ToolCallBehavior = ToolCallBehavior.RequireFunction(openAIFunction, autoInvoke: false),
+    FunctionChoiceBehavior = FunctionChoiceBehavior.Required([function], autoInvoke: false)
 };
 
 ChatHistory chatMessages = new();
@@ -85,22 +81,9 @@ var result = await chatCompletionService.GetChatMessageContentAsync(chatMessages
 
 #!csharp
 
-var mc = result as OpenAIChatMessageContent;
-foreach (var item in mc.Items)
+var fcc = result.Items.OfType<FunctionCallContent>().Single();
+Console.WriteLine("FunctionName: {0}", fcc.FunctionName); 
+foreach (var arg in fcc.Arguments)
 {
-    if (item is TextContent tc)
-    {
-        Console.WriteLine("TextContent: {0}", tc.Text);
-    }
-    else if (item is FunctionCallContent fcc)
-    {
-        Console.WriteLine("FunctionName: {0}", fcc.FunctionName);    
-        Console.WriteLine("Arguments: {0}", fcc.Arguments);
-    }
-}
-
-#!csharp
-
-var fcc = mc.Items.OfType<FunctionCallContent>().Single();
-Console.WriteLine("FunctionName: {0}", fcc.FunctionName);    
-Console.WriteLine("Arguments: {0}", fcc.Arguments);
+    Console.WriteLine("Argument: {0}={1}", arg.Key, arg.Value); 
+}  
