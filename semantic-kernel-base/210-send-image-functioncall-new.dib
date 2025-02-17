@@ -59,8 +59,16 @@ var function = KernelFunctionFactory.CreateFromMethod(describeLambda, "describe"
 
 #!csharp
 
+using Microsoft.SemanticKernel.Connectors.OpenAI;
 var settings = new PromptExecutionSettings
 {
+    FunctionChoiceBehavior = FunctionChoiceBehavior.Required([function], autoInvoke: false)
+};
+
+var oaiSettings = new OpenAIPromptExecutionSettings()
+{
+    MaxTokens = 1000,
+    Temperature = 0,
     FunctionChoiceBehavior = FunctionChoiceBehavior.Required([function], autoInvoke: false)
 };
 
@@ -70,14 +78,14 @@ chatMessages.AddSystemMessage("you are an expert technician that will extract in
 var image = "/Users/gianmariaricci/Desktop/test.png";
 var bytes = System.IO.File.ReadAllBytes(image);
 var imageData = new ReadOnlyMemory<byte>(bytes);
- var message = new ChatMessageContentItemCollection
+var message = new ChatMessageContentItemCollection
 {
     new TextContent("Extract a short description for this image then a longer markdown description"),
     new ImageContent(imageData, "image/png")
 };
 
 chatMessages.AddUserMessage(message);
-var result = await chatCompletionService.GetChatMessageContentAsync(chatMessages, settings);    
+var result = await chatCompletionService.GetChatMessageContentAsync(chatMessages, oaiSettings);    
 
 #!csharp
 
