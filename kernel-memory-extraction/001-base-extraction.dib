@@ -1,0 +1,66 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#r "nuget: Microsoft.KernelMemory, 0.97.250211.1"
+
+#!import ../dotenv.cs
+
+#!csharp
+
+using Microsoft.KernelMemory;
+using Microsoft.KernelMemory.DocumentStorage.DevTools;
+using Microsoft.KernelMemory.FileSystem.DevTools;
+using Microsoft.KernelMemory.MemoryStorage;
+using Microsoft.KernelMemory.MemoryStorage.DevTools;
+
+var outputDirectory = Path.Combine(Environment.CurrentDirectory, "skdata");
+var vectorstorage = Path.Combine(outputDirectory, "vectorstorage");
+var objectstorage = Path.Combine(outputDirectory, "objectstorage");
+
+var embeddingConfig = new AzureOpenAIConfig
+{
+    APIKey = Dotenv.Get("OPENAI_API_KEY"),
+    Deployment = "text-embedding-ada-002",
+    Endpoint = Dotenv.Get("AZURE_ENDPOINT"),
+    APIType = AzureOpenAIConfig.APITypes.EmbeddingGeneration,
+    Auth = AzureOpenAIConfig.AuthTypes.APIKey
+};
+
+// Now kenel memory needs the LLM data to be able to pass question
+// and retreived segments to the model. We can Use GPT35
+var chatConfig = new AzureOpenAIConfig
+{
+    APIKey = Dotenv.Get("OPENAI_API_KEY"),
+    Deployment = Dotenv.Get("KERNEL_MEMORY_DEPLOYMENT_NAME"),
+    Endpoint = Dotenv.Get("AZURE_ENDPOINT"),
+    APIType = AzureOpenAIConfig.APITypes.ChatCompletion,
+    Auth = AzureOpenAIConfig.AuthTypes.APIKey,
+    MaxTokenTotal = 4096
+};
+
+var kernelMemoryBuilder = new KernelMemoryBuilder()
+    .WithAzureOpenAITextGeneration(chatConfig)
+    .WithAzureOpenAITextEmbeddingGeneration(embeddingConfig);
+
+kernelMemoryBuilder
+    .WithSimpleFileStorage(new SimpleFileStorageConfig()
+    {
+        Directory = objectstorage,
+        StorageType = FileSystemTypes.Disk
+    })
+    .WithSimpleVectorDb(new SimpleVectorDbConfig()
+    {
+        Directory = vectorstorage,
+        StorageType = FileSystemTypes.Disk
+    });
+        
+
+#!csharp
+
+ var kernelMemory = kernelMemoryBuilder.Build<MemoryServerless>();
+var file = "/Users/gianmariaricci/Downloads/manualeDreame.pdf";
+
+await kernelMemory.ImportDocumentAsync(file, "manualeDreame");
