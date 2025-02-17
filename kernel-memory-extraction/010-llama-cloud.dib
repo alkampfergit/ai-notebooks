@@ -1,0 +1,98 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#r "nuget: Microsoft.KernelMemory.Core, 0.77.241004.1"
+#r "nuget: Microsoft.KernelMemory.Abstractions, 0.77.241004.1"
+#!import ../dotenv.cs
+#!import ext/LLamaCloudParserClient.cs
+#!import ext/LLamaCloudParserDocumentDecoder.cs
+
+#!csharp
+
+using Microsoft.KernelMemory;
+using Microsoft.KernelMemory.DocumentStorage.DevTools;
+using Microsoft.KernelMemory.FileSystem.DevTools;
+using Microsoft.KernelMemory.MemoryStorage;
+using Microsoft.KernelMemory.MemoryStorage.DevTools;
+using System.IO;
+
+var outputDirectory = Path.Combine(Environment.CurrentDirectory, "skdata");
+var vectorstorage = Path.Combine(outputDirectory, "vectorstorage");
+var objectstorage = Path.Combine(outputDirectory, "objectstorage");
+
+var services = new ServiceCollection();
+var embeddingConfig = new AzureOpenAIConfig
+{
+    APIKey = Dotenv.Get("OPENAI_API_KEY"),
+    Deployment = "text-embedding-ada-002",
+    Endpoint = Dotenv.Get("AZURE_ENDPOINT"),
+    APIType = AzureOpenAIConfig.APITypes.EmbeddingGeneration,
+    Auth = AzureOpenAIConfig.AuthTypes.APIKey
+};
+
+// Now kenel memory needs the LLM data to be able to pass question
+// and retreived segments to the model. We can Use GPT35
+var chatConfig = new AzureOpenAIConfig
+{
+    APIKey = Dotenv.Get("OPENAI_API_KEY"),
+    Deployment = Dotenv.Get("KERNEL_MEMORY_DEPLOYMENT_NAME"),
+    Endpoint = Dotenv.Get("AZURE_ENDPOINT"),
+    APIType = AzureOpenAIConfig.APITypes.ChatCompletion,
+    Auth = AzureOpenAIConfig.AuthTypes.APIKey,
+    MaxTokenTotal = 4096
+};
+
+var kernelMemoryBuilder = new KernelMemoryBuilder()
+    .WithAzureOpenAITextGeneration(chatConfig)
+    .WithAzureOpenAITextEmbeddingGeneration(embeddingConfig);
+
+if (Directory.Exists(outputDirectory))
+{
+    Directory.Delete(outputDirectory, true);
+}
+
+kernelMemoryBuilder
+    .WithSimpleFileStorage(new SimpleFileStorageConfig()
+    {
+        Directory = objectstorage,
+        StorageType = FileSystemTypes.Disk
+    })
+    .WithSimpleVectorDb(new SimpleVectorDbConfig()
+    {
+        Directory = vectorstorage,
+        StorageType = FileSystemTypes.Disk
+    });
+
+var llamaApiKey = Environment.GetEnvironmentVariable("LLAMA_API_KEY");
+if (string.IsNullOrEmpty(llamaApiKey))
+{
+    throw new Exception("LLAMA_API_KEY is not set");
+}
+
+//Create llamaparser client
+kernelMemoryBuilder.AddSingleton(new CloudParserConfiguration
+{
+    ApiKey = llamaApiKey,
+});
+
+kernelMemoryBuilder.AddHttpClient<LLamaCloudParserClient>()
+    .AddStandardResilienceHandler(options =>
+    {
+        // Configure standard resilience options here
+        options.TotalRequestTimeout = new HttpTimeoutStrategyOptions()
+        {
+            Timeout = TimeSpan.FromMinutes(10),
+        };
+    });
+
+        
+
+#!csharp
+
+ var kernelMemory = kernelMemoryBuilder.Build<MemoryServerless>();
+var file = "/Users/gianmariaricci/Downloads/manualeDreame.pdf";
+
+await kernelMemory.ImportDocumentAsync(file, "manualeDreame");
