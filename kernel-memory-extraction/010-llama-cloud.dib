@@ -6,6 +6,8 @@
 
 #r "nuget: Microsoft.KernelMemory.Core, 0.77.241004.1"
 #r "nuget: Microsoft.KernelMemory.Abstractions, 0.77.241004.1"
+#r "nuget: Microsoft.Extensions.Http, 8.*"
+
 #!import ../dotenv.cs
 #!import ext/LLamaCloudParserClient.cs
 #!import ext/LLamaCloudParserDocumentDecoder.cs
@@ -17,6 +19,7 @@ using Microsoft.KernelMemory.DocumentStorage.DevTools;
 using Microsoft.KernelMemory.FileSystem.DevTools;
 using Microsoft.KernelMemory.MemoryStorage;
 using Microsoft.KernelMemory.MemoryStorage.DevTools;
+using Microsoft.Extensions.DependencyInjection;
 using System.IO;
 
 var outputDirectory = Path.Combine(Environment.CurrentDirectory, "skdata");
@@ -45,7 +48,7 @@ var chatConfig = new AzureOpenAIConfig
     MaxTokenTotal = 4096
 };
 
-var kernelMemoryBuilder = new KernelMemoryBuilder()
+var kernelMemoryBuilder = new KernelMemoryBuilder(services)
     .WithAzureOpenAITextGeneration(chatConfig)
     .WithAzureOpenAITextEmbeddingGeneration(embeddingConfig);
 
@@ -66,33 +69,87 @@ kernelMemoryBuilder
         StorageType = FileSystemTypes.Disk
     });
 
-var llamaApiKey = Environment.GetEnvironmentVariable("LLAMA_API_KEY");
+var llamaApiKey = Dotenv.Get("LLAMA_API_KEY");
 if (string.IsNullOrEmpty(llamaApiKey))
 {
     throw new Exception("LLAMA_API_KEY is not set");
 }
 
+kernelMemoryBuilder.WithContentDecoder<LLamaCloudParserDocumentDecoder>();
+
 //Create llamaparser client
-kernelMemoryBuilder.AddSingleton(new CloudParserConfiguration
+services.AddSingleton(new CloudParserConfiguration
 {
     ApiKey = llamaApiKey,
 });
 
-kernelMemoryBuilder.AddHttpClient<LLamaCloudParserClient>()
-    .AddStandardResilienceHandler(options =>
-    {
-        // Configure standard resilience options here
-        options.TotalRequestTimeout = new HttpTimeoutStrategyOptions()
-        {
-            Timeout = TimeSpan.FromMinutes(10),
-        };
-    });
+services.AddHttpClient<LLamaCloudParserClient>();
 
         
 
 #!csharp
 
- var kernelMemory = kernelMemoryBuilder.Build<MemoryServerless>();
+using Microsoft.KernelMemory;
+using Microsoft.KernelMemory.Context;
+using Microsoft.KernelMemory.DataFormats;
+using Microsoft.KernelMemory.Diagnostics;
+using Microsoft.KernelMemory.DocumentStorage.DevTools;
+using Microsoft.KernelMemory.FileSystem.DevTools;
+using Microsoft.KernelMemory.Handlers;
+using Microsoft.KernelMemory.MemoryStorage.DevTools;
+using Microsoft.KernelMemory.Pipeline;
+
 var file = "/Users/gianmariaricci/Downloads/manualeDreame.pdf";
 
-await kernelMemory.ImportDocumentAsync(file, "manualeDreame");
+ var serviceProvider = services.BuildServiceProvider();
+var parserClient = serviceProvider.GetRequiredService<LLamaCloudParserClient>();
+
+//This is not so goot, but it seems that when we build the ServerlessMemory object
+//it cannot access the http services registered in the service collection
+kernelMemoryBuilder.Services.AddSingleton(parserClient);
+
+var kernelMemory = kernelMemoryBuilder.Build<MemoryServerless>();
+
+var orchestrator = kernelMemoryBuilder.GetOrchestrator();
+
+var decoders = serviceProvider.GetServices<IContentDecoder>();
+
+// Add pipeline handlers
+Console.WriteLine("* Defining pipeline handlers...");
+
+TextExtractionHandler textExtraction = new("extract", orchestrator, decoders);
+await orchestrator.AddHandlerAsync(textExtraction);
+
+TextPartitioningHandler textPartitioning = new("partition", orchestrator);
+await orchestrator.AddHandlerAsync(textPartitioning);
+
+// CustomSamplePartitioningHandler customMarkdownPartition = new("markdownpartition", orchestrator);
+// await orchestrator.AddHandlerAsync(customMarkdownPartition);
+
+GenerateEmbeddingsHandler textEmbedding = new("gen_embeddings", orchestrator);
+await orchestrator.AddHandlerAsync(textEmbedding);
+
+SaveRecordsHandler saveRecords = new("save_records", orchestrator);
+await orchestrator.AddHandlerAsync(saveRecords);
+
+var fileName = Path.GetFileName(file);
+
+var contextProvider = serviceProvider.GetRequiredService<IContextProvider>();
+
+// now we are going to index document, llamacloud can use caching so we can avoid asking for file.
+var pipelineBuilder = orchestrator
+    .PrepareNewDocumentUpload(
+        index: "llamacloud",
+        documentId: fileName,
+        new TagCollection { { "example", "books" } })
+    .AddUploadFile(fileName, fileName, file)
+    .Then("extract")
+    .Then("partition")
+    //.Then("markdownpartition")
+    .Then("gen_embeddings")
+    .Then("save_records");
+
+LLamaCloudParserDocumentDecoderExtensions.AddLLamaCloudParserOptions( contextProvider, fileName, "This is a manual for Dreame vacuum cleaner, I need you to extract a series of sections that can be useful for an helpdesk to answer user questions. You will create sections where each sections contains a question and an answer taken from the text. Each question will be separated with ---");
+
+var pipeline = pipelineBuilder.Build();
+await orchestrator.RunPipelineAsync(pipeline);
