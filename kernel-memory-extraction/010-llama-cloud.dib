@@ -5,6 +5,7 @@
 #!csharp
 
 #r "nuget: Microsoft.KernelMemory.Core, 0.77.241004.1"
+#r "nuget: Microsoft.KernelMemory, 0.77.241004.1"
 #r "nuget: Microsoft.KernelMemory.Abstractions, 0.77.241004.1"
 #r "nuget: Microsoft.Extensions.Http, 8.*"
 
@@ -123,7 +124,7 @@ await orchestrator.AddHandlerAsync(textExtraction);
 TextPartitioningHandler textPartitioning = new("partition", orchestrator);
 await orchestrator.AddHandlerAsync(textPartitioning);
 
-// CustomSamplePartitioningHandler customMarkdownPartition = new("markdownpartition", orchestrator);
+CustomSamplePartitioningHandler customMarkdownPartition = new("markdownpartition", orchestrator);
 // await orchestrator.AddHandlerAsync(customMarkdownPartition);
 
 GenerateEmbeddingsHandler textEmbedding = new("gen_embeddings", orchestrator);
