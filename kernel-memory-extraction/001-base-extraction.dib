@@ -60,7 +60,7 @@ kernelMemoryBuilder
 
 #!csharp
 
- var kernelMemory = kernelMemoryBuilder.Build<MemoryServerless>();
-var file = "/Users/gianmariaricci/Downloads/manualeDreame.pdf";
-
+var kernelMemory = kernelMemoryBuilder.Build<MemoryServerless>();
+//var file = "/Users/gianmariaricci/Downloads/manualeDreame.pdf";
+var file = @"c:\temp\manualeDreame.pdf";
 await kernelMemory.ImportDocumentAsync(file, "manualeDreame");

@@ -75,7 +75,8 @@ var oaiSettings = new OpenAIPromptExecutionSettings()
 ChatHistory chatMessages = new();
 chatMessages.AddSystemMessage("you are an expert technician that will extract information from images");
 
-var image = "/Users/gianmariaricci/Desktop/test.png";
+//var image = "/Users/gianmariaricci/Desktop/test.png";
+var image = @"c:\temp\test.png";
 var bytes = System.IO.File.ReadAllBytes(image);
 var imageData = new ReadOnlyMemory<byte>(bytes);
 var message = new ChatMessageContentItemCollection
