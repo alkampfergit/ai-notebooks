@@ -4,14 +4,15 @@
 
 #!csharp
 
-#r "nuget: Microsoft.KernelMemory.Core, 0.77.241004.1"
-#r "nuget: Microsoft.KernelMemory, 0.77.241004.1"
-#r "nuget: Microsoft.KernelMemory.Abstractions, 0.77.241004.1"
+#r "nuget: Microsoft.KernelMemory.Core, 0.94.241201.1"
+#r "nuget: Microsoft.KernelMemory.Abstractions, 0.94.241201.1"
+#r "nuget: Microsoft.KernelMemory.AI.AzureOpenAI, 0.94.241201.1"
 #r "nuget: Microsoft.Extensions.Http, 8.*"
 
 #!import ../dotenv.cs
 #!import ext/LLamaCloudParserClient.cs
 #!import ext/LLamaCloudParserDocumentDecoder.cs
+#!import ext/CustomPartitionHandler.cs
 
 #!csharp
 
@@ -100,8 +101,8 @@ using Microsoft.KernelMemory.Handlers;
 using Microsoft.KernelMemory.MemoryStorage.DevTools;
 using Microsoft.KernelMemory.Pipeline;
 
-var file = "/Users/gianmariaricci/Downloads/manualeDreame.pdf";
-
+//var file = "/Users/gianmariaricci/Downloads/manualeDreame.pdf";
+var file = @"c:\temp\manualeDreame.pdf";
  var serviceProvider = services.BuildServiceProvider();
 var parserClient = serviceProvider.GetRequiredService<LLamaCloudParserClient>();
 
@@ -125,7 +126,7 @@ TextPartitioningHandler textPartitioning = new("partition", orchestrator);
 await orchestrator.AddHandlerAsync(textPartitioning);
 
 CustomSamplePartitioningHandler customMarkdownPartition = new("markdownpartition", orchestrator);
-// await orchestrator.AddHandlerAsync(customMarkdownPartition);
+await orchestrator.AddHandlerAsync(customMarkdownPartition);
 
 GenerateEmbeddingsHandler textEmbedding = new("gen_embeddings", orchestrator);
 await orchestrator.AddHandlerAsync(textEmbedding);
@@ -145,12 +146,15 @@ var pipelineBuilder = orchestrator
         new TagCollection { { "example", "books" } })
     .AddUploadFile(fileName, fileName, file)
     .Then("extract")
-    .Then("partition")
-    //.Then("markdownpartition")
+    //.Then("partition")
+    .Then("markdownpartition")
     .Then("gen_embeddings")
     .Then("save_records");
 
-LLamaCloudParserDocumentDecoderExtensions.AddLLamaCloudParserOptions( contextProvider, fileName, "This is a manual for Dreame vacuum cleaner, I need you to extract a series of sections that can be useful for an helpdesk to answer user questions. You will create sections where each sections contains a question and an answer taken from the text. Each question will be separated with ---");
+LLamaCloudParserDocumentDecoderExtensions.AddLLamaCloudParserOptions( 
+    contextProvider, 
+    fileName, 
+    "This is a manual for Dreame vacuum cleaner, I need you to extract a series of sections that can be useful for an helpdesk to answer user questions. You will create sections where each sections contains a question and an answer taken from the text. Each question will be separated with ---");
 
 var pipeline = pipelineBuilder.Build();
 await orchestrator.RunPipelineAsync(pipeline);
