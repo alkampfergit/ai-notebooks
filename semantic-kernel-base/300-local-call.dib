@@ -2,56 +2,60 @@
 
 {"kernelInfo":{"defaultKernelName":null,"items":[{"name":"csharp","languageName":"C#","aliases":["c#","cs"]},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"html","languageName":"HTML"},{"name":"sql","languageName":"SQL"},{"name":"kql","languageName":"KQL"},{"name":"mermaid","languageName":"Mermaid"},{"name":"http","languageName":"HTTP"},{"name":"value"}]}}
 
-#!markdown
-
-This section imports the necessary NuGet packages for working with Semantic Kernel and logging.
-
 #!csharp
 
 #!import ../dotenv.cs
-#r "nuget: Microsoft.SemanticKernel, 1.32.0"
-#r "nuget: Microsoft.Extensions.Logging, 8.*"
-#r "nuget: Microsoft.Extensions.Logging.Console, 8.*"
-#r "nuget: Microsoft.Extensions.Logging.Debug, 8.*"
+#r "nuget: Microsoft.SemanticKernel"
+#r "nuget: Microsoft.Extensions.Logging"
+#r "nuget: Microsoft.Extensions.Logging.Console"
+#r "nuget: Microsoft.Extensions.Logging.Debug"
 
 #!markdown
 
-This section configures the `kernel` with logging and the Azure OpenAI chat completion service.
+We have an experimental overload of AddOpenAIChatCompletion that accepts a httpclient and also an Uri for endpoint. This allow us to specify any other url for OpenAI API, actually allowing us to redirect to local LM Studio instance
 
 #!csharp
 
+// Now configure kernel memory
 using Microsoft.SemanticKernel;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Net.Http;
 
+// Create and register a custom HttpClient with the redirect handler
+//var redirectUrl = "http://localhost:1234/v1"; // Target URL for redirection
+var redirectUrl = "http://10.0.0.39:1234/v1";
+
+// Register the HttpClient in the KernelBuilder's services
 var kernelBuilder = Kernel.CreateBuilder();
+//kernelBuilder.Services.AddSingleton<HttpClient>(httpClient);
+
 kernelBuilder.Services.AddLogging(l => l
-    .SetMinimumLevel(LogLevel.Trace)
+    .SetMinimumLevel(LogLevel.Warning)
     .AddConsole()
     .AddDebug()
 );
+var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
 
-kernelBuilder.Services.AddAzureOpenAIChatCompletion(
-    "GPT4omini", //"GPT35_2",//"GPT42",
-    Dotenv.Get("OPENAI_API_BASE"),
-    Dotenv.Get("OPENAI_API_KEY"),
-    serviceId: "default",
-    modelId: "gpt4o");
-
-#!markdown
-
-You need to grab an instance of `IChatCompletionService` because you need to interact with it instead of directly with kernel.
+#pragma warning disable SKEXP0010 // Suppress the warning for evaluation purposes
+kernelBuilder.AddOpenAIChatCompletion(
+    modelId: "gpt4o", 
+    apiKey: null,
+    endpoint: new Uri(redirectUrl),
+    httpClient: httpClient); 
+#pragma warning restore CS0618 // Re-enable the warning
 
 #!csharp
 
-using Microsoft.SemanticKernel.ChatCompletion;
-
 var kernel = kernelBuilder.Build();
+var result = await kernel.InvokePromptAsync("Which is the capital of France. Answer as pirate Barbossa!!!");
+Console.WriteLine(result);
+
+#!csharp
+
+//if your model is multimodal you can send images 
+using Microsoft.SemanticKernel.ChatCompletion;
 var chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
-
-#!markdown
-
-We define a `function` that will be used by the AI to `structure image descriptions` with short and long formats.
 
 #!csharp
 
@@ -60,18 +64,14 @@ using System.ComponentModel;
 
 //Define the function
 var describeLambda = [Description("Describe image")] (
-    [Description("Short description")] string shortDescription,
-    [Description("Long description")] string longDescription
+    [Description("Summary")] string summary,
+    [Description("Full Description")] string fullDescription
 ) =>
 {
    return;
 };
 
 var function = KernelFunctionFactory.CreateFromMethod(describeLambda, "describe");
-
-#!markdown
-
-This section configures execution settings, loads an image, and sends it to the AI for description.
 
 #!csharp
 
@@ -91,22 +91,18 @@ var oaiSettings = new OpenAIPromptExecutionSettings()
 ChatHistory chatMessages = new();
 chatMessages.AddSystemMessage("you are an expert technician that will extract information from images");
 
-//var image = "/Users/gianmariaricci/Desktop/test.png";
-var image = @"c:\temp\test.png";
+// var image = "/Users/gianmariaricci/Desktop/test.png";
+var image = "s:/Downloads/dreame.jpg";
 var bytes = System.IO.File.ReadAllBytes(image);
 var imageData = new ReadOnlyMemory<byte>(bytes);
 var message = new ChatMessageContentItemCollection
 {
-    new TextContent("Extract a short description for this image then a longer markdown description"),
+    new TextContent(@"This is a page of a pdf document that represents a technical manual, please describe the page, identify images and generate a markdown that explain with great detail what is in this page.."),
     new ImageContent(imageData, "image/png")
 };
 
 chatMessages.AddUserMessage(message);
 var result = await chatCompletionService.GetChatMessageContentAsync(chatMessages, oaiSettings);    
-
-#!markdown
-
-Here we `extract and display the function call content` from the AI's response, showing the generated descriptions.
 
 #!csharp
 
