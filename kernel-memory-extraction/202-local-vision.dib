@@ -1,0 +1,191 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":null,"items":[{"name":"csharp","languageName":"C#","aliases":["c#","cs"]},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"html","languageName":"HTML"},{"name":"sql","languageName":"SQL"},{"name":"kql","languageName":"KQL"},{"name":"mermaid","languageName":"Mermaid"},{"name":"http","languageName":"HTTP"},{"name":"value"}]}}
+
+#!csharp
+
+#!import ../dotenv.cs
+#r "nuget: Microsoft.SemanticKernel, 1.32.0"
+#r "nuget: Microsoft.Extensions.Logging, 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Console, 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Debug, 8.*"
+#r "nuget: PdfPig.Rendering.Skia"
+#r "nuget: System.Drawing.Common"
+
+#!csharp
+
+using System.IO;
+
+var pdfFile = "/Users/gianmariaricci/Downloads/catalogo.pdf";
+var outputDir = "/Users/gianmariaricci/Downloads/catalogo";
+
+//if the directory exists delete then recreate again
+if (Directory.Exists(outputDir))
+{
+    Directory.Delete(outputDir, true);
+}
+Directory.CreateDirectory(outputDir);
+
+#!csharp
+
+using UglyToad.PdfPig.Graphics.Colors;
+using UglyToad.PdfPig;
+using UglyToad.PdfPig.Rendering.Skia;
+using SkiaSharp;
+
+using (var document = PdfDocument.Open(pdfFile))
+{
+    var baseFileName = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(pdfFile));
+
+	document.AddSkiaPageFactory(); // Same as document.AddPageFactory<SKPicture, SkiaPageFactory>()
+
+	// var pageStart = 30;
+	// var pageEnd = 40;
+
+	// for (int p = pageStart; p <= pageEnd; p++)
+	// {
+	// 	using (var fs = new FileStream($"{baseFileName}_{p}.png", FileMode.Create))
+	// 	using (var ms = document.GetPageAsPng(p, 2, RGBColor.White ))
+	// 	{
+	// 		ms.WriteTo(fs);
+	// 	}
+	// }
+	var pagesToPrint = new int[] { 8, 29, 35, 36, 40 };
+	foreach (var pageNumber in pagesToPrint)
+	{
+		using (var fs = new FileStream($"{baseFileName}_{pageNumber}.png", FileMode.Create))
+		using (var ms = document.GetPageAsPng(pageNumber, 2, RGBColor.White))
+		{
+			ms.WriteTo(fs);
+		}
+
+		using var textFile = File.CreateText($"{baseFileName}_{pageNumber}.txt");
+		foreach (var word in document.GetPage(pageNumber).GetWords())
+		{
+			textFile.Write(word.Text);
+			textFile.Write(" ");
+		}
+	}
+}
+
+#!csharp
+
+// now I can cycle for all images, then pass the images to a multimodal 
+// model to extract text.
+using Microsoft.SemanticKernel;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.SemanticKernel.ChatCompletion;
+using System.Net.Http;
+
+var kernelBuilder = Kernel.CreateBuilder();
+kernelBuilder.Services.AddLogging(l => l
+    .SetMinimumLevel(LogLevel.Trace)
+    .AddConsole()
+    .AddDebug()
+);
+
+//var redirectUrl = "http://10.0.0.39:1234/v1";
+string redirectUrl = "http://10.0.0.39:1234/v1";//null;
+
+kernelBuilder.Services.AddAzureOpenAIChatCompletion(
+    "GPT4omini", //"GPT35_2",//"GPT42",
+    Dotenv.Get("OPENAI_API_BASE"),
+    Dotenv.Get("OPENAI_API_KEY"),
+    serviceId: "gpt4o",
+    modelId: "gpt4o");
+
+var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+
+#pragma warning disable SKEXP0010 // Suppress the warning for evaluation purposes
+kernelBuilder.AddOpenAIChatCompletion(
+    modelId: "gpt4o", 
+    apiKey: null,
+    endpoint: new Uri(redirectUrl),
+    httpClient: httpClient,
+    serviceId: "local"); 
+#pragma warning restore CS0618 // Re-enable the warning
+
+
+var kernel = kernelBuilder.Build();
+var ccsLocal = kernel.GetRequiredService<IChatCompletionService>("local");
+var ccsGpt = kernel.GetRequiredService<IChatCompletionService>("gpt4o");
+
+void WriteToFile(string filePath, string content)
+{
+    if (File.Exists(filePath))
+    {
+        File.Delete(filePath);
+    }
+    //if the first and last lines startw with three backticks, remove them
+    var lines = content.Split('\n');
+    var lineNum = 0;
+
+    if (lines.Length == 0) return;
+
+    if (lines[0].StartsWith("```"))
+    {
+        lineNum = 1;
+    }
+    //open out file as stream
+    using var outFile = new StreamWriter(filePath);
+    for (int i = lineNum; i < lines.Length - 1; i++)
+    {
+        outFile.WriteLine(lines[i]);
+    }
+    //Verify if the last line should be written
+    if (!lines[^1].StartsWith("```"))
+    {
+        outFile.WriteLine(lines[^1]);
+    }
+}
+
+#!csharp
+
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+using System.Threading;
+
+async Task ExtractTextFromImage(string fileName) 
+{
+    var oaiSettings = new OpenAIPromptExecutionSettings()
+    {
+        MaxTokens = 4000,
+        Temperature = 0,
+    };
+
+
+    ChatHistory chatMessages = new();
+    chatMessages.AddSystemMessage("You are an assistant that helps extracting text from catalog");
+
+    var bytes = System.IO.File.ReadAllBytes(fileName);
+    var imageData = new ReadOnlyMemory<byte>(bytes);
+    var message = new ChatMessageContentItemCollection
+    {
+        new TextContent(@"You need to extract all text from the image in markdown format. Try to extract table if the layout is tabular. 
+This is an image from a catalog you need to extract information for ALL product that are in the image.
+Do not add anything else than image description"),
+        new ImageContent(imageData, "image/png")
+    };
+    chatMessages.AddUserMessage(message);
+
+    var outputFile = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(fileName) + "_local.md");
+    var result = await ccsLocal.GetChatMessageContentAsync(chatMessages, oaiSettings);  
+    WriteToFile(outputFile, result.ToString());
+
+    //now go with gpt
+    var gptResult = await ccsGpt.GetChatMessageContentAsync(chatMessages, oaiSettings);
+    var gptOutputFile = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(fileName) + "_gpt.md");
+    WriteToFile(gptOutputFile, gptResult.ToString());
+
+    Console.WriteLine($"File {fileName} processed. Output saved to {outputFile}");
+
+}
+
+#!csharp
+
+var files = Directory.GetFiles(outputDir, "*.png")
+    .OrderBy(f => f);
+foreach (var file in files)
+{
+    await ExtractTextFromImage(file);
+}

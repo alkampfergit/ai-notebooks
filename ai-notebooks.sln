@@ -1,0 +1,29 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "fullprojects", "fullprojects", "{BFB9B8FB-BD5F-D081-4DAD-4326C8FF2314}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LocalCallRedirection", "fullprojects\localredirect\LocalCallRedirection.csproj", "{61FC891E-E8A1-964C-A0CD-EEDC0BE78405}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{61FC891E-E8A1-964C-A0CD-EEDC0BE78405}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{61FC891E-E8A1-964C-A0CD-EEDC0BE78405}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{61FC891E-E8A1-964C-A0CD-EEDC0BE78405}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{61FC891E-E8A1-964C-A0CD-EEDC0BE78405}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{61FC891E-E8A1-964C-A0CD-EEDC0BE78405} = {BFB9B8FB-BD5F-D081-4DAD-4326C8FF2314}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {C8D22DC2-9E26-47AC-B297-410F7AADC148}
+	EndGlobalSection
+EndGlobal
