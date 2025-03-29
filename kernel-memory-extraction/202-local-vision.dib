@@ -1,6 +1,6 @@
 #!meta
 
-{"kernelInfo":{"defaultKernelName":null,"items":[{"name":"csharp","languageName":"C#","aliases":["c#","cs"]},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"html","languageName":"HTML"},{"name":"sql","languageName":"SQL"},{"name":"kql","languageName":"KQL"},{"name":"mermaid","languageName":"Mermaid"},{"name":"http","languageName":"HTTP"},{"name":"value"}]}}
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp","languageName":"C#","aliases":["c#","cs"]},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"kql","languageName":"KQL"},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"sql","languageName":"SQL"},{"name":"value"}]}}
 
 #!csharp
 
@@ -39,18 +39,8 @@ using (var document = PdfDocument.Open(pdfFile))
 
 	document.AddSkiaPageFactory(); // Same as document.AddPageFactory<SKPicture, SkiaPageFactory>()
 
-	// var pageStart = 30;
-	// var pageEnd = 40;
-
-	// for (int p = pageStart; p <= pageEnd; p++)
-	// {
-	// 	using (var fs = new FileStream($"{baseFileName}_{p}.png", FileMode.Create))
-	// 	using (var ms = document.GetPageAsPng(p, 2, RGBColor.White ))
-	// 	{
-	// 		ms.WriteTo(fs);
-	// 	}
-	// }
-	var pagesToPrint = new int[] { 8, 29, 35, 36, 40 };
+	// 8, 29, 35, 36, 40
+	var pagesToPrint = new int[] { 36 };
 	foreach (var pageNumber in pagesToPrint)
 	{
 		using (var fs = new FileStream($"{baseFileName}_{pageNumber}.png", FileMode.Create))
@@ -85,31 +75,55 @@ kernelBuilder.Services.AddLogging(l => l
     .AddDebug()
 );
 
-//var redirectUrl = "http://10.0.0.39:1234/v1";
-string redirectUrl = "http://10.0.0.39:1234/v1";//null;
+var redirectUrl = "http://10.0.0.39:1234/v1";
 
+#!csharp
+
+var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+
+void RegisterLocalModel(string modelId) 
+{
+    #pragma warning disable SKEXP0010 // Suppress the warning for evaluation purposes
+    kernelBuilder.AddOpenAIChatCompletion(
+        modelId: modelId, 
+        apiKey: null,
+        endpoint: new Uri(redirectUrl),
+        httpClient: httpClient,
+        serviceId: modelId); 
+    #pragma warning restore CS0618 // Re-enable the warning
+}
+
+//now register gpt4o mini
 kernelBuilder.Services.AddAzureOpenAIChatCompletion(
     "GPT4omini", //"GPT35_2",//"GPT42",
     Dotenv.Get("OPENAI_API_BASE"),
     Dotenv.Get("OPENAI_API_KEY"),
-    serviceId: "gpt4o",
-    modelId: "gpt4o");
+    serviceId: "gpt4omini",
+    modelId: "gpt4omini");
 
-var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+//register local model
+string [] localModels = [
+    "gemma-3-12b-it"
+   ,"gemma-3-4b-it"
+];
+foreach (var model in localModels)
+{
+    RegisterLocalModel(model);
+}
 
-#pragma warning disable SKEXP0010 // Suppress the warning for evaluation purposes
-kernelBuilder.AddOpenAIChatCompletion(
-    modelId: "gpt4o", 
-    apiKey: null,
-    endpoint: new Uri(redirectUrl),
-    httpClient: httpClient,
-    serviceId: "local"); 
-#pragma warning restore CS0618 // Re-enable the warning
-
+string [] allModels = localModels.Concat(["gpt4omini" ]).ToArray();
 
 var kernel = kernelBuilder.Build();
-var ccsLocal = kernel.GetRequiredService<IChatCompletionService>("local");
-var ccsGpt = kernel.GetRequiredService<IChatCompletionService>("gpt4o");
+
+// now create a dictionary with the IChatCompletionService and the id of local model
+var allModelsDictionary = new Dictionary<string, IChatCompletionService>();
+foreach (var model in allModels)
+{
+    var ccs = kernel.GetRequiredService<IChatCompletionService>(model);
+    allModelsDictionary.Add(model, ccs);
+}
+
+#!csharp
 
 void WriteToFile(string filePath, string content)
 {
@@ -168,17 +182,16 @@ Do not add anything else than image description"),
     };
     chatMessages.AddUserMessage(message);
 
-    var outputFile = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(fileName) + "_local.md");
-    var result = await ccsLocal.GetChatMessageContentAsync(chatMessages, oaiSettings);  
-    WriteToFile(outputFile, result.ToString());
-
-    //now go with gpt
-    var gptResult = await ccsGpt.GetChatMessageContentAsync(chatMessages, oaiSettings);
-    var gptOutputFile = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(fileName) + "_gpt.md");
-    WriteToFile(gptOutputFile, gptResult.ToString());
-
-    Console.WriteLine($"File {fileName} processed. Output saved to {outputFile}");
-
+    //now use all completion service in allModelsDictionary
+    foreach (var model in allModelsDictionary)
+    {
+        var ccs = model.Value;
+        var modelId = model.Key;
+        var result = await ccs.GetChatMessageContentAsync(chatMessages, oaiSettings);
+        var outputFile = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(fileName) + $"_{modelId}.md");
+        WriteToFile(outputFile, result.ToString());
+        Console.WriteLine($"File {fileName} processed. Output saved to {outputFile}");
+    }
 }
 
 #!csharp
