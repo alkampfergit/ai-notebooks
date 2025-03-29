@@ -1,0 +1,75 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp","languageName":"C#","aliases":["c#","cs"]},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"kql","languageName":"KQL"},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"sql","languageName":"SQL"},{"name":"value"}]}}
+
+#!csharp
+
+#!import ../dotenv.cs
+#r "nuget: Microsoft.SemanticKernel"
+#r "nuget: Microsoft.Extensions.Logging"
+#r "nuget: Microsoft.Extensions.Logging.Console"
+#r "nuget: Microsoft.Extensions.Logging.Debug"
+
+#!csharp
+
+// Now configure kernel memory
+using Microsoft.SemanticKernel;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using System.Net.Http;
+
+// Create and register a custom HttpClient with the redirect handler
+var redirectUrl = "http://localhost:1234/v1"; // Target URL for redirection
+
+// Register the HttpClient in the KernelBuilder's services
+var kernelBuilder = Kernel.CreateBuilder();
+//kernelBuilder.Services.AddSingleton<HttpClient>(httpClient);
+
+kernelBuilder.Services.AddLogging(l => l
+    .SetMinimumLevel(LogLevel.Warning)
+    .AddConsole()
+    .AddDebug()
+);
+
+var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+
+void RegisterLocalModel(string modelId) 
+{
+    #pragma warning disable SKEXP0010 // Suppress the warning for evaluation purposes
+    kernelBuilder.AddOpenAIChatCompletion(
+        modelId: modelId, 
+        apiKey: null,
+        endpoint: new Uri(redirectUrl),
+        httpClient: httpClient,
+        serviceId: modelId); 
+    #pragma warning restore CS0618 // Re-enable the warning
+}
+
+#!csharp
+
+string [] localModels = [
+    "gemma-3-12b-it"
+   ,"gemma-3-4b-it"
+];
+foreach (var model in localModels)
+{
+    RegisterLocalModel(model);
+}
+
+#!csharp
+
+using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+
+var kernel = kernelBuilder.Build();
+
+//now iterate for each model
+foreach (var model in localModels)
+{
+    var ccs = kernel.GetRequiredService<IChatCompletionService>(model);
+    var answer = (OpenAIChatMessageContent) await ccs.GetChatMessageContentAsync(
+        "What is the capital of Italy? Answer like pirate barbossa.");
+
+    Console.WriteLine("\n----------------------------------------");
+    Console.WriteLine($"Model: {model} - Answer: {answer} fingerprint {answer.Metadata["SystemFingerprint"]}");
+}

@@ -1,6 +1,6 @@
 #!meta
 
-{"kernelInfo":{"defaultKernelName":null,"items":[{"name":"csharp","languageName":"C#","aliases":["c#","cs"]},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"html","languageName":"HTML"},{"name":"sql","languageName":"SQL"},{"name":"kql","languageName":"KQL"},{"name":"mermaid","languageName":"Mermaid"},{"name":"http","languageName":"HTTP"},{"name":"value"}]}}
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp","languageName":"C#","aliases":["c#","cs"]},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"kql","languageName":"KQL"},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"sql","languageName":"SQL"},{"name":"value"}]}}
 
 #!csharp
 
@@ -21,9 +21,12 @@ using System.Threading;
 
 private class ProxyOpenAIHandler : HttpClientHandler
 {
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request, 
+        CancellationToken cancellationToken)
     {
-        if (request.RequestUri != null && request.RequestUri.Host.Equals("api.openai.com", StringComparison.OrdinalIgnoreCase))
+        if (request.RequestUri != null 
+            && request.RequestUri.Host.Equals("api.openai.com", StringComparison.OrdinalIgnoreCase))
         {
             // Redirect to your local LLM server
             request.RequestUri = new Uri($"http://localhost:1234{request.RequestUri.PathAndQuery}");
@@ -53,7 +56,11 @@ kernelBuilder.Services.AddLogging(l => l
     .AddDebug()
 );
 var kernel = kernelBuilder
-    .AddOpenAIChatCompletion("xxx", "xxx", httpClient: new HttpClient(new ProxyOpenAIHandler())
+    .AddOpenAIChatCompletion(
+        "gemma-3-4b-it", 
+        apiKey : "xxxx", 
+        serviceId: "gemma-3-4b-it",
+        httpClient: new HttpClient(new ProxyOpenAIHandler())
     { 
         Timeout = TimeSpan.FromMinutes(10)      
     })
@@ -68,92 +75,3 @@ Now interact as usual with Semantic Kernel library.
 var kernel = kernelBuilder.Build();
 var result = await kernel.InvokePromptAsync("Which is the capital of France. Answer as pirate Barbossa!!!");
 Console.WriteLine(result);
-
-#!csharp
-
-//if your model is multimodal you can send images 
-using Microsoft.SemanticKernel.ChatCompletion;
-var chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
-
-#!csharp
-
-using Microsoft.SemanticKernel.Connectors.OpenAI;
-using System.ComponentModel;
-
-//Define the function
-var describeLambda = [Description("Describe image")] (
-    [Description("Short description")] string shortDescription,
-    [Description("Long description")] string longDescription
-) =>
-{
-   return;
-};
-
-var function = KernelFunctionFactory.CreateFromMethod(describeLambda, "describe");
-
-#!csharp
-
-using Microsoft.SemanticKernel.Connectors.OpenAI;
-var settings = new PromptExecutionSettings
-{
-    FunctionChoiceBehavior = FunctionChoiceBehavior.Required([function], autoInvoke: false)
-};
-
-var oaiSettings = new OpenAIPromptExecutionSettings()
-{
-    MaxTokens = 1000,
-    Temperature = 0,
-    FunctionChoiceBehavior = FunctionChoiceBehavior.Required([function], autoInvoke: false)
-};
-
-ChatHistory chatMessages = new();
-chatMessages.AddSystemMessage("you are an expert technician that will extract information from images");
-
-// var image = "/Users/gianmariaricci/Desktop/test.png";
-var image = "s:/Downloads/dreame.jpg";
-var bytes = System.IO.File.ReadAllBytes(image);
-var imageData = new ReadOnlyMemory<byte>(bytes);
-var message = new ChatMessageContentItemCollection
-{
-    new TextContent("Extract a short description for this image then a longer markdown description"),
-    new ImageContent(imageData, "image/png")
-};
-
-chatMessages.AddUserMessage(message);
-var result = await chatCompletionService.GetChatMessageContentAsync(chatMessages, oaiSettings);    
-
-#!csharp
-
-var fcc = result.Items.OfType<FunctionCallContent>().Single();
-Console.WriteLine("FunctionName: {0}", fcc.FunctionName); 
-foreach (var arg in fcc.Arguments)
-{
-    Console.WriteLine("Argument: {0}={1}", arg.Key, arg.Value); 
-}  
-
-#!markdown
-
-Now a sample call wihtout function calling
-
-#!csharp
-
-var oaiSettings = new OpenAIPromptExecutionSettings()
-{
-    MaxTokens = 1000,
-    Temperature = 0,
-};
-
-ChatHistory chatMessages = new();
-chatMessages.AddSystemMessage("you are an expert technician that will extract information from images");
-
-var bytes = System.IO.File.ReadAllBytes(image);
-var imageData = new ReadOnlyMemory<byte>(bytes);
-var message = new ChatMessageContentItemCollection
-{
-    new TextContent(@"This is a page of a pdf document that represents a technical manual, please describe the page, identify images and generate a markdown that explain with great detail what is in this page.."),
-    new ImageContent(imageData, "image/png")
-};
-
-chatMessages.AddUserMessage(message);
-var result = await chatCompletionService.GetChatMessageContentAsync(chatMessages, oaiSettings);  
-Console.WriteLine(result);  

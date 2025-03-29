@@ -170,29 +170,23 @@ async Task ExtractTextFromImage(string fileName)
         Temperature = 0,
     };
 
+    //read the corresponding text File
+    var textFile = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(fileName) + ".txt");
+    var textContent = File.ReadAllText(textFile);
 
     ChatHistory chatMessages = new();
-    chatMessages.AddSystemMessage("You are an assistant that helps extracting text from catalog");
 
     var bytes = System.IO.File.ReadAllBytes(fileName);
     var imageData = new ReadOnlyMemory<byte>(bytes);
     var message = new ChatMessageContentItemCollection
     {
-//         new TextContent(@"You need to extract all text from the image in markdown format. 
-// Try to extract table if the layout is tabular and preserve much semantic as possible.
-// Be sure to extract all text from the image."),
-//         new TextContent(@"Please describe the image in the most detailed way possible.
-// Identify all sub images and describe each of them separately.
-// This is a page that describe a product manual so focus on the instructions contained in the image and
-// the information that are useful to the user to use the product"),
-//         new TextContent(@"This is the image of a product, you need to extract a series of Question and Answers to be used by a call center.
-// Focus on all possible answer that the images can answer. If there are sub images, please focus on each
-// sub image separately.
-// Separate each question and answer from the next one with a series of dashes like ----."),
-        new TextContent(@"This is a page from a manual of a product.
-You will extract a series of Question and Answers to be used by a call center, and be sure
-to use only information that are present in the images.
+        new TextContent(@"The image contains a page of a manual of a product.
+You will have also the entire text of the page extracted from the original PDF.
+You will extract a series of Question and Answers to be used by a call center, use
+the extracted text to better formulate them.
 Asnwer in plain text, put the question on the first line and separate each question and answer from the next one with a series of dashes like ----."),
+new TextContent(@"This is the text contained in the image: {textContent}"),
+
         new ImageContent(imageData, "image/png")
     };
     chatMessages.AddUserMessage(message);
