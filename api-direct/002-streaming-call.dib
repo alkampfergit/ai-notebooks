@@ -1,0 +1,220 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
+
+#!csharp
+
+#r "nuget: Azure.AI.OpenAI, 2.5.0-beta.1"
+#r "nuget: OpenAI, 2.5.0"
+   
+#!import ../dotenv.cs
+
+#!markdown
+
+# Streaming Client
+
+This notebook demonstrates how to use streaming responses with Azure OpenAI. Streaming allows you to receive the response incrementally as tokens are generated, rather than waiting for the entire response to complete.
+
+#!csharp
+
+using Azure.AI.OpenAI;
+using OpenAI.Chat;
+using System.ClientModel;
+
+var client = new AzureOpenAIClient(
+    new Uri(Dotenv.Get("OPENAI_API_BASE")),
+    new ApiKeyCredential(Dotenv.Get("OPENAI_API_KEY")));
+
+var chatClient = client.GetChatClient("gpt-5-nano");
+
+#!markdown
+
+## Streaming Chat Interaction
+
+When using streaming, the response is received incrementally. Each update contains a delta with new content. This is useful for providing real-time feedback to users while the model is generating the response.
+
+#!csharp
+
+var messages = new List<ChatMessage>
+{
+    ChatMessage.CreateSystemMessage("You are a helpful assistant."),
+    ChatMessage.CreateUserMessage("Write a short poem about the sea.")
+};
+
+Console.WriteLine("Streaming response:");
+Console.WriteLine("-------------------");
+
+var streamingResponse = chatClient.CompleteChatStreamingAsync(messages);
+
+await foreach (var update in streamingResponse)
+{
+    foreach (var contentPart in update.ContentUpdate)
+    {
+        Console.Write(contentPart.Text);
+    }
+}
+
+#!markdown
+
+## Collecting the Full Response
+
+While streaming, you may want to collect the full response text and access metadata once streaming is complete. Here's how to do that:
+
+#!csharp
+
+var messages2 = new List<ChatMessage>
+{
+    ChatMessage.CreateSystemMessage("You are a helpful assistant."),
+    ChatMessage.CreateUserMessage("write an haiku about cat.")
+};
+
+Console.WriteLine("Streaming response with metadata:");
+Console.WriteLine("-------------------");
+
+var fullResponse = new System.Text.StringBuilder();
+string finishReason = string.Empty;
+string responseId = string.Empty;
+string model = string.Empty;
+DateTimeOffset createdAt = default;
+
+var streamingResponse2 = chatClient.CompleteChatStreamingAsync(messages2);
+
+await foreach (var update in streamingResponse2)
+{
+    // Collect content
+    foreach (var contentPart in update.ContentUpdate)
+    {
+        Console.Write(contentPart.Text);
+        fullResponse.Append(contentPart.Text);
+    }
+    
+    // Capture metadata (these are set in the final update)
+    if (update.FinishReason.HasValue)
+    {
+        finishReason = update.FinishReason.Value.ToString();
+    }
+    
+    if (!string.IsNullOrEmpty(update.CompletionId))
+    {
+        responseId = update.CompletionId;
+    }
+    
+    if (!string.IsNullOrEmpty(update.Model))
+    {
+        model = update.Model;
+    }
+    
+    createdAt = update.CreatedAt;
+}
+
+Console.WriteLine("\n-------------------");
+Console.WriteLine($"\nFull response text:\n{fullResponse}");
+Console.WriteLine($"\nMetadata:");
+Console.WriteLine($"  Response ID: {responseId}");
+Console.WriteLine($"  Model: {model}");
+Console.WriteLine($"  Finish Reason: {finishReason}");
+Console.WriteLine($"  Created At: {createdAt}");
+
+#!markdown
+
+## Token Usage with Streaming
+
+Token usage information is available in streaming responses through the `Usage` property in the final update. You can track token consumption even when streaming.
+
+#!csharp
+
+var messages3 = new List<ChatMessage>
+{
+    ChatMessage.CreateSystemMessage("You are a helpful assistant."),
+    ChatMessage.CreateUserMessage("Explain quantum computing in simple terms.")
+};
+
+Console.WriteLine("Streaming with token tracking:");
+Console.WriteLine("-------------------");
+
+int? inputTokens = null;
+int? outputTokens = null;
+int? totalTokens = null;
+
+var streamingResponse3 = chatClient.CompleteChatStreamingAsync(messages3);
+
+await foreach (var update in streamingResponse3)
+{
+    foreach (var contentPart in update.ContentUpdate)
+    {
+        Console.Write(contentPart.Text);
+    }
+    
+    // Token usage is typically available in the final update
+    if (update.Usage != null)
+    {
+        inputTokens = update.Usage.InputTokenCount;
+        outputTokens = update.Usage.OutputTokenCount;
+        totalTokens = update.Usage.TotalTokenCount;
+    }
+}
+
+Console.WriteLine("\n-------------------");
+Console.WriteLine($"\nToken Usage:");
+Console.WriteLine($"  Prompt tokens: {inputTokens ?? 0}");
+Console.WriteLine($"  Completion tokens: {outputTokens ?? 0}");
+Console.WriteLine($"  Total tokens: {totalTokens ?? 0}");
+
+#!markdown
+
+## Handling Streaming Updates
+
+Each streaming update can contain multiple pieces of information. Here's a detailed example showing all the properties you can access:
+
+#!csharp
+
+var messages4 = new List<ChatMessage>
+{
+    ChatMessage.CreateSystemMessage("You are a helpful assistant."),
+    ChatMessage.CreateUserMessage("Count from 1 to 10.")
+};
+
+Console.WriteLine("Detailed streaming update analysis:");
+Console.WriteLine("-------------------");
+
+int updateCount = 0;
+var streamingResponse4 = chatClient.CompleteChatStreamingAsync(messages4);
+
+await foreach (var update in streamingResponse4)
+{
+    updateCount++;
+    
+    Console.WriteLine($"\n[Update {updateCount}]");
+    
+    // Content updates
+    if (update.ContentUpdate.Count > 0)
+    {
+        Console.Write("Content: ");
+        foreach (var contentPart in update.ContentUpdate)
+        {
+            Console.Write(contentPart.Text);
+        }
+        Console.WriteLine();
+    }
+    
+    // Role (typically only in first update)
+    if (update.Role.HasValue)
+    {
+        Console.WriteLine($"Role: {update.Role.Value}");
+    }
+    
+    // Finish reason (only in final update)
+    if (update.FinishReason.HasValue)
+    {
+        Console.WriteLine($"Finish Reason: {update.FinishReason.Value}");
+    }
+    
+    // Refusal (if any)
+    if (!string.IsNullOrEmpty(update.RefusalUpdate))
+    {
+        Console.WriteLine($"Refusal: {update.RefusalUpdate}");
+    }
+}
+
+Console.WriteLine($"\n-------------------");
+Console.WriteLine($"Total updates received: {updateCount}");

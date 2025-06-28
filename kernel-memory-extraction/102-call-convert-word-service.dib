@@ -1,6 +1,6 @@
 #!meta
 
-{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
 
 #!csharp
 
@@ -13,6 +13,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Net.Http;
+using System.IO;
 
 var serviceCollection = new ServiceCollection();
 serviceCollection.AddHttpClient();
@@ -20,23 +21,20 @@ var serviceProvider = serviceCollection.BuildServiceProvider();
 
 var httpClient = serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient();
 
-var outputFile = @"C:/temp/converted.docx";
+var outputFile = @"C:/temp/converted2.docx";
 // if exists Delete
 if (System.IO.File.Exists(outputFile))
 {
     System.IO.File.Delete(outputFile);
 }
 
-var inputFile = @"C:/temp/extractPDFInput.pdf";
+var inputFile = @"C:/temp/manualedreame2.pdf";
 
-var requestUri = "http://localhost:5000/api/convert/local";
-var jsonContent = @$"{{
-    ""LocalPdfFile"": ""{inputFile}"",
-    ""LocalOutputDocxFile"": ""{outputFile}""
-}}";
+var requestUri = "http://localhost:9999/api/conversion/convertpdf2word";
+var inputstreamfile = new System.IO.FileStream(inputFile, System.IO.FileMode.Open, System.IO.FileAccess.Read);
 
-Console.WriteLine("Sending request to convert PDF to DOCX with dto {0}", jsonContent);
-var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+Console.WriteLine("Sending request to convert PDF to DOCX");
+var content = new StreamContent(inputstreamfile);
 
 Console.WriteLine($"Sending request to {requestUri}...");
 var response = await httpClient.PostAsync(requestUri, content);
@@ -49,6 +47,16 @@ if (response.IsSuccessStatusCode)
 else
 {
     Console.WriteLine($"Request failed with status code: {response.StatusCode}");
+}
+
+if (File.Exists(outputFile))
+{
+    File.Delete(outputFile);
+}
+
+using (var output = new FileStream(outputFile, FileMode.Create))
+{
+    await response.Content.CopyToAsync(output);
 }
 
 #!csharp
@@ -117,7 +125,7 @@ using (WordprocessingDocument wordDoc = WordprocessingDocument.Open(outputFile, 
 using System.IO;
 
 // if the directory exists, delete, then create 
-var outputDirectory = Path.Combine(Environment.CurrentDirectory, "output");
+var outputDirectory = Path.Combine(Environment.CurrentDirectory, "outputword");
 if (Directory.Exists(outputDirectory))
 {
     Directory.Delete(outputDirectory, true);

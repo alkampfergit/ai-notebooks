@@ -1,0 +1,289 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
+
+#!markdown
+
+### References
+
+- [Azure Ai Resources https://ai.azure.com/explore/aiservices?tid=854d7cc7-3d8e-42db-b62b-39ff06ca250f](https://ai.azure.com/explore/aiservices?tid=854d7cc7-3d8e-42db-b62b-39ff06ca250f)
+
+#!csharp
+
+#r "nuget: Azure.AI.DocumentIntelligence, *"
+
+#!import ../dotenv.cs
+
+#!csharp
+
+using Azure;
+using Azure.AI.DocumentIntelligence;
+using System.IO;
+
+string endpoint = Dotenv.Get("AZURE_DI_ENDPOINT");
+string key = Dotenv.Get("AZURE_DI_KEY");
+var credential = new AzureKeyCredential(key);
+var client = new DocumentIntelligenceClient(new Uri(endpoint), credential);
+
+// Load binary file
+string filePath = @"C:\temp\sampleocr1.jpeg";
+var data = File.ReadAllBytes(filePath);
+
+var binaryData = new BinaryData(data);
+AnalyzeDocumentOptions content = new AnalyzeDocumentOptions("prebuilt-layout", binaryData);
+content.OutputContentFormat = DocumentContentFormat.Markdown;
+
+Operation<AnalyzeResult> operation = await client.AnalyzeDocumentAsync(WaitUntil.Completed, content);
+
+AnalyzeResult result = operation.Value;
+
+#!csharp
+
+// now start writing the result on a subdirectory 
+var originalFileName = Path.GetFileNameWithoutExtension(filePath);
+var outputDirectory = Path.Combine(Environment.CurrentDirectory, "azure-di-output-ocr", originalFileName);
+if (Directory.Exists(outputDirectory))
+{
+    Directory.Delete(outputDirectory, true);
+}
+
+Directory.CreateDirectory(outputDirectory);
+
+// Output file without original filename prefix
+var outputFilePath = Path.Combine(outputDirectory, "result.md");
+File.WriteAllText(outputFilePath, result.Content, System.Text.Encoding.UTF8);
+
+#!csharp
+
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+
+public class Settings
+{
+    public string Endpoint { get; init; }
+    public string ApiVersion { get; init; }
+    public string SubscriptionKey { get; init; }
+    public string AadToken { get; init; }
+    public string AnalyzerId { get; init; }
+    public string FileLocation { get; init; }
+
+    public Settings(string endpoint, string apiVersion, string analyzerId, string fileLocation, 
+                   string subscriptionKey = null, string aadToken = null)
+    {
+        Endpoint = endpoint;
+        ApiVersion = apiVersion;
+        SubscriptionKey = subscriptionKey;
+        AadToken = aadToken;
+        AnalyzerId = analyzerId;
+        FileLocation = fileLocation;
+
+        ValidateSettings();
+    }
+
+    private void ValidateSettings()
+    {
+        bool keyNotProvided = string.IsNullOrEmpty(SubscriptionKey) || 
+                             SubscriptionKey == "AZURE_CONTENT_UNDERSTANDING_SUBSCRIPTION_KEY";
+        bool tokenNotProvided = string.IsNullOrEmpty(AadToken) || 
+                               AadToken == "AZURE_CONTENT_UNDERSTANDING_AAD_TOKEN";
+
+        if (keyNotProvided && tokenNotProvided)
+        {
+            throw new ArgumentException("Either 'SubscriptionKey' or 'AadToken' must be provided");
+        }
+    }
+
+    public Func<string> TokenProvider => string.IsNullOrEmpty(AadToken) ? null : () => AadToken;
+}
+
+public class AzureContentUnderstandingClient
+{
+    private readonly string _endpoint;
+    private readonly string _apiVersion;
+    private readonly ILogger _logger;
+    private readonly Dictionary<string, string> _headers;
+    private readonly HttpClient _httpClient;
+
+    public AzureContentUnderstandingClient(string endpoint, string apiVersion, 
+                                         string subscriptionKey = null, 
+                                         Func<string> tokenProvider = null,
+                                         string xMsUserAgent = "cu-sample-code")
+    {
+        if (string.IsNullOrEmpty(subscriptionKey) && tokenProvider == null)
+        {
+            throw new ArgumentException("Either subscription key or token provider must be provided");
+        }
+        if (string.IsNullOrEmpty(apiVersion))
+        {
+            throw new ArgumentException("API version must be provided");
+        }
+        if (string.IsNullOrEmpty(endpoint))
+        {
+            throw new ArgumentException("Endpoint must be provided");
+        }
+
+        _endpoint = endpoint.TrimEnd('/');
+        _apiVersion = apiVersion;
+        _logger = LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<AzureContentUnderstandingClient>();
+        _headers = GetHeaders(subscriptionKey, tokenProvider?.Invoke(), xMsUserAgent);
+        _httpClient = new HttpClient();
+    }
+
+    public async Task<HttpResponseMessage> BeginAnalyzeAsync(string analyzerId, string fileLocation)
+    {
+        HttpContent content;
+        var headers = new Dictionary<string, string>(_headers);
+
+        if (File.Exists(fileLocation))
+        {
+            var fileData = await File.ReadAllBytesAsync(fileLocation);
+            content = new ByteArrayContent(fileData);
+            content.Headers.Add("Content-Type", "application/octet-stream");
+        }
+        else if (fileLocation.StartsWith("https://") || fileLocation.StartsWith("http://"))
+        {
+            var urlData = new { url = fileLocation };
+            var jsonString = JsonSerializer.Serialize(urlData);
+            content = new StringContent(jsonString, Encoding.UTF8, "application/json");
+        }
+        else
+        {
+            throw new ArgumentException("File location must be a valid path or URL.");
+        }
+
+        var request = new HttpRequestMessage(HttpMethod.Post, GetAnalyzeUrl(_endpoint, _apiVersion, analyzerId))
+        {
+            Content = content
+        };
+
+        foreach (var header in headers)
+        {
+            request.Headers.Add(header.Key, header.Value);
+        }
+
+        var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        
+        _logger.LogInformation($"Analyzing file {fileLocation} with analyzer: {analyzerId}");
+        return response;
+    }
+
+    public async Task<Dictionary<string, object>> PollResultAsync(HttpResponseMessage response, 
+                                                                 int timeoutSeconds = 120, 
+                                                                 int pollingIntervalSeconds = 2)
+    {
+        if (!response.Headers.TryGetValues("operation-location", out var operationLocationValues))
+        {
+            throw new ArgumentException("Operation location not found in response headers.");
+        }
+
+        var operationLocation = operationLocationValues.FirstOrDefault();
+        if (string.IsNullOrEmpty(operationLocation))
+        {
+            throw new ArgumentException("Operation location not found in response headers.");
+        }
+
+        var startTime = DateTime.UtcNow;
+        
+        while (true)
+        {
+            var elapsedTime = (DateTime.UtcNow - startTime).TotalSeconds;
+            _logger.LogInformation($"Waiting for service response, elapsed: {elapsedTime:F2} seconds");
+            
+            if (elapsedTime > timeoutSeconds)
+            {
+                throw new TimeoutException($"Operation timed out after {timeoutSeconds:F2} seconds.");
+            }
+
+            var request = new HttpRequestMessage(HttpMethod.Get, operationLocation);
+            foreach (var header in _headers)
+            {
+                request.Headers.Add(header.Key, header.Value);
+            }
+
+            var pollResponse = await _httpClient.SendAsync(request);
+            pollResponse.EnsureSuccessStatusCode();
+            
+            var resultJson = await pollResponse.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<Dictionary<string, object>>(resultJson);
+            
+            var status = result.ContainsKey("status") ? result["status"].ToString().ToLower() : "";
+            
+            if (status == "succeeded")
+            {
+                _logger.LogInformation($"Request result is ready after {elapsedTime:F2} seconds.");
+                return JsonSerializer.Deserialize<Dictionary<string, object>>(resultJson);
+            }
+            else if (status == "failed")
+            {
+                _logger.LogError($"Request failed. Reason: {resultJson}");
+                throw new InvalidOperationException("Request failed.");
+            }
+            else
+            {
+                var operationId = operationLocation.Split('/').Last().Split('?').First();
+                _logger.LogInformation($"Request {operationId} in progress ...");
+            }
+            
+            await Task.Delay(TimeSpan.FromSeconds(pollingIntervalSeconds));
+        }
+    }
+
+    private string GetAnalyzeUrl(string endpoint, string apiVersion, string analyzerId)
+    {
+        return $"{endpoint}/contentunderstanding/analyzers/{analyzerId}:analyze?api-version={apiVersion}&stringEncoding=utf16";
+    }
+
+    private Dictionary<string, string> GetHeaders(string subscriptionKey, string apiToken, string xMsUserAgent)
+    {
+        var headers = new Dictionary<string, string>();
+        
+        if (!string.IsNullOrEmpty(subscriptionKey))
+        {
+            headers["Ocp-Apim-Subscription-Key"] = subscriptionKey;
+        }
+        else
+        {
+            headers["Authorization"] = $"Bearer {apiToken}";
+        }
+        
+        headers["x-ms-useragent"] = xMsUserAgent;
+        return headers;
+    }
+
+    public void Dispose()
+    {
+        _httpClient?.Dispose();
+    }
+}
+
+public async Task Main()
+{
+    var settings = new Settings(
+        endpoint: "https://alkampfer-rag-resource.cognitiveservices.azure.com/",
+        apiVersion: "2025-05-01-preview",
+        subscriptionKey: "AZURE_CONTENT_UNDERSTANDING_SUBSCRIPTION_KEY",
+        aadToken: "AZURE_CONTENT_UNDERSTANDING_AAD_TOKEN",
+        analyzerId: "demo",
+        fileLocation: "https://raw.githubusercontent.com/Azure/azure-sdk-for-python/main/sdk/formrecognizer/azure-ai-formrecognizer/tests/sample_forms/receipt/contoso-receipt.png"
+    );
+
+    var client = new AzureContentUnderstandingClient(
+        settings.Endpoint,
+        settings.ApiVersion,
+        subscriptionKey: settings.SubscriptionKey,
+        tokenProvider: settings.TokenProvider
+    );
+
+    var response = await client.BeginAnalyzeAsync(settings.AnalyzerId, settings.FileLocation);
+    var result = await client.PollResultAsync(response, timeoutSeconds: 60 * 60, pollingIntervalSeconds: 1);
+    
+    var json = JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
+    Console.WriteLine(json);
+}

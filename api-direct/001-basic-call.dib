@@ -1,0 +1,110 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
+
+#!csharp
+
+#r "nuget: Azure.AI.OpenAI, 2.5.0-beta.1"
+#r "nuget: OpenAI, 2.5.0"
+   
+#!import ../dotenv.cs
+
+#!markdown
+
+# Client
+
+The first step is obtaining a client that is capable to interface with the Azure OpenAI service. This can be done by using the `OpenAIClient` class from the `Azure.AI.OpenAI` package.
+
+#!csharp
+
+using Azure.AI.OpenAI;
+using OpenAI.Chat;
+using System.ClientModel;
+
+var client = new AzureOpenAIClient(
+    new Uri(Dotenv.Get("OPENAI_API_BASE")),
+    new ApiKeyCredential(Dotenv.Get("OPENAI_API_KEY")));
+
+var chatClient = client.GetChatClient("gpt-5-nano");
+
+#!markdown
+
+## Chat interaction
+
+The default chat interaction allows to have a conversation with the model by sending a list of messages. Eac\h message has a role (system, user, assistant) and content.
+
+#!csharp
+
+var messages = new List<ChatMessage>
+{
+    ChatMessage.CreateUserMessage("You are a helpful assistant."),
+    ChatMessage.CreateUserMessage("Write a short poem about the sea.")
+};
+
+var response = await chatClient.CompleteChatAsync(messages);
+// output the response in json using system.text.json
+var resonseJson = System.Text.Json.JsonSerializer.Serialize(
+    response.Value, 
+    new System.Text.Json.JsonSerializerOptions 
+    { 
+        WriteIndented = true 
+    });
+
+Console.WriteLine($"Response of type {response.GetType()}");
+Console.WriteLine($"Response: {resonseJson}");
+
+#!csharp
+
+ChatCompletion responseValue = response.Value;
+// The Content property is a collection of ChatMessageContentPart
+Console.WriteLine($"Response content type: {responseValue.Content.GetType()}");
+Console.WriteLine($"Number of content parts: {responseValue.Content.Count}");
+
+// Access the text content
+foreach (var contentPart in responseValue.Content)
+{
+    Console.WriteLine($"Content part: {contentPart.Text}");
+}
+
+// Or simply use the first content part's text
+if (responseValue.Content.Count > 0)
+{
+    Console.WriteLine($"\nFirst content text: {responseValue.Content[0].Text}");
+}
+
+#!markdown
+
+## Metadata
+
+All the responses from the Azure OpenAI service contain metadata information about the request, such as token usage, response id, and more. The most important thing is being able to count the tokens used in the request and response to monitor costs and usage.
+
+#!csharp
+
+// Access token usage information from the response
+var usage = responseValue.Usage;
+
+Console.WriteLine($"Token Usage:");
+Console.WriteLine($"  Prompt tokens: {usage.InputTokenCount}");
+Console.WriteLine($"  Completion tokens: {usage.OutputTokenCount}");
+Console.WriteLine($"  Total tokens: {usage.TotalTokenCount}");
+
+// Additional metadata
+Console.WriteLine($"\nResponse ID: {responseValue.Id}");
+Console.WriteLine($"Model: {responseValue.Model}");
+Console.WriteLine($"Finish Reason: {responseValue.FinishReason}");
+
+#!csharp
+
+// Additional metadata information
+Console.WriteLine($"\nAdditional Response Information:");
+Console.WriteLine($"Created At: {responseValue.CreatedAt}");
+Console.WriteLine($"System Fingerprint: {responseValue.SystemFingerprint ?? "N/A"}");
+
+// Role information
+Console.WriteLine($"Role: {responseValue.Role}");
+
+// Check for refusal
+if (!string.IsNullOrEmpty(responseValue.Refusal))
+{
+    Console.WriteLine($"Refusal: {responseValue.Refusal}");
+}

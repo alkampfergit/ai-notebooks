@@ -1,0 +1,187 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
+
+#!csharp
+
+#r "nuget: Azure.AI.OpenAI, 2.5.0-beta.1"
+#r "nuget: OpenAI, 2.5.0"
+   
+#!import ../dotenv.cs
+
+#!markdown
+
+# Local LM Studio Client
+
+This example demonstrates how to connect to a local LM Studio instance running on port 1234. LM Studio provides an OpenAI-compatible API, so we can use the same client libraries.
+
+#!csharp
+
+using OpenAI;
+using OpenAI.Chat;
+using System.ClientModel;
+
+ var client = new OpenAIClient(new ApiKeyCredential("notuserd"), 
+ new OpenAIClientOptions
+{
+    Endpoint = new Uri("http://127.0.0.1:1234/v1")
+});
+// Get the chat client - use the model name from your LM Studio
+var chatClient = client.GetChatClient("gemma-3n-e2b-it-mlx");
+
+#!markdown
+
+## Chat interaction
+
+The default chat interaction allows to have a conversation with the model by sending a list of messages. Each message has a role (system, user, assistant) and content.
+
+#!csharp
+
+var messages = new List<ChatMessage>
+{
+    ChatMessage.CreateUserMessage("You are a helpful assistant."),
+    ChatMessage.CreateUserMessage("Write a short poem about the sea.")
+};
+
+var response = await chatClient.CompleteChatAsync(messages);
+// output the response in json using system.text.json
+var resonseJson = System.Text.Json.JsonSerializer.Serialize(
+    response.Value, 
+    new System.Text.Json.JsonSerializerOptions 
+    { 
+        WriteIndented = true 
+    });
+
+Console.WriteLine($"Response of type {response.GetType()}");
+Console.WriteLine($"Response: {resonseJson}");
+
+#!csharp
+
+ChatCompletion responseValue = response.Value;
+// The Content property is a collection of ChatMessageContentPart
+Console.WriteLine($"Response content type: {responseValue.Content.GetType()}");
+Console.WriteLine($"Number of content parts: {responseValue.Content.Count}");
+
+// Access the text content
+foreach (var contentPart in responseValue.Content)
+{
+    Console.WriteLine($"Content part: {contentPart.Text}");
+}
+
+// Or simply use the first content part's text
+if (responseValue.Content.Count > 0)
+{
+    Console.WriteLine($"\nFirst content text: {responseValue.Content[0].Text}");
+}
+
+#!markdown
+
+## Metadata
+
+All the responses from the local LM Studio service contain metadata information about the request, such as token usage, response id, and more. The most important thing is being able to count the tokens used in the request and response to monitor costs and usage.
+
+#!csharp
+
+// Access token usage information from the response
+var usage = responseValue.Usage;
+
+Console.WriteLine($"Token Usage:");
+Console.WriteLine($"  Prompt tokens: {usage.InputTokenCount}");
+Console.WriteLine($"  Completion tokens: {usage.OutputTokenCount}");
+Console.WriteLine($"  Total tokens: {usage.TotalTokenCount}");
+
+// Additional metadata
+Console.WriteLine($"\nResponse ID: {responseValue.Id}");
+Console.WriteLine($"Model: {responseValue.Model}");
+Console.WriteLine($"Finish Reason: {responseValue.FinishReason}");
+
+#!csharp
+
+// Additional metadata information
+Console.WriteLine($"\nAdditional Response Information:");
+Console.WriteLine($"Created At: {responseValue.CreatedAt}");
+Console.WriteLine($"System Fingerprint: {responseValue.SystemFingerprint ?? "N/A"}");
+
+// Role information
+Console.WriteLine($"Role: {responseValue.Role}");
+
+// Check for refusal
+if (!string.IsNullOrEmpty(responseValue.Refusal))
+{
+    Console.WriteLine($"Refusal: {responseValue.Refusal}");
+}
+
+#!markdown
+
+## Streaming Response
+
+Streaming allows you to receive the response incrementally as it's being generated, rather than waiting for the complete response. This is useful for long responses and provides a better user experience.
+
+#!csharp
+
+var streamingMessages = new List<ChatMessage>
+{
+    ChatMessage.CreateSystemMessage("You are a helpful assistant."),
+    ChatMessage.CreateUserMessage("Write a short story about a robot learning to paint.")
+};
+
+Console.WriteLine("Streaming response:\n");
+
+await foreach (var update in chatClient.CompleteChatStreamingAsync(streamingMessages))
+{
+    foreach (var contentPart in update.ContentUpdate)
+    {
+        Console.Write(contentPart.Text);
+    }
+}
+
+Console.WriteLine("\n\nStreaming complete!");
+
+#!markdown
+
+## Streaming with Metadata
+
+You can also access metadata information during streaming, such as finish reason and usage statistics, which are available in the final update.
+
+#!csharp
+
+var streamingMessagesWithMetadata = new List<ChatMessage>
+{
+    ChatMessage.CreateSystemMessage("You are a helpful assistant."),
+    ChatMessage.CreateUserMessage("Explain quantum computing in simple terms.")
+};
+
+Console.WriteLine("Streaming response with metadata:\n");
+
+StreamingChatCompletionUpdate? lastUpdate = null;
+
+await foreach (var update in chatClient.CompleteChatStreamingAsync(streamingMessagesWithMetadata))
+{
+    // Print content as it arrives
+    foreach (var contentPart in update.ContentUpdate)
+    {
+        Console.Write(contentPart.Text);
+    }
+    
+    // Keep track of the last update for metadata
+    lastUpdate = update;
+}
+
+Console.WriteLine("\n\n=== Metadata Information ===");
+
+if (lastUpdate != null)
+{
+    Console.WriteLine($"Finish Reason: {lastUpdate.FinishReason}");
+    
+    if (lastUpdate.Usage != null)
+    {
+        Console.WriteLine($"\nToken Usage:");
+        Console.WriteLine($"  Prompt tokens: {lastUpdate.Usage.InputTokenCount}");
+        Console.WriteLine($"  Completion tokens: {lastUpdate.Usage.OutputTokenCount}");
+        Console.WriteLine($"  Total tokens: {lastUpdate.Usage.TotalTokenCount}");
+    }
+    
+    Console.WriteLine($"\nResponse ID: {lastUpdate.Id}");
+    Console.WriteLine($"Model: {lastUpdate.Model}");
+    Console.WriteLine($"Created At: {lastUpdate.CreatedAt}");
+}

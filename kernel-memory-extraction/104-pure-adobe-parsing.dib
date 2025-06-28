@@ -1,6 +1,6 @@
 #!meta
 
-{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
 
 #!csharp
 
@@ -22,8 +22,8 @@ using System.IO;
 // if the directory exists, delete, then create 
 var outputDirectory = Path.Combine(Environment.CurrentDirectory, "output2");
 // var inputFile = @"C:/temp/extractPDFInput.pdf";
-//var inputFile = @"C:/temp/manualeDreame.pdf";
-var inputFile = @"s:\Downloads\66250675-4G-EN.pdf";
+var inputFile = @"C:/temp/manualeDreame2.pdf";
+//var inputFile = @"s:\Downloads\66250675-4G-EN.pdf";
 
 #!csharp
 
@@ -61,7 +61,7 @@ ICredentials credentials = new ServicePrincipalCredentials(
 PDFServices pdfServices = new PDFServices(credentials);
 
 // IMPORTANT: TO AVOID SENDING EACH TIME DATA TO ADOBE (IT IS SLOW) WE DISABLE ANALYZING YOU NEED TO SET TO TRUE
-var reanalyzePdf = false;
+var reanalyzePdf = true;
 
 if (reanalyzePdf) 
 {
