@@ -7,6 +7,8 @@ skdata
 **/bin/
 **/obj/
 **/out/
+**/output/
+**/azure-di-output/
 
 # User-specific files
 *.user

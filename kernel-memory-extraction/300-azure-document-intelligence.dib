@@ -1,0 +1,126 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
+
+#!markdown
+
+### References
+
+- [Azure Ai Resources https://ai.azure.com/explore/aiservices?tid=854d7cc7-3d8e-42db-b62b-39ff06ca250f](https://ai.azure.com/explore/aiservices?tid=854d7cc7-3d8e-42db-b62b-39ff06ca250f)
+
+#!csharp
+
+#r "nuget: Azure.AI.DocumentIntelligence, *"
+
+#!import ../dotenv.cs
+
+#!csharp
+
+using Azure;
+using Azure.AI.DocumentIntelligence;
+using System.IO;
+
+string endpoint = Dotenv.Get("AZURE_DI_ENDPOINT");
+string key = Dotenv.Get("AZURE_DI_KEY");
+var credential = new AzureKeyCredential(key);
+var client = new DocumentIntelligenceClient(new Uri(endpoint), credential);
+
+
+// Load binary file
+string filePath = "C:\\temp\\manualedreame2.pdf";
+//string filePath = @"C:\temp\sampleocr1.jpeg";
+var data = File.ReadAllBytes(filePath);
+
+var binaryData = new BinaryData(data);
+AnalyzeDocumentOptions content = new AnalyzeDocumentOptions("prebuilt-layout", binaryData);
+content.OutputContentFormat = DocumentContentFormat.Markdown;
+
+Operation<AnalyzeResult> operation = await client.AnalyzeDocumentAsync(WaitUntil.Completed, content);
+
+AnalyzeResult result = operation.Value;
+
+#!csharp
+
+// now start writing the result on a subdirectory 
+var outputDirectory = Path.Combine(Environment.CurrentDirectory, "azure-di-output");
+if (!Directory.Exists(outputDirectory))
+{
+    Directory.CreateDirectory(outputDirectory);
+}
+// Append original file name to result file
+var originalFileName = Path.GetFileNameWithoutExtension(filePath);
+var outputFilePath = Path.Combine(outputDirectory, $"result_{originalFileName}.md");
+File.WriteAllText(outputFilePath, result.Content, System.Text.Encoding.UTF8);
+
+#!csharp
+
+// Delete existing table files for this document before generating new ones
+var tableFilePattern = $"table_*_{originalFileName}.md";
+var existingTableFiles = Directory.GetFiles(outputDirectory, tableFilePattern);
+foreach (var file in existingTableFiles)
+{
+    File.Delete(file);
+    Console.WriteLine($"Deleted existing file: {Path.GetFileName(file)}");
+}
+
+// Now dump table information and save each table to a separate file
+int tableIndex = 0;
+foreach (var table in result.Tables)
+{
+    tableIndex++;
+    int pageNumber = table.BoundingRegions[0].PageNumber;
+    
+    Console.WriteLine($"Table {tableIndex} in page {pageNumber} has {table.RowCount} rows and {table.ColumnCount} columns.");
+
+    // Build markdown table
+    var sb = new System.Text.StringBuilder();
+    sb.AppendLine($"# Table {tableIndex} - Page {pageNumber}");
+    
+    if (!string.IsNullOrEmpty(table.Caption?.Content))
+    {
+        sb.AppendLine($"**Caption:** {table.Caption.Content}");
+    }
+    sb.AppendLine($"**Rows:** {table.RowCount}, **Columns:** {table.ColumnCount}");
+    sb.AppendLine();
+    
+
+    // Create a 2D array to hold all cell contents
+    string[,] tableData = new string[table.RowCount, table.ColumnCount];
+    
+    // Fill the array with cell contents
+    foreach (var cell in table.Cells)
+    {
+        string content = cell.Content?.Trim() ?? "";
+        // Escape markdown characters and handle line breaks
+        content = content.Replace("|", "\\|").Replace("\n", " ").Replace("\r", "");
+        tableData[cell.RowIndex, cell.ColumnIndex] = content;
+    }
+
+    // Generate markdown table
+    for (int row = 0; row < table.RowCount; row++)
+    {
+        var rowCells = new string[table.ColumnCount];
+        for (int col = 0; col < table.ColumnCount; col++)
+        {
+            rowCells[col] = tableData[row, col] ?? "";
+        }
+        
+        sb.AppendLine("| " + string.Join(" | ", rowCells) + " |");
+        
+        // Add separator after header row
+        if (row == 0)
+        {
+            sb.AppendLine("|" + string.Concat(Enumerable.Repeat(" --- |", table.ColumnCount)));
+        }
+    }
+
+    // Save table to file
+    var tableFileName = $"table_{tableIndex:D2}_page{pageNumber}_{originalFileName}.md";
+    var tableFilePath = Path.Combine(outputDirectory, tableFileName);
+    File.WriteAllText(tableFilePath, sb.ToString(), System.Text.Encoding.UTF8);
+    
+    Console.WriteLine($"Table saved to: {tableFileName}");
+    Console.WriteLine("------------------------------");
+}
+
+Console.WriteLine($"Total tables processed: {tableIndex}");
