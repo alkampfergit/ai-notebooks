@@ -11,6 +11,7 @@
 #!csharp
 
 #r "nuget: Azure.AI.DocumentIntelligence, *"
+#r "nuget: UglyToad.PdfPig, *"
 
 #!import ../dotenv.cs
 
@@ -160,3 +161,76 @@ File.WriteAllText(processedFilePath, processedContent, System.Text.Encoding.UTF8
 Console.WriteLine($"Processed markdown saved to: processed_{originalFileName}.md");
 Console.WriteLine($"Total figures converted: {figureCount}");
 Console.WriteLine($"Images should be placed in: {Path.GetRelativePath(outputDirectory, imagesDirectory)}");
+
+#!csharp
+
+using UglyToad.PdfPig;
+using UglyToad.PdfPig.Content;
+
+// Only process if the original file is a PDF
+if (Path.GetExtension(filePath).ToLowerInvariant() == ".pdf")
+{
+    Console.WriteLine("PDF file detected. Extracting images...");
+    
+    // Create images subdirectory if it doesn't exist
+    var imagesDirectory = Path.Combine(outputDirectory, "images");
+    if (!Directory.Exists(imagesDirectory))
+    {
+        Directory.CreateDirectory(imagesDirectory);
+    }
+    
+    // Delete existing images with the same prefix
+    var imagePrefix = $"{originalFileName}_";
+    var existingImages = Directory.GetFiles(imagesDirectory, $"{imagePrefix}*");
+    foreach (var imageFile in existingImages)
+    {
+        File.Delete(imageFile);
+        Console.WriteLine($"Deleted existing image: {Path.GetFileName(imageFile)}");
+    }
+    
+    // Extract images from PDF
+    using (PdfDocument document = PdfDocument.Open(filePath))
+    {
+        int imageCount = 0;
+        
+        for (int pageNum = 1; pageNum <= document.NumberOfPages; pageNum++)
+        {
+            Page page = document.GetPage(pageNum);
+            
+            foreach (var image in page.GetImages())
+            {
+                imageCount++;
+                try
+                {
+                    // Get image bytes
+                    var imageBytes = image.RawBytes.ToArray();
+                    
+                    // Determine file extension based on image format
+                    string extension = ".png"; // default
+                    if (image.ColorSpace?.Name?.Contains("JPEG") == true || 
+                        image.Filter?.Contains("DCTDecode") == true)
+                    {
+                        extension = ".jpg";
+                    }
+                    
+                    // Save image with proper naming convention
+                    var imageFileName = $"{originalFileName}_figure{imageCount}{extension}";
+                    var imageFilePath = Path.Combine(imagesDirectory, imageFileName);
+                    
+                    File.WriteAllBytes(imageFilePath, imageBytes);
+                    Console.WriteLine($"Extracted image {imageCount}: {imageFileName}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to extract image {imageCount}: {ex.Message}");
+                }
+            }
+        }
+        
+        Console.WriteLine($"Total images extracted: {imageCount}");
+    }
+}
+else
+{
+    Console.WriteLine($"File is not a PDF ({Path.GetExtension(filePath)}). Skipping image extraction.");
+}
