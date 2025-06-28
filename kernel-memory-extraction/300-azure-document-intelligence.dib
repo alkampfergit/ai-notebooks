@@ -124,3 +124,39 @@ foreach (var table in result.Tables)
 }
 
 Console.WriteLine($"Total tables processed: {tableIndex}");
+
+#!csharp
+
+// Process the markdown file to convert <figure> tags to markdown images
+var markdownFilePath = Path.Combine(outputDirectory, $"result_{originalFileName}.md");
+var processedFilePath = Path.Combine(outputDirectory, $"processed_{originalFileName}.md");
+
+// Create images subdirectory
+var imagesDirectory = Path.Combine(outputDirectory, "images");
+if (!Directory.Exists(imagesDirectory))
+{
+    Directory.CreateDirectory(imagesDirectory);
+    Console.WriteLine($"Created images directory: {imagesDirectory}");
+}
+
+// Read the markdown content
+string markdownContent = File.ReadAllText(markdownFilePath, System.Text.Encoding.UTF8);
+
+// Process figure tags
+var figurePattern = @"<figure>(.*?)</figure>";
+var regex = new System.Text.RegularExpressions.Regex(figurePattern, 
+    System.Text.RegularExpressions.RegexOptions.Singleline | 
+    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+int figureCount = 0;
+string processedContent = regex.Replace(markdownContent, match => {
+    figureCount++;
+    return $"![Figure {figureCount}](images/figure{figureCount}.png)";
+});
+
+// Save the processed markdown
+File.WriteAllText(processedFilePath, processedContent, System.Text.Encoding.UTF8);
+
+Console.WriteLine($"Processed markdown saved to: processed_{originalFileName}.md");
+Console.WriteLine($"Total figures converted: {figureCount}");
+Console.WriteLine($"Images should be placed in: {Path.GetRelativePath(outputDirectory, imagesDirectory)}");
