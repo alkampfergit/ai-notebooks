@@ -11,6 +11,9 @@
 #!csharp
 
 #r "nuget: Azure.AI.DocumentIntelligence, *"
+#r "nuget: PdfPig, *"
+#r "nuget: PdfPig.Rendering.Skia"
+#r "nuget: System.Drawing.Common"
 
 #!import ../dotenv.cs
 
@@ -42,20 +45,23 @@ AnalyzeResult result = operation.Value;
 #!csharp
 
 // now start writing the result on a subdirectory 
-var outputDirectory = Path.Combine(Environment.CurrentDirectory, "azure-di-output");
-if (!Directory.Exists(outputDirectory))
-{
-    Directory.CreateDirectory(outputDirectory);
-}
-// Append original file name to result file
 var originalFileName = Path.GetFileNameWithoutExtension(filePath);
-var outputFilePath = Path.Combine(outputDirectory, $"result_{originalFileName}.md");
+var outputDirectory = Path.Combine(Environment.CurrentDirectory, "azure-di-output", originalFileName);
+if (Directory.Exists(outputDirectory))
+{
+    Directory.Delete(outputDirectory, true);
+}
+
+Directory.CreateDirectory(outputDirectory);
+
+// Output file without original filename prefix
+var outputFilePath = Path.Combine(outputDirectory, "result.md");
 File.WriteAllText(outputFilePath, result.Content, System.Text.Encoding.UTF8);
 
 #!csharp
 
 // Delete existing table files for this document before generating new ones
-var tableFilePattern = $"table_*_{originalFileName}.md";
+var tableFilePattern = "table_*.md";
 var existingTableFiles = Directory.GetFiles(outputDirectory, tableFilePattern);
 foreach (var file in existingTableFiles)
 {
@@ -114,8 +120,8 @@ foreach (var table in result.Tables)
         }
     }
 
-    // Save table to file
-    var tableFileName = $"table_{tableIndex:D2}_page{pageNumber}_{originalFileName}.md";
+    // Save table to file without original filename
+    var tableFileName = $"table_{tableIndex:D2}_page{pageNumber}.md";
     var tableFilePath = Path.Combine(outputDirectory, tableFileName);
     File.WriteAllText(tableFilePath, sb.ToString(), System.Text.Encoding.UTF8);
     
@@ -124,3 +130,201 @@ foreach (var table in result.Tables)
 }
 
 Console.WriteLine($"Total tables processed: {tableIndex}");
+
+#!csharp
+
+// Process the markdown file to convert <figure> tags to markdown images
+var markdownFilePath = Path.Combine(outputDirectory, "result.md");
+var processedFilePath = Path.Combine(outputDirectory, "processed.md");
+
+// Create images subdirectory
+var imagesDirectory = Path.Combine(outputDirectory, "images");
+if (!Directory.Exists(imagesDirectory))
+{
+    Directory.CreateDirectory(imagesDirectory);
+    Console.WriteLine($"Created images directory: {imagesDirectory}");
+}
+
+// Read the markdown content
+string markdownContent = File.ReadAllText(markdownFilePath, System.Text.Encoding.UTF8);
+
+// Process figure tags
+var figurePattern = @"<figure>(?<content>.*?)</figure>";
+var regex = new System.Text.RegularExpressions.Regex(figurePattern, 
+    System.Text.RegularExpressions.RegexOptions.Singleline | 
+    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+int figureCount = 0;
+string processedContent = regex.Replace(markdownContent, match => {
+    figureCount++;
+    return $@"
+### Figure {figureCount}
+![Figure {figureCount}](images/figure{figureCount}.png)
+
+{match.Groups["content"].Value.Trim()}
+
+### End Figure {figureCount}";});
+
+// Save the processed markdown
+File.WriteAllText(processedFilePath, processedContent, System.Text.Encoding.UTF8);
+
+Console.WriteLine($"Processed markdown saved to: processed.md");
+Console.WriteLine($"Total figures converted: {figureCount}");
+Console.WriteLine($"Images should be placed in: {Path.GetRelativePath(outputDirectory, imagesDirectory)}");
+
+#!csharp
+
+using UglyToad.PdfPig;
+using UglyToad.PdfPig.Content;
+using UglyToad.PdfPig.Graphics.Colors;
+using UglyToad.PdfPig.Rendering.Skia;
+using SkiaSharp;
+
+var baseImageFileName = Path.Combine(imagesDirectory, "page");
+
+// Only process if the original file is a PDF
+if (Path.GetExtension(filePath).ToLowerInvariant() == ".pdf")
+{
+    using (var document = PdfDocument.Open(filePath))
+    {
+        document.AddSkiaPageFactory(); // Same as document.AddPageFactory<SKPicture, SkiaPageFactory>()
+
+        // render only pages that have figures
+        foreach (var pageNumber in result.Figures.Select(f => f.BoundingRegions[0].PageNumber).Distinct())
+        {
+            using (var fs = new FileStream($"{baseImageFileName}_{pageNumber}.png", FileMode.Create))
+            using (var ms = document.GetPageAsPng(pageNumber, 2, RGBColor.White))
+            {
+                ms.WriteTo(fs);
+            }
+        }
+    }
+    // Console.WriteLine("PDF file detected. Extracting images...");
+    
+    // // Create images subdirectory if it doesn't exist
+    // var imagesDirectory = Path.Combine(outputDirectory, "images");
+    // if (!Directory.Exists(imagesDirectory))
+    // {
+    //     Directory.CreateDirectory(imagesDirectory);
+    // }
+    
+    // // Delete existing images with the same prefix
+    // var imagePrefix = $"{originalFileName}_";
+    // var existingImages = Directory.GetFiles(imagesDirectory, $"{imagePrefix}*");
+    // foreach (var imageFile in existingImages)
+    // {
+    //     File.Delete(imageFile);
+    //     Console.WriteLine($"Deleted existing image: {Path.GetFileName(imageFile)}");
+    // }
+    
+    // // Extract images from PDF
+    // using (PdfDocument document = PdfDocument.Open(filePath))
+    // {
+    //     int imageCount = 0;
+        
+    //     for (int pageNum = 1; pageNum <= document.NumberOfPages; pageNum++)
+    //     {
+    //         Page page = document.GetPage(pageNum);
+            
+    //         foreach (var image in page.GetImages())
+    //         {
+    //             imageCount++;
+    //             try
+    //             {
+    //                 // Get image bytes
+    //                 var imageBytes = image.RawBytes.ToArray();
+                    
+    //                 // Determine file extension based on image format
+    //                 string extension = ".png"; // default
+    //                 if (image.ColorSpace?.Name?.Contains("JPEG") == true || 
+    //                     image.Filter?.Contains("DCTDecode") == true)
+    //                 {
+    //                     extension = ".jpg";
+    //                 }
+                    
+    //                 // Save image with proper naming convention
+    //                 var imageFileName = $"{originalFileName}_figure{imageCount}{extension}";
+    //                 var imageFilePath = Path.Combine(imagesDirectory, imageFileName);
+                    
+    //                 File.WriteAllBytes(imageFilePath, imageBytes);
+    //                 Console.WriteLine($"Extracted image {imageCount}: {imageFileName}");
+    //             }
+    //             catch (Exception ex)
+    //             {
+    //                 Console.WriteLine($"Failed to extract image {imageCount}: {ex.Message}");
+    //             }
+    //         }
+    //     }
+        
+    //     Console.WriteLine($"Total images extracted: {imageCount}");
+    // }
+}
+else
+{
+    Console.WriteLine($"File is not a PDF ({Path.GetExtension(filePath)}). Skipping image extraction.");
+}
+
+#!csharp
+
+using System.Drawing;
+// now we can use the fact that we have the bounding boxes of the figures so we can render them
+int FigureIndex = 1;
+foreach (var figure in result.Figures)
+{
+    var pageNumber = figure.BoundingRegions[0].PageNumber;
+    var imageFileName = $"{baseImageFileName}_{pageNumber}.png";
+ 
+    // Load the full page image
+    using (var bitmap = SKBitmap.Decode(imageFileName))
+    {
+        var boundingRegion = figure.BoundingRegions[0];
+        var polygon = boundingRegion.Polygon;
+        Console.WriteLine($"Processing figure {FigureIndex} on page {pageNumber} with polygon: {string.Join(", ", polygon)}");
+
+        var page = result.Pages[figure.BoundingRegions[0].PageNumber - 1];
+        List<PointF> absolutePoints = new();
+        for (int i = 0; i < polygon.Count; i += 2)
+        {
+            
+            float x = polygon[i] / page.Width.Value * bitmap.Width; // Convert to absolute X coordinate
+            float y = (polygon[i + 1] / page.Height.Value * bitmap.Height); // Flip Y-axis for top-left origin
+            absolutePoints.Add(new PointF(x, y));
+        }
+
+        Console.WriteLine($"Absolute points for figure {FigureIndex}: {string.Join(", ", absolutePoints.Select(p => $"({p.X}, {p.Y})"))}");
+
+        float minX = absolutePoints.Min(p => p.X);
+        float maxX = absolutePoints.Max(p => p.X);
+        float minY = absolutePoints.Min(p => p.Y);
+        float maxY = absolutePoints.Max(p => p.Y);
+        float width = maxX - minX;
+        float height = maxY - minY;
+        float side = Math.Max(width, height); // Square side length
+        
+        // Extract the figure region
+        var rect = new SKRectI((int)minX, (int)minY, (int)(minX + width), (int)(minY + height));
+        using (var croppedBitmap = new SKBitmap((int)width, (int) height))
+        {
+            Console.WriteLine($"Cropping figure {FigureIndex} from page {pageNumber} at {rect}");
+            bitmap.ExtractSubset(croppedBitmap, rect);
+            
+            // Save the cropped figure without original filename prefix
+            var figureFileName = Path.Combine(imagesDirectory, $"figure{FigureIndex++}.png");
+            //delete existing file if it exists
+            if (File.Exists(figureFileName))
+            {
+                File.Delete(figureFileName);
+                Console.WriteLine($"Deleted existing figure file: {figureFileName}");
+            }
+
+            using (var image = SKImage.FromBitmap(croppedBitmap))
+            using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
+            using (var stream = File.OpenWrite(figureFileName))
+            {
+                data.SaveTo(stream);
+            }
+            
+            Console.WriteLine($"Extracted figure: {figureFileName}");
+        }
+    }
+}

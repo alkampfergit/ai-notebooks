@@ -24,7 +24,7 @@ using Microsoft.KernelMemory.MemoryStorage.DevTools;
 using Microsoft.Extensions.DependencyInjection;
 using System.IO;
 
-var outputDirectory = Path.Combine(Environment.CurrentDirectory, "skdata");
+var outputDirectory = Path.Combine(Environment.CurrentDirectory, "skdatallama");
 var vectorstorage = Path.Combine(outputDirectory, "vectorstorage");
 var objectstorage = Path.Combine(outputDirectory, "objectstorage");
 
@@ -102,7 +102,7 @@ using Microsoft.KernelMemory.MemoryStorage.DevTools;
 using Microsoft.KernelMemory.Pipeline;
 
 //var file = "/Users/gianmariaricci/Downloads/manualeDreame.pdf";
-var file = @"c:\temp\manualeDreame.pdf";
+var file = @"c:\temp\manualeDreame2.pdf";
  var serviceProvider = services.BuildServiceProvider();
 var parserClient = serviceProvider.GetRequiredService<LLamaCloudParserClient>();
 
