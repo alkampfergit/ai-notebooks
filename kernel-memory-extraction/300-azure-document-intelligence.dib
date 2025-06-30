@@ -45,20 +45,23 @@ AnalyzeResult result = operation.Value;
 #!csharp
 
 // now start writing the result on a subdirectory 
-var outputDirectory = Path.Combine(Environment.CurrentDirectory, "azure-di-output");
-if (!Directory.Exists(outputDirectory))
-{
-    Directory.CreateDirectory(outputDirectory);
-}
-// Append original file name to result file
 var originalFileName = Path.GetFileNameWithoutExtension(filePath);
-var outputFilePath = Path.Combine(outputDirectory, $"result_{originalFileName}.md");
+var outputDirectory = Path.Combine(Environment.CurrentDirectory, "azure-di-output", originalFileName);
+if (Directory.Exists(outputDirectory))
+{
+    Directory.Delete(outputDirectory, true);
+}
+
+Directory.CreateDirectory(outputDirectory);
+
+// Output file without original filename prefix
+var outputFilePath = Path.Combine(outputDirectory, "result.md");
 File.WriteAllText(outputFilePath, result.Content, System.Text.Encoding.UTF8);
 
 #!csharp
 
 // Delete existing table files for this document before generating new ones
-var tableFilePattern = $"table_*_{originalFileName}.md";
+var tableFilePattern = "table_*.md";
 var existingTableFiles = Directory.GetFiles(outputDirectory, tableFilePattern);
 foreach (var file in existingTableFiles)
 {
@@ -117,8 +120,8 @@ foreach (var table in result.Tables)
         }
     }
 
-    // Save table to file
-    var tableFileName = $"table_{tableIndex:D2}_page{pageNumber}_{originalFileName}.md";
+    // Save table to file without original filename
+    var tableFileName = $"table_{tableIndex:D2}_page{pageNumber}.md";
     var tableFilePath = Path.Combine(outputDirectory, tableFileName);
     File.WriteAllText(tableFilePath, sb.ToString(), System.Text.Encoding.UTF8);
     
@@ -131,8 +134,8 @@ Console.WriteLine($"Total tables processed: {tableIndex}");
 #!csharp
 
 // Process the markdown file to convert <figure> tags to markdown images
-var markdownFilePath = Path.Combine(outputDirectory, $"result_{originalFileName}.md");
-var processedFilePath = Path.Combine(outputDirectory, $"processed_{originalFileName}.md");
+var markdownFilePath = Path.Combine(outputDirectory, "result.md");
+var processedFilePath = Path.Combine(outputDirectory, "processed.md");
 
 // Create images subdirectory
 var imagesDirectory = Path.Combine(outputDirectory, "images");
@@ -146,7 +149,7 @@ if (!Directory.Exists(imagesDirectory))
 string markdownContent = File.ReadAllText(markdownFilePath, System.Text.Encoding.UTF8);
 
 // Process figure tags
-var figurePattern = @"<figure>(.*?)</figure>";
+var figurePattern = @"<figure>(?<content>.*?)</figure>";
 var regex = new System.Text.RegularExpressions.Regex(figurePattern, 
     System.Text.RegularExpressions.RegexOptions.Singleline | 
     System.Text.RegularExpressions.RegexOptions.IgnoreCase);
@@ -154,13 +157,18 @@ var regex = new System.Text.RegularExpressions.Regex(figurePattern,
 int figureCount = 0;
 string processedContent = regex.Replace(markdownContent, match => {
     figureCount++;
-    return $"![Figure {figureCount}](images/figure{figureCount}.png)";
-});
+    return $@"
+### Figure {figureCount}
+![Figure {figureCount}](images/figure{figureCount}.png)
+
+{match.Groups["content"].Value.Trim()}
+
+### End Figure {figureCount}";});
 
 // Save the processed markdown
 File.WriteAllText(processedFilePath, processedContent, System.Text.Encoding.UTF8);
 
-Console.WriteLine($"Processed markdown saved to: processed_{originalFileName}.md");
+Console.WriteLine($"Processed markdown saved to: processed.md");
 Console.WriteLine($"Total figures converted: {figureCount}");
 Console.WriteLine($"Images should be placed in: {Path.GetRelativePath(outputDirectory, imagesDirectory)}");
 
@@ -172,7 +180,7 @@ using UglyToad.PdfPig.Graphics.Colors;
 using UglyToad.PdfPig.Rendering.Skia;
 using SkiaSharp;
 
-var baseImageFileName = Path.Combine(imagesDirectory, Path.GetFileNameWithoutExtension(filePath));
+var baseImageFileName = Path.Combine(imagesDirectory, "page");
 
 // Only process if the original file is a PDF
 if (Path.GetExtension(filePath).ToLowerInvariant() == ".pdf")
@@ -271,14 +279,19 @@ foreach (var figure in result.Figures)
     {
         var boundingRegion = figure.BoundingRegions[0];
         var polygon = boundingRegion.Polygon;
+        Console.WriteLine($"Processing figure {FigureIndex} on page {pageNumber} with polygon: {string.Join(", ", polygon)}");
 
+        var page = result.Pages[figure.BoundingRegions[0].PageNumber - 1];
         List<PointF> absolutePoints = new();
         for (int i = 0; i < polygon.Count; i += 2)
         {
-            float x = polygon[i] * bitmap.Width;
-            float y = (1 - polygon[i + 1]) * bitmap.Height; // Flip Y-axis for top-left origin
+            
+            float x = polygon[i] / page.Width.Value * bitmap.Width; // Convert to absolute X coordinate
+            float y = (polygon[i + 1] / page.Height.Value * bitmap.Height); // Flip Y-axis for top-left origin
             absolutePoints.Add(new PointF(x, y));
         }
+
+        Console.WriteLine($"Absolute points for figure {FigureIndex}: {string.Join(", ", absolutePoints.Select(p => $"({p.X}, {p.Y})"))}");
 
         float minX = absolutePoints.Min(p => p.X);
         float maxX = absolutePoints.Max(p => p.X);
@@ -287,22 +300,23 @@ foreach (var figure in result.Figures)
         float width = maxX - minX;
         float height = maxY - minY;
         float side = Math.Max(width, height); // Square side length
-
         
         // Extract the figure region
         var rect = new SKRectI((int)minX, (int)minY, (int)(minX + width), (int)(minY + height));
         using (var croppedBitmap = new SKBitmap((int)width, (int) height))
         {
+            Console.WriteLine($"Cropping figure {FigureIndex} from page {pageNumber} at {rect}");
             bitmap.ExtractSubset(croppedBitmap, rect);
             
-            // Save the cropped figure
-            var figureFileName = baseImageFileName + $"_figure{FigureIndex++}.png";
+            // Save the cropped figure without original filename prefix
+            var figureFileName = Path.Combine(imagesDirectory, $"figure{FigureIndex++}.png");
             //delete existing file if it exists
             if (File.Exists(figureFileName))
             {
                 File.Delete(figureFileName);
                 Console.WriteLine($"Deleted existing figure file: {figureFileName}");
             }
+
             using (var image = SKImage.FromBitmap(croppedBitmap))
             using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
             using (var stream = File.OpenWrite(figureFileName))
