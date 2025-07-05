@@ -8,6 +8,11 @@ skdata
 **/obj/
 **/out/
 **/output/
+**/output2/
+**/azure-di*/
+**/outputword/
+**/skdatallama
+**/localvision/
 **/azure-di-output/
 
 # User-specific files
