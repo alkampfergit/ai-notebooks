@@ -77,18 +77,25 @@ def download_wikipedia_to_markdown(wikipedia_url: str, output_file: str) -> bool
         processed_lines = []
         
         for i, line in enumerate(lines):
+            # Ensure a blank line after each heading
             if line.startswith('#'):
-                # Check if there are two empty lines before this header
-                if i >= 2 and not (lines[i-1] == '' and lines[i-2] == ''):
-                    # Add necessary empty lines
-                    if i > 0 and lines[i-1] != '':
-                        processed_lines.append('')
-                    if i > 1 and lines[i-1] == '' and lines[i-2] != '':
-                        processed_lines.append('')
-                    elif i <= 1:
-                        processed_lines.append('')
-                        processed_lines.append('')
-            processed_lines.append(line)
+                # Add blank line before heading if not present
+                if len(processed_lines) > 0 and processed_lines[-1] != '':
+                    processed_lines.append('')
+                processed_lines.append(line)
+                # Add blank line after heading if next line is not blank or end of file
+                if i + 1 < len(lines) and lines[i + 1].strip() != '':
+                    processed_lines.append('')
+            # Ensure a blank line between paragraphs (non-header, non-blank lines)
+            elif line.strip() != '':
+                processed_lines.append(line)
+                # Add blank line after paragraph if next line is not blank, not a header, and not end of file
+                if i + 1 < len(lines) and lines[i + 1].strip() != '' and not lines[i + 1].startswith('#'):
+                    processed_lines.append('')
+            else:
+                # Preserve blank lines
+                if len(processed_lines) == 0 or processed_lines[-1] != '':
+                    processed_lines.append('')
         
         markdown = '\n'.join(processed_lines)
 
