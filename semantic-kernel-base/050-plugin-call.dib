@@ -1,14 +1,14 @@
 #!meta
 
-{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
 
 #!csharp
 
-#r "nuget: Microsoft.Extensions.Logging"
+#r "nuget: Microsoft.Extensions.Logging, 8.*"
 #r "nuget: Microsoft.SemanticKernel"
-#r "nuget: Microsoft.Extensions.Logging.Console"
-#r "nuget: Microsoft.Extensions.Logging.Debug"
-#r "nuget: Microsoft.Extensions.Http"
+#r "nuget: Microsoft.Extensions.Logging.Console, 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Debug, 8.*"
+#r "nuget: Microsoft.Extensions.Http, 8.*"
 #r "nuget: Microsoft.SemanticKernel.PromptTemplates.Handlebars"
 
 #!import ../dotenv.cs
@@ -24,7 +24,10 @@ var kernel = Common.GetKernel(enableLogging: true, enableDumpProvider: false);
 
 var logger = LogFactory.CreateLogger<AudioVideoPlugin>();
 var audioVideoPluginConfig = new AudioVideoPluginConfig("setting");
-var concreteAvPlugin = new AudioVideoPlugin(audioVideoPluginConfig, logger);
+
+var pythonWrapper =  new PythonWrapper(@"A:\Develop\github\ai-playground\src\python\various\various\Scripts\python.exe");
+
+var concreteAvPlugin = new AudioVideoPlugin(audioVideoPluginConfig, pythonWrapper, logger);
 KernelPlugin audioVideoPlugin = kernel.ImportPluginFromObject(concreteAvPlugin, "AudioVideoPlugin");
 
 #!csharp
@@ -42,8 +45,8 @@ foreach (var function in audioVideoPlugin)
 #!csharp
 
 // we can directly invoke functions directly from plugin
-//var videoFile = "C:/temp/sk/ssh.mp4";
-var videoFile = "/Users/gianmariaricci/Downloads/Untitled.mp4";
+var videoFile = "C:/temp/sk/ssh.mp4";
+//var videoFile = "/Users/gianmariaricci/Downloads/Untitled.mp4";
 audioVideoPlugin.TryGetFunction("ExtractAudio", out var extractAudio);
 KernelArguments args = new KernelArguments();
 args["videofile"] = videoFile;

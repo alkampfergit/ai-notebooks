@@ -1,0 +1,269 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
+
+#!markdown
+
+# Semantic Kernel Agents 101
+
+This notebook demonstrates how to create and interact with AI agents using Semantic Kernel. We'll create an agent that can assist with tasks and use tools/plugins.
+
+## What are Agents?
+
+Agents in Semantic Kernel are AI-powered assistants that can:
+- Maintain conversation context
+- Use tools and plugins to perform actions
+- Follow specific instructions and personalities
+- Collaborate with other agents
+
+#!csharp
+
+// Import Semantic Kernel packages
+#r "nuget: Microsoft.SemanticKernel, 1.29.0"
+#r "nuget: Microsoft.SemanticKernel.Agents.Core, 1.29.0-alpha"
+#r "nuget: Microsoft.SemanticKernel.Plugins.Core, 1.29.0-alpha"
+
+#!markdown
+
+## Setup and Configuration
+
+First, we need to configure our AI service connection. This example uses Azure OpenAI, but you can also use OpenAI.
+
+#!csharp
+
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Agents;
+using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+using System;
+using System.Threading.Tasks;
+
+// Configuration - Replace with your actual values
+var deploymentName = Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT_NAME") ?? "gpt-4";
+var endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT") ?? "your-endpoint";
+var apiKey = Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY") ?? "your-api-key";
+
+Console.WriteLine("Configuration loaded successfully!");
+
+#!markdown
+
+## Create the Kernel
+
+The Kernel is the core of Semantic Kernel that manages AI services and plugins.
+
+#!csharp
+
+// Create a kernel with Azure OpenAI chat completion
+var builder = Kernel.CreateBuilder();
+
+builder.AddAzureOpenAIChatCompletion(
+    deploymentName: deploymentName,
+    endpoint: endpoint,
+    apiKey: apiKey
+);
+
+var kernel = builder.Build();
+
+Console.WriteLine("Kernel created successfully!");
+
+#!markdown
+
+## Define Agent Instructions
+
+Let's create an agent with specific instructions and personality.
+
+#!csharp
+
+const string AgentName = "Assistant";
+const string AgentInstructions = @"
+You are a helpful AI assistant. Your role is to:
+- Answer questions accurately and concisely
+- Help users accomplish their tasks
+- Be friendly and professional
+- Ask clarifying questions when needed
+";
+
+Console.WriteLine($"Agent '{AgentName}' instructions defined.");
+
+#!markdown
+
+## Create the Chat Completion Agent
+
+Now we'll create the actual agent using the ChatCompletionAgent class.
+
+#!csharp
+
+// Create the agent
+ChatCompletionAgent agent = new()
+{
+    Name = AgentName,
+    Instructions = AgentInstructions,
+    Kernel = kernel
+};
+
+Console.WriteLine($"Agent '{agent.Name}' created successfully!");
+
+#!markdown
+
+## Create a Chat History
+
+We'll maintain a chat history to keep track of the conversation.
+
+#!csharp
+
+using Microsoft.SemanticKernel.ChatCompletion;
+
+var chatHistory = new ChatHistory();
+
+Console.WriteLine("Chat history initialized.");
+
+#!markdown
+
+## Interact with the Agent
+
+Let's have a conversation with our agent!
+
+#!csharp
+
+// Helper function to chat with the agent
+async Task ChatWithAgent(string userMessage)
+{
+    Console.WriteLine($"\n👤 User: {userMessage}");
+    chatHistory.AddUserMessage(userMessage);
+    
+    // Get agent response
+    await foreach (var content in agent.InvokeAsync(chatHistory))
+    {
+        chatHistory.Add(content);
+        Console.WriteLine($"🤖 {agent.Name}: {content.Content}");
+    }
+}
+
+// Example conversation
+await ChatWithAgent("Hello! Who are you?");
+
+#!csharp
+
+// Continue the conversation
+await ChatWithAgent("What can you help me with?");
+
+#!csharp
+
+// Ask a specific question
+await ChatWithAgent("Can you explain what Semantic Kernel is in simple terms?");
+
+#!markdown
+
+## Adding Plugins to the Agent
+
+Agents become more powerful when they can use tools. Let's add a plugin with some useful functions.
+
+#!csharp
+
+using Microsoft.SemanticKernel;
+using System.ComponentModel;
+
+// Define a simple plugin with tools
+public class MathPlugin
+{
+    [KernelFunction, Description("Adds two numbers together")]
+    public int Add(
+        [Description("The first number")] int a,
+        [Description("The second number")] int b)
+    {
+        return a + b;
+    }
+    
+    [KernelFunction, Description("Multiplies two numbers together")]
+    public int Multiply(
+        [Description("The first number")] int a,
+        [Description("The second number")] int b)
+    {
+        return a * b;
+    }
+}
+
+// Add the plugin to the kernel
+kernel.Plugins.AddFromType<MathPlugin>();
+
+Console.WriteLine("MathPlugin added to the kernel!");
+
+#!csharp
+
+// Create a new agent with tool calling enabled
+ChatCompletionAgent agentWithTools = new()
+{
+    Name = "MathAssistant",
+    Instructions = @"
+You are a helpful math assistant. You have access to tools for basic math operations.
+When asked to perform calculations, use the available tools.
+Always explain what you're doing.",
+    Kernel = kernel,
+    Arguments = new KernelArguments(new OpenAIPromptExecutionSettings 
+    { 
+        ToolCallBehavior = ToolCallBehavior.AutoInvokeKernelFunctions 
+    })
+};
+
+Console.WriteLine($"Agent '{agentWithTools.Name}' created with tools!");
+
+#!csharp
+
+// Start a new conversation with the tool-enabled agent
+var toolChatHistory = new ChatHistory();
+
+async Task ChatWithToolAgent(string userMessage)
+{
+    Console.WriteLine($"\n👤 User: {userMessage}");
+    toolChatHistory.AddUserMessage(userMessage);
+    
+    await foreach (var content in agentWithTools.InvokeAsync(toolChatHistory))
+    {
+        toolChatHistory.Add(content);
+        Console.WriteLine($"🤖 {agentWithTools.Name}: {content.Content}");
+    }
+}
+
+await ChatWithToolAgent("What is 45 plus 67?");
+
+#!csharp
+
+await ChatWithToolAgent("Now multiply the result by 3");
+
+#!markdown
+
+## View Chat History
+
+Let's examine the full conversation history to see how the agent maintains context.
+
+#!csharp
+
+Console.WriteLine("\n📜 Full Chat History:");
+Console.WriteLine("=".PadRight(50, '='));
+
+foreach (var message in toolChatHistory)
+{
+    var role = message.Role.ToString().ToUpper();
+    var content = message.Content ?? "[No content]";
+    Console.WriteLine($"\n[{role}]");
+    Console.WriteLine(content);
+}
+
+#!markdown
+
+## Summary
+
+In this notebook, we've learned:
+
+1. ✅ How to set up Semantic Kernel with Azure OpenAI
+2. ✅ How to create a ChatCompletionAgent
+3. ✅ How to maintain conversation history
+4. ✅ How to add plugins/tools to enhance agent capabilities
+5. ✅ How to enable automatic tool calling
+
+## Next Steps
+
+- Explore more complex plugins
+- Create multi-agent scenarios
+- Add memory and persistence
+- Implement custom tool calling strategies

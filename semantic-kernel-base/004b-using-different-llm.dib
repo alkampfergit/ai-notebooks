@@ -7,9 +7,9 @@
 #r "nuget: Microsoft.SemanticKernel"
 #r "nuget: Microsoft.SemanticKernel.Abstractions"
 #r "nuget: Microsoft.SemanticKernel.PromptTemplates.Handlebars"
-#r "nuget: Microsoft.Extensions.Logging"
-#r "nuget: Microsoft.Extensions.Logging.Console"
-#r "nuget: Microsoft.Extensions.Logging.Debug"
+#r "nuget: Microsoft.Extensions.Logging , 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Console , 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Debug , 8.*"
 
 #!import ..\dotenv.cs
 #!import ..\common.cs

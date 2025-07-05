@@ -47,7 +47,8 @@ var chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
 ChatHistory chatMessages = new();
 chatMessages.AddSystemMessage("you are an expert technician that will extract information from images");
 
-var image = "/Users/gianmariaricci/develop/github/ai-notebooks/kernel-memory-extraction/output/tables/fileoutpart35.png";
+//var image = "/Users/gianmariaricci/develop/github/ai-notebooks/kernel-memory-extraction/output/tables/fileoutpart35.png";
+var image = @"A:\Develop\github\ai-notebooks\kernel-memory-extraction\localvision\manualeDreame2_6.png";
 var bytes = System.IO.File.ReadAllBytes(image);
 var imageData = new ReadOnlyMemory<byte>(bytes);
  var message = new ChatMessageContentItemCollection

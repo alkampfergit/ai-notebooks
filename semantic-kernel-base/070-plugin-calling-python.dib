@@ -4,11 +4,11 @@
 
 #!csharp
 
-#r "nuget: Microsoft.Extensions.Logging"
+#r "nuget: Microsoft.Extensions.Logging , 8.*"
 #r "nuget: Microsoft.SemanticKernel"
-#r "nuget: Microsoft.Extensions.Logging.Console"
-#r "nuget: Microsoft.Extensions.Logging.Debug"
-#r "nuget: Microsoft.Extensions.Http"
+#r "nuget: Microsoft.Extensions.Logging.Console , 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Debug , 8.*"
+#r "nuget: Microsoft.Extensions.Http , 8.*"
 #r "nuget: Microsoft.SemanticKernel.PromptTemplates.Handlebars"
 
 #!import ../dotenv.cs
@@ -33,7 +33,8 @@ var audioVideoPluginConfig = new AudioVideoPluginConfig("setting");
 Common.Services.AddSingleton(audioVideoPluginConfig);  
 
 // now install python wrapper
-PythonWrapper wrapper = new ("/Users/gianmariaricci/develop/github/ai-playground/src/python/langchainVarious/langchain/bin/python3");
+//PythonWrapper wrapper = new ("/Users/gianmariaricci/develop/github/ai-playground/src/python/langchainVarious/langchain/bin/python3");
+PythonWrapper wrapper = new (@"A:\Develop\github\ai-notebooks\python\pywrapper\Scripts\python.exe");
 kernelBuilder.Services.AddSingleton(wrapper);
 
 kernelBuilder
@@ -52,7 +53,8 @@ Now we can simply let the kernel resolve complex task, that involves calling **m
 
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 
-var videoFile = "/Users/gianmariaricci/Downloads/Untitled.mp4";
+//var videoFile = "/Users/gianmariaricci/Downloads/Untitled.mp4";
+var videoFile = @"C:\temp\ssh.mp4";
 
 // Now you can call directly with the prompt
 KernelArguments ka = new();

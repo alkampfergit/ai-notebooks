@@ -5,10 +5,10 @@
 #!csharp
 
 #r "nuget: Microsoft.SemanticKernel"
-#r "nuget: Microsoft.Extensions.Logging"
-#r "nuget: Microsoft.Extensions.Logging.Console"
-#r "nuget: Microsoft.Extensions.Logging.Debug"
-#r "nuget: Microsoft.Extensions.Http"
+#r "nuget: Microsoft.Extensions.Logging , 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Console , 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Debug , 8.*"
+#r "nuget: Microsoft.Extensions.Http , 8.*"
 
 #!import ..\dotenv.cs
 #!import ..\commonFull.cs

@@ -4,7 +4,7 @@
 
 #!csharp
 
-#r "nuget: Microsoft.KernelMemory, 0.97.250211.1"
+#r "nuget: Microsoft.KernelMemory"
 
 #!import ../dotenv.cs
 
@@ -61,6 +61,6 @@ kernelMemoryBuilder
 #!csharp
 
 var kernelMemory = kernelMemoryBuilder.Build<MemoryServerless>();
-//var file = "/Users/gianmariaricci/Downloads/manualeDreame.pdf";
-var file = @"c:\temp\manualeDreame2.pdf";
+var file = "/Users/gianmariaricci/Downloads/manualeDreame2.pdf";
+//var file = @"c:\temp\manualeDreame2.pdf";
 await kernelMemory.ImportDocumentAsync(file, "manualeDreame");

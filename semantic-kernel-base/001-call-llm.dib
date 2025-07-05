@@ -6,9 +6,9 @@
 
 #!import ../dotenv.cs
 #r "nuget: Microsoft.SemanticKernel"
-#r "nuget: Microsoft.Extensions.Logging"
-#r "nuget: Microsoft.Extensions.Logging.Console"
-#r "nuget: Microsoft.Extensions.Logging.Debug"
+#r "nuget: Microsoft.Extensions.Logging, 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Console, 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Debug, 8.*"
 
 #!csharp
 

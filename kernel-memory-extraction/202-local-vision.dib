@@ -6,9 +6,9 @@
 
 #!import ../dotenv.cs
 #r "nuget: Microsoft.SemanticKernel, 1.32.0"
-#r "nuget: Microsoft.Extensions.Logging"
-#r "nuget: Microsoft.Extensions.Logging.Console"
-#r "nuget: Microsoft.Extensions.Logging.Debug"
+#r "nuget: Microsoft.Extensions.Logging , 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Console , 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Debug , 8.*"
 #r "nuget: PdfPig.Rendering.Skia"
 #r "nuget: System.Drawing.Common"
 
@@ -48,7 +48,7 @@ using (var document = PdfDocument.Open(pdfFile))
 	foreach (var pageNumber in pagesToPrint)
 	{
 		using (var fs = new FileStream($"{baseFileName}_{pageNumber}.png", FileMode.Create))
-		using (var ms = document.GetPageAsPng(pageNumber, 2, RGBColor.White))
+		using (var ms = document.GetPageAsPng(pageNumber, 2))
 		{
 			ms.WriteTo(fs);
 		}
@@ -97,21 +97,21 @@ void RegisterLocalModel(string modelId)
     #pragma warning restore CS0618 // Re-enable the warning
 }
 
-//now register gpt4o mini
+//now register gpt5 mini
 kernelBuilder.Services.AddAzureOpenAIChatCompletion(
-    "GPT4omini", //"GPT35_2",//"GPT42",
+    "gpt-4o-mini", //"GPT35_2",//"GPT42",
     Dotenv.Get("OPENAI_API_BASE"),
     Dotenv.Get("OPENAI_API_KEY"),
-    serviceId: "gpt4omini",
-    modelId: "gpt4omini");
+    serviceId: "gpt-4o-mini",
+    modelId: "gpt-4o-mini");
 
 //now register gpt4o mini
 kernelBuilder.Services.AddAzureOpenAIChatCompletion(
-    "gpt4o", //"GPT35_2",//"GPT42",
+    "gpt-4o", //"GPT35_2",//"GPT42",
     Dotenv.Get("OPENAI_API_BASE"),
     Dotenv.Get("OPENAI_API_KEY"),
-    serviceId: "gpt4o",
-    modelId: "gpt4o");
+    serviceId: "gpt-4o",
+    modelId: "gpt-4o");
 
 //register local model
 // string [] localModels = [
@@ -126,7 +126,7 @@ foreach (var model in localModels)
     RegisterLocalModel(model);
 }
 
-string [] allModels = localModels.Concat(["gpt4omini", "gpt4o" ]).ToArray();
+string [] allModels = localModels.Concat(["gpt-4o-mini", "gpt-4o" ]).ToArray();
 
 var kernel = kernelBuilder.Build();
 

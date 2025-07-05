@@ -1,14 +1,14 @@
 #!meta
 
-{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
 
 #!csharp
 
-#r "nuget: Microsoft.Extensions.Logging"
+#r "nuget: Microsoft.Extensions.Logging , 8.*"
 #r "nuget: Microsoft.SemanticKernel"
-#r "nuget: Microsoft.Extensions.Logging.Console"
-#r "nuget: Microsoft.Extensions.Logging.Debug"
-#r "nuget: Microsoft.Extensions.Http"
+#r "nuget: Microsoft.Extensions.Logging.Console , 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Debug , 8.*"
+#r "nuget: Microsoft.Extensions.Http , 8.*"
 #r "nuget: Microsoft.SemanticKernel.PromptTemplates.Handlebars"
 
 #!import ../dotenv.cs
@@ -49,7 +49,7 @@ var chatCompletionService = Common.Resolve<IChatCompletionService>();
 
 //you can alwasy get the interface from kernel, but from global DI is better
 var chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
-var videoFile = @"c:\temp\sk\ssh.mp4";
+var videoFile = @"c:\temp\sk\HashObject.mp4";
 ChatHistory chatMessages = new();
 chatMessages.AddUserMessage($@"I want to extract audio from video file {videoFile}");
 var results = await chatCompletionService.GetChatMessageContentsAsync(

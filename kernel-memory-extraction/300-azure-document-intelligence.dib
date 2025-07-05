@@ -30,17 +30,19 @@ var client = new DocumentIntelligenceClient(new Uri(endpoint), credential);
 
 
 // Load binary file
-string filePath = "C:\\temp\\manualedreame2.pdf";
-//string filePath = @"C:\temp\sampleocr1.jpeg";
-var data = File.ReadAllBytes(filePath);
+//string filePath = "C:\\temp\\manualedreame2.pdf";
+var filePath = "/Users/gianmariaricci/Downloads/manualeDreame2.pdf";
+AnalyzeResult result;
+using (FileStream fileStream = File.OpenRead(filePath)) 
+{
+    var binaryData = await BinaryData.FromStreamAsync(fileStream);
+    AnalyzeDocumentOptions content = new AnalyzeDocumentOptions("prebuilt-layout", binaryData);
+    content.OutputContentFormat = DocumentContentFormat.Markdown;
+    // content.Pages = "1-10";
+    Operation<AnalyzeResult> operation = await client.AnalyzeDocumentAsync(WaitUntil.Completed, content);
 
-var binaryData = new BinaryData(data);
-AnalyzeDocumentOptions content = new AnalyzeDocumentOptions("prebuilt-layout", binaryData);
-content.OutputContentFormat = DocumentContentFormat.Markdown;
-
-Operation<AnalyzeResult> operation = await client.AnalyzeDocumentAsync(WaitUntil.Completed, content);
-
-AnalyzeResult result = operation.Value;
+    result = operation.Value;
+}
 
 #!csharp
 
@@ -193,7 +195,11 @@ if (Path.GetExtension(filePath).ToLowerInvariant() == ".pdf")
         foreach (var pageNumber in result.Figures.Select(f => f.BoundingRegions[0].PageNumber).Distinct())
         {
             using (var fs = new FileStream($"{baseImageFileName}_{pageNumber}.png", FileMode.Create))
+<<<<<<< Updated upstream
             using (var ms = document.GetPageAsPng(pageNumber, 2, RGBColor.White))
+=======
+            using (var ms = document.GetPageAsPng(pageNumber, 2, 100))
+>>>>>>> Stashed changes
             {
                 ms.WriteTo(fs);
             }

@@ -4,11 +4,11 @@
 
 #!csharp
 
-#r "nuget: Microsoft.Extensions.Logging"
+#r "nuget: Microsoft.Extensions.Logging , 8.*"
 #r "nuget: Microsoft.SemanticKernel"
-#r "nuget: Microsoft.Extensions.Logging.Console"
-#r "nuget: Microsoft.Extensions.Logging.Debug"
-#r "nuget: Microsoft.Extensions.Http"
+#r "nuget: Microsoft.Extensions.Logging.Console , 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Debug , 8.*"
+#r "nuget: Microsoft.Extensions.Http , 8.*"
 #r "nuget: Microsoft.SemanticKernel.PromptTemplates.Handlebars"
 
 #!import ../dotenv.cs
@@ -24,7 +24,7 @@ var audioVideoPluginConfig = new AudioVideoPluginConfig("setting");
 Common.Services.AddSingleton(audioVideoPluginConfig);  
 
 // now install python wrapper
-PythonWrapper wrapper = new (@"C:\develop\github\ai-notebooks\python\pywrapper\Scripts\python.exe");
+PythonWrapper wrapper = new (@"A:\Develop\github\ai-notebooks\python\pywrapper\Scripts\python.exe");
 kernelBuilder.Services.AddSingleton(wrapper);
 
 kernelBuilder

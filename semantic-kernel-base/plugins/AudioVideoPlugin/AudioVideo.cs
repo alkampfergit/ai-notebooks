@@ -66,7 +66,7 @@ public class AudioVideoPlugin
             Task<string> errorTask = process.StandardError.ReadToEndAsync();
 
             //Create a cancellation token for 30 seconds
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
             await process.WaitForExitAsync(cancellationToken: cts.Token).ConfigureAwait(false);
 
             //now that the process exited I can read the output tasks
