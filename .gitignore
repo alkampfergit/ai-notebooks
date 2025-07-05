@@ -3,6 +3,7 @@ kernel-memory-extraction/output2
 .DS_STORE
 skdata
 
+__pycache__/
 # Build results
 **/bin/
 **/obj/
@@ -13,6 +14,7 @@ skdata
 **/outputword/
 **/skdatallama
 **/localvision/
+**/downloads/
 **/azure-di-output/
 
 # User-specific files
