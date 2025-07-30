@@ -23,6 +23,9 @@ __pycache__/
 *.userosscache
 *.sln.docstates
 
+# Special data folder
+**/videos
+
 # Mono auto generated files
 mono_crash.*
 

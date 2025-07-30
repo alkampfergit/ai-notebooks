@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(powershell:*)",
+      "Bash(ffmpeg:*)",
+      "Bash(whisper:*)",
+      "Bash(ls:*)",
+      "Bash(ai-cli:*)",
+      "Bash(del prompt.txt)",
+      "Bash(rm:*)"
+    ],
+    "deny": []
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq '.' >> ~/.claude/posttooluse-full-dump.json"
+          }
+        ]
+      }
+    ]
+  }
+}
