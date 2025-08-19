@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq '.' >> ~/.claude/posttooluse-full-dump.json"
+            "command": "powershell -Command \"$input | Add-Content '.dump/posttooluse-raw-dump.txt'\""
           }
         ]
       }
