@@ -9,6 +9,8 @@ Class that operates with Elasticsearch usually accepts a Uri on the constructor 
 
 # NEST 7 Driver Mapping Comprehensive Guide
 
+Verify that the project depends from Nest package with major version 7.
+
 ## Standard Mapping Examples
 
 ### 1. Text and Keyword Mapping
