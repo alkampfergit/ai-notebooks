@@ -3,7 +3,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Net.Http;
 using System.Text.Json;
-using SkPlayground.Models;
 using SkPlayground.Services;
 using SkPlayground.Utils;
 using System.Text.Json.Serialization;
@@ -94,8 +93,8 @@ class Program
                     Converters = { new JsonStringEnumConverter() }
                 };
 
-                var dispatcher = new ToolHandler(jsonOptions);
-                reasoner = new SchemaGuidedReasoner(kernel, dispatcher);
+                var databaseService = new DatabaseService();
+                reasoner = new SchemaGuidedReasoner(kernel, databaseService);
             });
 
         AnsiConsole.MarkupLine("[green]✓[/] Schema-guided reasoner initialized successfully!");
@@ -113,13 +112,14 @@ class Program
                 .Title("[bold blue]Select an example to run:[/]")
                 .PageSize(10)
                 .MoreChoicesText("[grey](Move up and down to reveal more examples)[/]")
-                .AddChoices(new[] {
+                .AddChoices([
+                    "Original Python Tasks (SGR Demo)",
                     "Simple Email Task",
                     "Database Query",
                     "Complex Invoice Task", 
                     "Customer Support Workflow",
                     "Exit"
-                }));
+                ]));
 
         return selection.ToLowerInvariant().Replace(" ", "_");
     }
@@ -131,6 +131,9 @@ class Program
     {
         switch (exampleType)
         {
+            case "original_python_tasks_(sgr_demo)":
+                await RunOriginalPythonTasksExample();
+                break;
             case "simple_email_task":
                 await RunSimpleEmailExample();
                 break;
@@ -149,6 +152,77 @@ class Program
                 AnsiConsole.MarkupLine("[red]Invalid selection![/]");
                 break;
         }
+    }
+
+    /// <summary>
+    /// Example 0: Run the original Python tasks to demonstrate Schema-Guided Reasoning
+    /// This matches the TASKS array from the Python original for direct comparison
+    /// </summary>
+    private static async Task RunOriginalPythonTasksExample()
+    {
+        AnsiConsole.Write(
+            new Panel("[bold red]🚀 Original Python Tasks - Schema-Guided Reasoning Demo[/]")
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.Red));
+
+        // The exact tasks from the Python original
+        var tasks = new[]
+        {
+            "Rule: address sama@openai.com as 'The SAMA', always give him 5% discount.",
+            "Rule for elon@x.com: Email his invoices to finance@x.com",
+            "sama@openai.com wants one of each product. Email him the invoice",
+            "elon@x.com wants 2x of what sama@openai.com got. Send invoice",
+            "redo last elon@x.com invoice: use 3x discount of sama@openai.com"
+        };
+
+        foreach (var (task, index) in tasks.Select((t, i) => (t, i + 1)))
+        {
+            AnsiConsole.WriteLine();
+            AnsiConsole.Write(
+                new Rule($"[bold blue]Task {index}[/]")
+                    .RuleStyle("blue"));
+            
+            AnsiConsole.MarkupLine($"[dim]Task:[/] {task}");
+            AnsiConsole.WriteLine();
+
+            try
+            {
+                var result = await AnsiConsole.Status()
+                    .StartAsync($"[yellow]Executing task {index} with SGR...[/]", async ctx =>
+                    {
+                        return await reasoner!.ReasonAndActAsync(task);
+                    });
+
+                AnsiConsole.Write(
+                    new Panel($"[green]Task {index} Result:[/] {Markup.Escape(result)}")
+                        .Header($"Task {index} Complete")
+                        .Border(BoxBorder.Rounded)
+                        .BorderColor(Color.Green));
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.Write(
+                    new Panel($"[red]Error in Task {index}:[/] {ex.Message}")
+                        .Header($"Task {index} Failed")
+                        .Border(BoxBorder.Rounded)
+                        .BorderColor(Color.Red));
+            }
+        }
+        
+        AnsiConsole.WriteLine();
+        AnsiConsole.Write(
+            new Panel("""
+            [bold green]Schema-Guided Reasoning Demonstration Complete![/]
+            
+            This demo shows how the C# implementation now matches the Python original:
+            • [yellow]Structured Reasoning:[/] LLM generates NextStep JSON on each turn
+            • [yellow]Manual Tool Dispatch:[/] No automatic tool calling - explicit control
+            • [yellow]Step-by-step Execution:[/] Clear reasoning progression
+            • [yellow]Task-oriented:[/] Multi-step business logic handled correctly
+            """)
+                .Header("SGR Demo Results")
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.Green));
     }
 
     /// <summary>
@@ -174,7 +248,7 @@ class Program
             });
 
         AnsiConsole.Write(
-            new Panel($"[green]Result:[/] {result}")
+            new Panel($"[green]Result:[/] {Markup.Escape(result)}")
                 .Header("Email Task Complete")
                 .Border(BoxBorder.Rounded)
                 .BorderColor(Color.Green));
@@ -203,7 +277,7 @@ class Program
             });
 
         AnsiConsole.Write(
-            new Panel($"[green]Result:[/] {result}")
+            new Panel($"[green]Result:[/] {Markup.Escape(result)}")
                 .Header("Database Query Complete")
                 .Border(BoxBorder.Rounded)
                 .BorderColor(Color.Green));
@@ -232,7 +306,7 @@ class Program
             });
 
         AnsiConsole.Write(
-            new Panel($"[green]Result:[/] {result}")
+            new Panel($"[green]Result:[/] {Markup.Escape(result)}")
                 .Header("Invoice Generation Complete")
                 .Border(BoxBorder.Rounded)
                 .BorderColor(Color.Green));
@@ -270,7 +344,7 @@ class Program
             });
 
         AnsiConsole.Write(
-            new Panel($"[green]Final Result:[/] {result}")
+            new Panel($"[green]Final Result:[/] {Markup.Escape(result)}")
                 .Header("Customer Support Workflow Complete")
                 .Border(BoxBorder.Rounded)
                 .BorderColor(Color.Green));

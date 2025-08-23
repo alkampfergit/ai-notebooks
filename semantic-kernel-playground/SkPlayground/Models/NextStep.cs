@@ -1,24 +1,18 @@
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
 namespace SkPlayground.Models;
 
-public record NextStep
+[Description("Represents the next step in a task workflow")]
+public abstract class NextStep
 {
-    [JsonPropertyName("current_state")]
-    [Required]
-    public required string CurrentState { get; init; }
-    
-    [JsonPropertyName("plan_remaining_steps_brief")]
-    [Required]
-    [MinLength(1)]
-    [MaxLength(5)]
-    public required List<string> PlanRemainingStepsBrief { get; init; }
-    
-    [JsonPropertyName("task_completed")]
-    public bool TaskCompleted { get; init; } = false;
-    
-    [JsonPropertyName("function")]
-    [Required]
-    public required ToolFunction Function { get; init; }
+    [Description("Current status of the workflow")]
+    public string CurrentState { get; set; }
+
+    [Description("Brief list of next step planned")]
+    public List<string> PlanRemainingStepsBrief { get; set; }
+
+    [Description("Indicates if the task is completed")]
+    public bool TaskCompleted { get; set; } = false;
 }
