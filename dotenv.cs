@@ -32,6 +32,10 @@ public static class Dotenv
                 }
             }
         }
+        else
+        {
+            Console.WriteLine("Warning: .env file not found.");
+        }
     }
 
     private static string FindEnvFile()
