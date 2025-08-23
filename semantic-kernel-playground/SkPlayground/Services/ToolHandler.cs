@@ -3,14 +3,14 @@ using SkPlayground.Models;
 
 namespace SkPlayground.Services;
 
-public class ToolDispatcher
+public class ToolHandler
 {
     private readonly Dictionary<string, List<Dictionary<string, object>>> _mockDatabase;
     private readonly List<string> _emailLog;
     private readonly List<Dictionary<string, object>> _invoiceLog;
     private readonly JsonSerializerOptions _jsonOptions;
     
-    public ToolDispatcher(JsonSerializerOptions jsonOptions)
+    public ToolHandler(JsonSerializerOptions jsonOptions)
     {
         _jsonOptions = jsonOptions;
         _mockDatabase = new Dictionary<string, List<Dictionary<string, object>>>
@@ -37,48 +37,48 @@ public class ToolDispatcher
         
         return tool switch
         {
-            ReportTaskCompletion completion => HandleTaskCompletion(completion),
-            SendEmail email => HandleSendEmail(email),
-            IssueInvoice invoice => HandleIssueInvoice(invoice),
-            QueryDatabase query => HandleQueryDatabase(query),
-            UpdateDatabase update => HandleUpdateDatabase(update),
+            ReportTaskCompletion completion => HandleTaskCompletion(completion.Summary),
+            SendEmail email => HandleSendEmail(email.To, email.Subject, email.Body),
+            IssueInvoice invoice => HandleIssueInvoice(invoice.Email, invoice.Skus.ToArray(), invoice.DiscountPercent),
+            QueryDatabase query => HandleQueryDatabase(query.Query),
+            UpdateDatabase update => HandleUpdateDatabase(update.Table, update.Updates, update.WhereClause),
             _ => "Unknown tool type"
         };
     }
     
-    private string HandleTaskCompletion(ReportTaskCompletion completion)
+    public string HandleTaskCompletion(string summary)
     {
-        return $"Task completed successfully: {completion.Summary}";
+        return $"Task completed successfully: {summary}";
     }
     
-    private string HandleSendEmail(SendEmail email)
+    public string HandleSendEmail(string to, string subject, string body)
     {
-        var logEntry = $"Email sent to {email.To}: '{email.Subject}'";
+        var logEntry = $"Email sent to {to}: '{subject}'";
         _emailLog.Add(logEntry);
         Console.WriteLine($"📧 {logEntry}");
-        return $"Email sent successfully to {email.To}";
+        return $"Email sent successfully to {to}";
     }
     
-    private string HandleIssueInvoice(IssueInvoice invoice)
+    public string HandleIssueInvoice(string email, string[] skus, double discountPercent)
     {
         var products = _mockDatabase["products"];
-        var matchedProducts = products.Where(p => invoice.Skus.Contains(p["sku"]?.ToString())).ToList();
+        var matchedProducts = products.Where(p => skus.Contains(p["sku"]?.ToString())).ToList();
         
         if (!matchedProducts.Any())
         {
-            return $"Error: No products found for SKUs: {string.Join(", ", invoice.Skus)}";
+            return $"Error: No products found for SKUs: {string.Join(", ", skus)}";
         }
         
         var total = matchedProducts.Sum(p => Convert.ToDouble(p["price"]));
-        var discountAmount = total * (invoice.DiscountPercent / 100.0);
+        var discountAmount = total * (discountPercent / 100.0);
         var finalAmount = total - discountAmount;
         
         var invoiceRecord = new Dictionary<string, object>
         {
-            ["email"] = invoice.Email,
-            ["skus"] = invoice.Skus,
+            ["email"] = email,
+            ["skus"] = skus,
             ["total"] = total,
-            ["discount_percent"] = invoice.DiscountPercent,
+            ["discount_percent"] = discountPercent,
             ["discount_amount"] = discountAmount,
             ["final_amount"] = finalAmount,
             ["timestamp"] = DateTime.UtcNow
@@ -86,16 +86,16 @@ public class ToolDispatcher
         
         _invoiceLog.Add(invoiceRecord);
         
-        Console.WriteLine($"💰 Invoice issued to {invoice.Email}: ${finalAmount:F2} (${total:F2} - ${discountAmount:F2} discount)");
+        Console.WriteLine($"💰 Invoice issued to {email}: ${finalAmount:F2} (${total:F2} - ${discountAmount:F2} discount)");
         return $"Invoice issued successfully. Total: ${finalAmount:F2}";
     }
     
-    private string HandleQueryDatabase(QueryDatabase query)
+    public string HandleQueryDatabase(string query)
     {
-        Console.WriteLine($"🔍 Executing query: {query.Query}");
+        Console.WriteLine($"🔍 Executing query: {query}");
         
         // Simple query simulation
-        var results = query.Query.ToLower() switch
+        var results = query.ToLower() switch
         {
             var q when q.Contains("customers") => _mockDatabase["customers"],
             var q when q.Contains("products") => _mockDatabase["products"],
@@ -105,9 +105,14 @@ public class ToolDispatcher
         return $"Query executed. Found {results.Count} records: {JsonSerializer.Serialize(results, _jsonOptions)}";
     }
     
-    private string HandleUpdateDatabase(UpdateDatabase update)
+    public string HandleUpdateDatabase(string table, object updates, string whereClause)
     {
-        Console.WriteLine($"✏️ Updating {update.Table} where {update.WhereClause}");
-        return $"Database updated successfully. Table: {update.Table}, Updates: {JsonSerializer.Serialize(update.Updates)}";
+        Console.WriteLine($"✏️ Updating {table} where {whereClause}");
+        return $"Database updated successfully. Table: {table}, Updates: {JsonSerializer.Serialize(updates)}";
+    }
+
+    internal string GetDbAsJson()
+    {
+        return JsonSerializer.Serialize(_mockDatabase, _jsonOptions);
     }
 }

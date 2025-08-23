@@ -1,5 +1,8 @@
+using System.ComponentModel;
 using System.Text.Json;
 using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
 using SkPlayground.Models;
 
 namespace SkPlayground.Services;
@@ -7,106 +10,117 @@ namespace SkPlayground.Services;
 public class SchemaGuidedReasoner
 {
     private readonly Kernel _kernel;
-    private readonly ToolDispatcher _dispatcher;
-    private readonly List<string> _conversationLog;
-    private readonly JsonSerializerOptions _jsonOptions;
-    
-    public SchemaGuidedReasoner(Kernel kernel, ToolDispatcher dispatcher, JsonSerializerOptions jsonOptions)
+    private readonly ChatHistory _chatHistory;
+    private readonly OpenAIPromptExecutionSettings _executionSettings;
+
+    private readonly ToolHandler _toolHandler;
+    public SchemaGuidedReasoner(Kernel kernel, ToolHandler toolHandler)
     {
         _kernel = kernel;
-        _dispatcher = dispatcher;
-        _conversationLog = new List<string>();
-        _jsonOptions = jsonOptions;
+        _chatHistory = new ChatHistory($@"
+You are a business assistant helping Rinat Abdullin with customer interactions.
+- Clearly report when tasks are done.
+- Always send customers emails after issuing invoices (with invoice attached).
+- Be laconic. Especially in emails
+- No need to wait for payment confirmation before proceeding.
+- Always check customer data before issuing invoices or making changes.
+Products: {toolHandler.GetDbAsJson()}");
+        _toolHandler = toolHandler;
+
+        // Define tools as KernelFunctions using lambdas
+        var reportTaskCompletion = KernelFunctionFactory.CreateFromMethod(
+                [Description("Call this to report the final result of a task to the user.")] (
+                [Description("A summary of the task outcome.")] string summary
+            ) =>
+                {
+                    return _toolHandler.HandleTaskCompletion(summary);
+                },
+            "report_task_completion");
+
+        var sendEmail = KernelFunctionFactory.CreateFromMethod(
+            [Description("Sends an email.")] (
+                [Description("Recipient's email address.")] string to,
+                [Description("Email subject.")] string subject,
+                [Description("Email body.")] string body
+            ) =>
+            {
+                return _toolHandler.HandleSendEmail(to, subject, body);
+            },
+            "send_email");
+
+        var issueInvoice = KernelFunctionFactory.CreateFromMethod(
+            [Description("Issues an invoice to a customer.")] (
+                [Description("Recipient's email address.")] string email,
+                [Description("List of product SKUs.")] string[] skus,
+                [Description("Discount percentage (0-50).")] double discount_percent
+            ) =>
+            {
+                return _toolHandler.HandleIssueInvoice(email, skus, discount_percent);
+            },
+            "issue_invoice");
+
+        var queryDatabase = KernelFunctionFactory.CreateFromMethod(
+            [Description("Queries the company database.")] (
+                [Description("The database query to execute.")] string query
+            ) =>
+            {
+                return _toolHandler.HandleQueryDatabase(query);
+            },
+            "query_database");
+
+        var updateDatabase = KernelFunctionFactory.CreateFromMethod(
+            [Description("Updates a record in the company database.")] (
+                [Description("The table to update.")] string table,
+                [Description("An object with key-value pairs for the update.")] object updates,
+                [Description("The WHERE clause to select the record to update.")] string where_clause
+            ) =>
+            {
+                return _toolHandler.HandleUpdateDatabase(table, updates, where_clause);
+            },
+            "update_database");
+
+        _executionSettings = new OpenAIPromptExecutionSettings
+        {
+            ToolCallBehavior = ToolCallBehavior.AutoInvokeKernelFunctions,
+        };
+
+        // Add tools to the kernel so they can be used by the planner
+        _kernel.Plugins.Add(KernelPluginFactory.CreateFromFunctions("Tools", "Tools available to the AI", 
+        [
+            reportTaskCompletion,
+            sendEmail,
+            issueInvoice,
+            queryDatabase,
+            updateDatabase
+        ]));
     }
-    
+
     public async Task<string> ReasonAndActAsync(string userRequest)
     {
-        _conversationLog.Add($"User: {userRequest}");
+        var chatCompletionService = _kernel.GetRequiredService<IChatCompletionService>();
+        _chatHistory.AddUserMessage(userRequest);
+
+        var result = await chatCompletionService.GetChatMessageContentAsync(_chatHistory, _executionSettings, _kernel);
+        var finalResponse = result.Items.LastOrDefault(i => i is TextContent) as TextContent;
+
+        // Add the assistant's response to history for the next turn
+        _chatHistory.Add(result);
+
+        // The ToolCallBehavior.AutoInvokeKernelFunctions setting handles the tool execution and adds the result to the history automatically.
+        // We just need to return the final text response from the assistant.
         
-        var systemPrompt = """
-        You are an AI assistant that follows a Schema-Guided Reasoning approach. 
-        
-        You must ALWAYS respond with a JSON object matching the NextStep schema:
-        {
-          "current_state": "string describing what you understand about the current situation",
-          "plan_remaining_steps_brief": ["step1", "step2", "..."] (1-5 brief steps),
-          "task_completed": boolean,
-          "function": {
-            "tool": "tool_name",
-            "...": "tool-specific parameters"
-          }
-        }
-        
-        Available tools:
-        - report_task_completion: {"tool": "report_task_completion", "summary": "string"}
-        - send_email: {"tool": "send_email", "to": "email", "subject": "string", "body": "string"}
-        - issue_invoice: {"tool": "issue_invoice", "email": "email", "skus": ["SKU1", "SKU2"], "discount_percent": 0-50}
-        - query_database: {"tool": "query_database", "query": "string"}
-        - update_database: {"tool": "update_database", "table": "string", "updates": {}, "where_clause": "string"}
-        
-        Think step by step, break down complex tasks, and use the appropriate tools.
-        """;
-        
-        var conversationContext = string.Join("\n", _conversationLog);
-        var fullPrompt = $"{systemPrompt}\n\nConversation so far:\n{conversationContext}\n\nRespond with NextStep JSON:";
-        
-        try
-        {
-            var result = await _kernel.InvokePromptAsync(fullPrompt);
-            var responseText = result.ToString().Trim();
-            
-            // Clean up response (remove markdown code blocks if present)
-            if (responseText.StartsWith("```json"))
-            {
-                responseText = responseText.Substring(7);
-            }
-            if (responseText.EndsWith("```"))
-            {
-                responseText = responseText.Substring(0, responseText.Length - 3);
-            }
-            responseText = responseText.Trim();
-            
-            Console.WriteLine($"🤖 LLM Response: {responseText}");
-            
-            // Parse the NextStep
-            var nextStep = JsonSerializer.Deserialize<NextStep>(responseText, _jsonOptions);
-            
-            if (nextStep == null)
-            {
-                throw new InvalidOperationException("Failed to parse NextStep from LLM response");
-            }
-            
-            // Log the reasoning
-            _conversationLog.Add($"AI State: {nextStep.CurrentState}");
-            _conversationLog.Add($"AI Plan: {string.Join(", ", nextStep.PlanRemainingStepsBrief)}");
-            
-            // Execute the function
-            var toolResult = await _dispatcher.DispatchAsync(nextStep.Function);
-            _conversationLog.Add($"Tool Result: {toolResult}");
-            
-            return toolResult;
-        }
-        catch (JsonException ex)
-        {
-            var errorMsg = $"JSON parsing error: {ex.Message}";
-            _conversationLog.Add($"Error: {errorMsg}");
-            return errorMsg;
-        }
-        catch (Exception ex)
-        {
-            var errorMsg = $"Error: {ex.Message}";
-            _conversationLog.Add($"Error: {errorMsg}");
-            return errorMsg;
-        }
+        Console.WriteLine($"🤖 LLM Response: {finalResponse?.Text ?? "No text response."}");
+
+        return finalResponse?.Text ?? "Task completed.";
     }
-    
+
     public void PrintConversationLog()
     {
         Console.WriteLine("\n📝 Conversation Log:");
         Console.WriteLine("==================");
-        foreach (var entry in _conversationLog)
+        foreach (var entry in _chatHistory)
         {
-            Console.WriteLine(entry);
+            Console.WriteLine($"{entry.Role}: {entry.Content}");
         }
         Console.WriteLine("==================\n");
     }

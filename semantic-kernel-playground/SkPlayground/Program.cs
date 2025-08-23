@@ -7,117 +7,295 @@ using SkPlayground.Models;
 using SkPlayground.Services;
 using SkPlayground.Utils;
 using System.Text.Json.Serialization;
+using Spectre.Console;
 
-Console.WriteLine("=== Schema-Guided Reasoning with C# and Semantic Kernel ===");
-Console.WriteLine();
-
-// Setup kernel with OpenAI (you can change to local LM Studio)
-//var redirectUrl = "https://api.openai.com/v1"; // OpenAI
-// var redirectUrl = "http://10.0.0.39:1234/v1"; // Local LM Studio
-var redirectUrl = Dotenv.Get("AZURE_ENDPOINT");
-
-var kernelBuilder = Kernel.CreateBuilder();
-kernelBuilder.Services.AddLogging(l => l
-    .SetMinimumLevel(LogLevel.Warning)
-    .AddConsole()
-);
-
-var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
-
-// kernelBuilder.AddOpenAIChatCompletion(
-//     modelId: "gpt4omini", 
-//     apiKey: Dotenv.Get("OPENAI_API_KEY"),
-//     endpoint: new Uri(redirectUrl),
-//     httpClient: httpClient);
-
-var apiKey = Dotenv.Get("OPENAI_API_KEY");
-var endpoint = Dotenv.Get("AZURE_ENDPOINT");
-//we use azureopenai for this sample
-kernelBuilder.AddAzureOpenAIChatCompletion(
-    deploymentName: "gpt4omini",
-    apiKey: apiKey,
-    endpoint: endpoint
-);
-
-var kernel = kernelBuilder.Build();
-
-//now quickly test if the kernel is working
-var result = await kernel.InvokePromptAsync("Who are you?");
-Console.WriteLine(result);
-
-// Custom JsonConverter options for proper serialization
-var jsonOptions = new JsonSerializerOptions
+/// <summary>
+/// Main program class for the Schema-Guided Reasoning playground
+/// Demonstrates various AI reasoning scenarios using Semantic Kernel
+/// </summary>
+class Program
 {
-    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-    WriteIndented = true,
-    PropertyNameCaseInsensitive = true,
-    Converters = { new JsonStringEnumConverter() }
-};
+    private static Kernel? kernel;
+    private static SchemaGuidedReasoner? reasoner;
 
+    static async Task Main(string[] args)
+    {
+        // Display application header with styling
+        AnsiConsole.Write(
+            new FigletText("SK Playground")
+                .Centered()
+                .Color(Color.Blue));
 
+        AnsiConsole.Write(
+            new Rule("[bold blue]Schema-Guided Reasoning with C# and Semantic Kernel[/]")
+                .RuleStyle("grey"));
 
-var dispatcher = new ToolDispatcher(jsonOptions);
-var reasoner = new SchemaGuidedReasoner(kernel, dispatcher, jsonOptions);
+        // Initialize the semantic kernel and reasoner
+        await InitializeKernel();
 
-Console.WriteLine("Schema-guided reasoner initialized!");
-Console.WriteLine();
+        // Main application loop
+        while (true)
+        {
+            var selectedExample = ShowExampleMenu();
+            
+            if (selectedExample == "exit")
+                break;
+                
+            await ExecuteExample(selectedExample);
+            
+            // Wait for user to press a key before continuing
+            AnsiConsole.Write(new Rule("[dim]Press any key to continue...[/]").RuleStyle("grey"));
+            Console.ReadKey(true);
+            AnsiConsole.Clear();
+        }
 
-// Test 1: Simple email task
-Console.WriteLine("🧪 Test 1: Simple Email Task");
-Console.WriteLine("================================");
+        AnsiConsole.Write(
+            new Panel("[green]Thank you for using the Schema-Guided Reasoning Playground![/]")
+                .Border(BoxBorder.Rounded)
+                .Padding(1, 0));
+    }
 
-var result1 = await reasoner.ReasonAndActAsync("Send an email to john@example.com with subject 'Welcome' and body 'Thank you for joining us!'");
-Console.WriteLine($"Result: {result1}");
-Console.WriteLine();
+    /// <summary>
+    /// Initialize the Semantic Kernel with Azure OpenAI configuration
+    /// Sets up logging, HTTP client, and creates the reasoning components
+    /// </summary>
+    private static async Task InitializeKernel()
+    {
+        AnsiConsole.Status()
+            .Start("[yellow]Initializing Semantic Kernel...[/]", ctx =>
+            {
+                // Setup kernel with Azure OpenAI configuration
+                var kernelBuilder = Kernel.CreateBuilder();
+                kernelBuilder.Services.AddLogging(l => l
+                    .SetMinimumLevel(LogLevel.Warning)
+                    .AddConsole()
+                );
 
-// Test 2: Database query
-Console.WriteLine("🧪 Test 2: Database Query");
-Console.WriteLine("==========================");
+                var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
 
-var result2 = await reasoner.ReasonAndActAsync("Query the customers database to see all available customers");
-Console.WriteLine($"Result: {result2}");
-Console.WriteLine();
+                var apiKey = Dotenv.Get("OPENAI_API_KEY");
+                var endpoint = Dotenv.Get("AZURE_ENDPOINT");
+                
+                // Configure Azure OpenAI connection
+                kernelBuilder.AddAzureOpenAIChatCompletion(
+                    deploymentName: "gpt4omini",
+                    apiKey: apiKey,
+                    endpoint: endpoint
+                );
 
-// Test 3: Complex invoice task
-Console.WriteLine("🧪 Test 3: Complex Invoice Task");
-Console.WriteLine("================================");
+                kernel = kernelBuilder.Build();
 
-var result3 = await reasoner.ReasonAndActAsync("Issue an invoice to jane@example.com for LAPTOP001 and MOUSE001 with 15% discount");
-Console.WriteLine($"Result: {result3}");
-Console.WriteLine();
+                // Custom JsonConverter options for proper serialization
+                var jsonOptions = new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+                    WriteIndented = true,
+                    PropertyNameCaseInsensitive = true,
+                    Converters = { new JsonStringEnumConverter() }
+                };
 
-// Test 4: Customer support workflow
-Console.WriteLine("🧪 Test 4: Customer Support Workflow");
-Console.WriteLine("=====================================");
+                var dispatcher = new ToolHandler(jsonOptions);
+                reasoner = new SchemaGuidedReasoner(kernel, dispatcher);
+            });
 
-var supportRequest = """
-A customer john@example.com contacted us saying they want to purchase a gaming laptop 
-but they're a loyal customer and should get a discount. Please:
-1. Check if they're in our customer database
-2. Send them information about our gaming laptop
-3. Issue them an invoice with appropriate discount (20% for existing customers, 10% for new ones)
-""";
+        AnsiConsole.MarkupLine("[green]✓[/] Schema-guided reasoner initialized successfully!");
+        AnsiConsole.WriteLine();
+    }
 
-Console.WriteLine($"Support Request: {supportRequest}");
-Console.WriteLine();
+    /// <summary>
+    /// Display the interactive menu for selecting examples
+    /// Uses Spectre.Console for vibrant UI
+    /// </summary>
+    private static string ShowExampleMenu()
+    {
+        var selection = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title("[bold blue]Select an example to run:[/]")
+                .PageSize(10)
+                .MoreChoicesText("[grey](Move up and down to reveal more examples)[/]")
+                .AddChoices(new[] {
+                    "Simple Email Task",
+                    "Database Query",
+                    "Complex Invoice Task", 
+                    "Customer Support Workflow",
+                    "Exit"
+                }));
 
-var step1 = await reasoner.ReasonAndActAsync(supportRequest);
-Console.WriteLine($"Step 1 Result: {step1}\n");
+        return selection.ToLowerInvariant().Replace(" ", "_");
+    }
 
-var step2 = await reasoner.ReasonAndActAsync("Continue with the next step in the workflow");
-Console.WriteLine($"Step 2 Result: {step2}\n");
+    /// <summary>
+    /// Execute the selected example based on user choice
+    /// </summary>
+    private static async Task ExecuteExample(string exampleType)
+    {
+        switch (exampleType)
+        {
+            case "simple_email_task":
+                await RunSimpleEmailExample();
+                break;
+            case "database_query":
+                await RunDatabaseQueryExample();
+                break;
+            case "complex_invoice_task":
+                await RunComplexInvoiceExample();
+                break;
+            case "customer_support_workflow":
+                await RunCustomerSupportWorkflowExample();
+                break;
+            case "exit":
+                return;
+            default:
+                AnsiConsole.MarkupLine("[red]Invalid selection![/]");
+                break;
+        }
+    }
 
-var step3 = await reasoner.ReasonAndActAsync("Continue with the final step");
-Console.WriteLine($"Step 3 Result: {step3}\n");
+    /// <summary>
+    /// Example 1: Demonstrate simple email sending task
+    /// Shows basic schema-guided reasoning for a straightforward operation
+    /// </summary>
+    private static async Task RunSimpleEmailExample()
+    {
+        AnsiConsole.Write(
+            new Panel("[bold yellow]🧪 Test 1: Simple Email Task[/]")
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.Yellow));
 
-// Print final conversation log
-reasoner.PrintConversationLog();
+        var prompt = "Send an email to john@example.com with subject 'Welcome' and body 'Thank you for joining us!'";
+        
+        AnsiConsole.MarkupLine($"[dim]Prompt:[/] {prompt}");
+        AnsiConsole.WriteLine();
 
-Console.WriteLine("=== Schema-Guided Reasoning Demo Complete ===");
-Console.WriteLine();
-Console.WriteLine("Key Benefits Demonstrated:");
-Console.WriteLine("- Structured Thinking: LLM breaks down complex tasks into steps");
-Console.WriteLine("- Type Safety: Strongly typed schemas prevent malformed tool calls");
-Console.WriteLine("- Predictable Behavior: Consistent reasoning patterns");
-Console.WriteLine("- Easy Debugging: Clear conversation logs");
-Console.WriteLine("- Extensible: Easy to add new tools and reasoning patterns");
+        var result = await AnsiConsole.Status()
+            .StartAsync("[yellow]Processing email task...[/]", async ctx =>
+            {
+                return await reasoner!.ReasonAndActAsync(prompt);
+            });
+
+        AnsiConsole.Write(
+            new Panel($"[green]Result:[/] {result}")
+                .Header("Email Task Complete")
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.Green));
+    }
+
+    /// <summary>
+    /// Example 2: Demonstrate database querying capabilities
+    /// Shows how the AI can interact with simulated database operations
+    /// </summary>
+    private static async Task RunDatabaseQueryExample()
+    {
+        AnsiConsole.Write(
+            new Panel("[bold cyan]🧪 Test 2: Database Query[/]")
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.Aqua));
+
+        var prompt = "Query the customers database to see all available customers";
+        
+        AnsiConsole.MarkupLine($"[dim]Prompt:[/] {prompt}");
+        AnsiConsole.WriteLine();
+
+        var result = await AnsiConsole.Status()
+            .StartAsync("[cyan]Querying database...[/]", async ctx =>
+            {
+                return await reasoner!.ReasonAndActAsync(prompt);
+            });
+
+        AnsiConsole.Write(
+            new Panel($"[green]Result:[/] {result}")
+                .Header("Database Query Complete")
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.Green));
+    }
+
+    /// <summary>
+    /// Example 3: Demonstrate complex invoice generation
+    /// Shows multi-step reasoning for financial operations with discounts
+    /// </summary>
+    private static async Task RunComplexInvoiceExample()
+    {
+        AnsiConsole.Write(
+            new Panel("[bold magenta]🧪 Test 3: Complex Invoice Task[/]")
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.BlueViolet));
+
+        var prompt = "Issue an invoice to jane@example.com for LAPTOP001 and MOUSE001 with 15% discount";
+        
+        AnsiConsole.MarkupLine($"[dim]Prompt:[/] {prompt}");
+        AnsiConsole.WriteLine();
+
+        var result = await AnsiConsole.Status()
+            .StartAsync("[magenta]Generating invoice...[/]", async ctx =>
+            {
+                return await reasoner!.ReasonAndActAsync(prompt);
+            });
+
+        AnsiConsole.Write(
+            new Panel($"[green]Result:[/] {result}")
+                .Header("Invoice Generation Complete")
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.Green));
+    }
+
+    /// <summary>
+    /// Example 4: Demonstrate complex multi-step customer support workflow
+    /// Shows advanced reasoning with multiple conditional steps and business logic
+    /// </summary>
+    private static async Task RunCustomerSupportWorkflowExample()
+    {
+        AnsiConsole.Write(
+            new Panel("[bold orange1]🧪 Test 4: Customer Support Workflow[/]")
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.Orange1));
+
+        var supportRequest = """
+        A customer john@example.com contacted us saying they want to purchase a gaming laptop 
+        but they're a loyal customer and should get a discount. Please:
+        1. Check if they're in our customer database
+        2. Send them information about our gaming laptop
+        3. Issue them an invoice with appropriate discount (20% for existing customers, 10% for new ones)
+        """;
+
+        AnsiConsole.MarkupLine("[dim]Support Request:[/]");
+        AnsiConsole.Write(
+            new Panel(supportRequest)
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.Grey));
+
+        var result = await AnsiConsole.Status()
+            .StartAsync("[orange1]Processing support workflow...[/]", async ctx =>
+            {
+                return await reasoner!.ReasonAndActAsync(supportRequest);
+            });
+
+        AnsiConsole.Write(
+            new Panel($"[green]Final Result:[/] {result}")
+                .Header("Customer Support Workflow Complete")
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.Green));
+
+        // Show conversation log for this complex example
+        AnsiConsole.WriteLine();
+        AnsiConsole.Write(
+            new Rule("[bold blue]Conversation Log[/]")
+                .RuleStyle("blue"));
+        
+        reasoner!.PrintConversationLog();
+
+        // Display key benefits
+        AnsiConsole.WriteLine();
+        AnsiConsole.Write(
+            new Panel("""
+            [bold green]Key Benefits Demonstrated:[/]
+            • [yellow]Structured Thinking:[/] LLM breaks down complex tasks into steps
+            • [yellow]Type Safety:[/] Strongly typed schemas prevent malformed tool calls
+            • [yellow]Predictable Behavior:[/] Consistent reasoning patterns
+            • [yellow]Easy Debugging:[/] Clear conversation logs
+            • [yellow]Extensible:[/] Easy to add new tools and reasoning patterns
+            """)
+                .Header("Schema-Guided Reasoning Benefits")
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.Green));
+    }
+}
