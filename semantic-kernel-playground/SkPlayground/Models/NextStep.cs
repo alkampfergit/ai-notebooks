@@ -21,7 +21,7 @@ public abstract class NextStep
     public ToolCall ToolCall { get; set; }
 }
 
-[JsonPolymorphic(TypeDiscriminatorPropertyName = "tool")]
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(SendEmailToolCall), typeDiscriminator: "send_email")]
 [JsonDerivedType(typeof(IssueInvoiceToolCall), typeDiscriminator: "issue_invoice")]
 [JsonDerivedType(typeof(GetCustomerDataToolCall), typeDiscriminator: "get_customer_data")]

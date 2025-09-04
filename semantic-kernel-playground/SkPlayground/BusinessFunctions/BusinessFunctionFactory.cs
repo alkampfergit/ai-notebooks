@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Schema;
+using System.Text.Json.Serialization.Metadata;
 
 namespace SkPlayground.BusinessFunctions;
 
@@ -389,59 +390,17 @@ public class BusinessFunctionFactory
     /// </summary>
     /// <param name="toolCallType">The ToolCall type to generate schema for</param>
     /// <returns>JSON schema as JsonNode representing the ToolCall structure</returns>
-    public JsonNode GenerateJsonSchemaForToolCall(Type toolCallType)
+    public string GenerateJsonSchemaForToolCall()
     {
-        if (!typeof(ToolCall).IsAssignableFrom(toolCallType))
+        var options = new JsonSerializerOptions
         {
-            throw new ArgumentException($"Type {toolCallType.Name} is not a ToolCall type");
-        }
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true,
+            TypeInfoResolver = new DefaultJsonTypeInfoResolver()
+        };
 
-        var schema = JsonSchemaExporter.GetJsonSchemaAsNode(_jsonOptions, toolCallType);
-        return schema;
-    }
-
-    /// <summary>
-    /// **Generates JSON schemas for all registered ToolCall types**.
-    /// 
-    /// This method creates a dictionary mapping function names to their corresponding
-    /// JSON schemas, useful for dynamic function calling and parameter validation.
-    /// </summary>
-    /// <returns>Dictionary mapping function names to JSON schema nodes</returns>
-    public Dictionary<string, JsonNode> GenerateAllJsonSchemas()
-    {
-        var schemas = new Dictionary<string, JsonNode>();
-
-        foreach (var kvp in _functions)
-        {
-            var functionName = kvp.Key;
-            var parameterType = kvp.Value.ParameterType;
-            
-            if (parameterType != null && typeof(ToolCall).IsAssignableFrom(parameterType))
-            {
-                schemas[functionName] = GenerateJsonSchemaForToolCall(parameterType);
-            }
-        }
-
-        return schemas;
-    }
-
-    /// <summary>
-    /// **Gets JSON schema for a specific function by name**.
-    /// 
-    /// This method retrieves the JSON schema for a specific registered function,
-    /// returning null if the function is not found or doesn't have a ToolCall parameter type.
-    /// </summary>
-    /// <param name="functionName">The name of the function to get schema for</param>
-    /// <returns>JSON schema as JsonNode, or null if not found</returns>
-    public JsonNode? GetJsonSchemaForFunction(string functionName)
-    {
-        if (!_functions.TryGetValue(functionName, out var functionInfo) || 
-            functionInfo.ParameterType == null ||
-            !typeof(ToolCall).IsAssignableFrom(functionInfo.ParameterType))
-        {
-            return null;
-        }
-
-        return GenerateJsonSchemaForToolCall(functionInfo.ParameterType);
+        JsonNode schema = JsonSchemaExporter.GetJsonSchemaAsNode(options, typeof(NextStep));
+        string schemaJson = schema.ToJsonString();
+        return schemaJson;
     }
 }

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
@@ -49,7 +50,10 @@ public class SchemaGuidedReasoner
         _jsonOptions = new JsonSerializerOptions
         {
             WriteIndented = true,
-            PropertyNameCaseInsensitive = true
+            PropertyNameCaseInsensitive = true,
+            TypeInfoResolver = JsonSerializer.IsReflectionEnabledByDefault 
+                ? new DefaultJsonTypeInfoResolver() 
+                : JsonTypeInfoResolver.Combine()
         };
 
         // Initialize the business function factory
@@ -209,19 +213,16 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
             chatHistory.Add(message);
         }
 
-        // Get NextStep JSON schema for structured response
-        var nextStepSchema = _functionFactory.GenerateJsonSchemaForToolCall(typeof(NextStep));
-        
-        
+
         // Configure OpenAI execution settings with JSON schema constraint
         // Serialize schema to string and embed it into a "json_schema" response_format object
-        var schemaStr = nextStepSchema.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        var schemaStr = _functionFactory.GenerateJsonSchemaForToolCall();
         var executionSettings = new OpenAIPromptExecutionSettings
         {
             ResponseFormat = new
             {
                 type = "json_schema",
-                json_schema = JsonNode.Parse(schemaStr)
+                json_schema = schemaStr
             }
         };
     
