@@ -1,7 +1,9 @@
 using System.ComponentModel;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
 using SkPlayground.Models;
 using SkPlayground.BusinessFunctions;
 using Spectre.Console;
@@ -9,19 +11,17 @@ using Spectre.Console;
 namespace SkPlayground.Services;
 
 /// <summary>
-/// Represents the result of a reasoning step containing both the NextStep object,
-/// the function name, and the call ID that was called by the LLM.
+/// Represents the result of a reasoning step containing both the NextStep object and function name.
 /// </summary>
-/// <param name="NextStep">The deserialized NextStep object containing the reasoning parameters</param>
-/// <param name="FunctionName">The name of the function that the LLM chose to call</param>
-/// <param name="CallId">The unique identifier for this function call</param>
-public readonly record struct NextStepResult(NextStep NextStep, string FunctionName, string CallId);
+/// <param name="NextStep">The deserialized NextStep object containing the reasoning parameters and tool call</param>
+/// <param name="FunctionName">The name of the function that the LLM chose to call (derived from ToolCall discriminator)</param>
+public readonly record struct NextStepResult(NextStep NextStep, string FunctionName);
 
 /// <summary>
 /// Represents the complete LLM response including both parsed results and the original assistant message
 /// </summary>
 /// <param name="NextStepResults">Array of parsed NextStep results</param>
-/// <param name="AssistantResponse">The original assistant message containing function calls</param>
+/// <param name="AssistantResponse">The original assistant message containing structured JSON response</param>
 public readonly record struct LLMReasoningResponse(NextStepResult[] NextStepResults, ChatMessageContent AssistantResponse);
 
 /// <summary>
@@ -55,15 +55,30 @@ public class SchemaGuidedReasoner
         // Initialize the business function factory
         _functionFactory = new BusinessFunctionFactory(_jsonOptions, _databaseService);
         
-        // Initialize conversation history with system prompt matching Python original
+        // Initialize conversation history with system prompt for structured JSON responses
         var systemPrompt = $@"
 You are a business assistant helping Rinat Abdullin with customer interactions.
 
-- Clearly report when tasks are done.
-- Always send customers emails after issuing invoices (with invoice attached).
+IMPORTANT: You must always respond with structured JSON that includes:
+1. Current state analysis
+2. List of remaining steps briefly described
+3. Whether the task is completed
+4. The specific tool call to execute next (with proper type discriminator)
+
+Available function types:
+- send_email: Send emails to customers
+- issue_invoice: Create invoices for customers  
+- get_customer_data: Retrieve customer information
+- void_invoice: Cancel existing invoices
+- create_rule: Create business rules for customers
+- report_task_completion: Complete tasks with summary
+
+Guidelines:
+- Clearly report when tasks are done using report_task_completion
+- Always send customers emails after issuing invoices (with invoice attached)
 - Be laconic. Especially in emails
-- No need to wait for payment confirmation before proceeding.
-- Always check customer data before issuing invoices or making changes.
+- No need to wait for payment confirmation before proceeding
+- Always check customer data before issuing invoices or making changes
 
 Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
         
@@ -116,7 +131,6 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
                 {
                     var nextStep = nextStepResult.NextStep;
                     var functionName = nextStepResult.FunctionName;
-                    var callId = nextStepResult.CallId;
                     
                     // Display the planned step
                     var currentPlan = nextStep.PlanRemainingStepsBrief?.FirstOrDefault() ?? "No plan specified";
@@ -124,23 +138,17 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
                     AnsiConsole.MarkupLine($"[dim]    Function: {functionName}[/]");
                     
                     // Check if task is completed
-                    if (nextStep is ReportTaskCompletionParameters completionParameter)
+                    if (nextStep.ToolCall is ReportTaskCompletionToolCall completionParameter)
                     {
                         AnsiConsole.MarkupLine($"[blue]Task completed[/]");
                         taskCompletionSummary = completionParameter.Summary;
                         
-                        // Still add the completion as a tool result for conversation history
-                        var completionFunctionResult = new FunctionResultContent(
-                            functionName: functionName,
-                            callId: callId,
-                            result: completionParameter.Summary
+                        // Add completion result as user message for conversation history
+                        var completionMessage = new ChatMessageContent(
+                            role: AuthorRole.User, 
+                            content: $"Task completed: {completionParameter.Summary}"
                         );
-                        var completionToolMessage = new ChatMessageContent(
-                            role: AuthorRole.Tool,
-                            items: new ChatMessageContentItemCollection { completionFunctionResult }
-                        );
-                        completionToolMessage.Content = completionParameter.Summary;
-                        allToolMessages.Add(completionToolMessage);
+                        allToolMessages.Add(completionMessage);
                         continue;
                     }
                     
@@ -150,17 +158,11 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
                     // Use the summary for LLM conversation, not the full result object
                     var resultSummary = businessResult.Summary;
 
-                    // Add tool result to conversation history with proper tool_call_id format
-                    var functionResultContent = new FunctionResultContent(
-                        functionName: functionName,
-                        callId: callId,
-                        result: resultSummary
-                    );
+                    // Add tool result to conversation history as user message
                     var toolMessage = new ChatMessageContent(
-                        role: AuthorRole.Tool,
-                        items: new ChatMessageContentItemCollection { functionResultContent }
+                        role: AuthorRole.User,
+                        content: $"Function {functionName} result: {resultSummary}"
                     );
-                    toolMessage.Content = resultSummary; // Also set the Content for logging purposes
                     allToolMessages.Add(toolMessage);
                     
                     // Use AnsiConsole.WriteLine instead of MarkupLine to avoid markup parsing issues
@@ -196,8 +198,8 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
 
     /// <summary>
     /// Get structured NextStep response from LLM using JSON schema constraint.
-    /// This is the core of SGR - forcing the model to think in structured steps.
-    /// Returns both the NextStep objects and the original assistant response with tool calls.
+    /// This is the core of SGR - forcing the model to generate valid NextStep JSON.
+    /// Returns both the NextStep objects and the original assistant response.
     /// </summary>
     private async Task<LLMReasoningResponse> GetNextStepFromLLM()
     {
@@ -207,34 +209,69 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
             chatHistory.Add(message);
         }
 
-        var settings = new PromptExecutionSettings
+        // Get NextStep JSON schema for structured response
+        var nextStepSchema = _functionFactory.GenerateJsonSchemaForToolCall(typeof(NextStep));
+        
+        
+        // Configure OpenAI execution settings with JSON schema constraint
+        // Serialize schema to string and embed it into a "json_schema" response_format object
+        var schemaStr = nextStepSchema.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        var executionSettings = new OpenAIPromptExecutionSettings
         {
-            FunctionChoiceBehavior = FunctionChoiceBehavior.Required(
-                _functionFactory.GetAllKernelFunctions(),
-                autoInvoke: false)
+            ResponseFormat = new
+            {
+                type = "json_schema",
+                json_schema = JsonNode.Parse(schemaStr)
+            }
         };
-        var response = await _chatService.GetChatMessageContentAsync(chatHistory, settings);
-
-        //ok now response is FORCED to be the function call
-        var functionCalls = response.Items.OfType<FunctionCallContent>();
-
-        //now we have a series of function calls, create NextStepResult objects with NextStep, FunctionName, and CallId
-        var nextStepResults = functionCalls.Select(functionCall =>
+    
+        
+        var response = await _chatService.GetChatMessageContentAsync(chatHistory, executionSettings);
+        
+        // Parse the JSON response to NextStep object
+        var jsonContent = response.Content ?? string.Empty;
+        NextStep? nextStep = null;
+        
+        try
         {
-            var functionName = functionCall.FunctionName;
-            var callId = functionCall.Id;
-            
-            // Use the new method that handles both nextStep JSON and individual arguments
-            var nextStep = _functionFactory.CreateParameterFromArguments(functionName, functionCall.Arguments);
-            
-            return nextStep != null ? new NextStepResult(nextStep, functionName, callId) : (NextStepResult?)null;
-        })
-        .Where(result => result.HasValue)
-        .Select(result => result!.Value)
-        .ToArray();
+            nextStep = JsonSerializer.Deserialize<NextStep>(jsonContent, _jsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            AnsiConsole.MarkupLine($"[red]Failed to parse NextStep JSON: {ex.Message}[/]");
+            AnsiConsole.MarkupLine($"[dim]Response content: {jsonContent}[/]");
+        }
 
-        // Return both the parsed results and the original assistant response with function calls
+        // Determine function name from ToolCall discriminator
+        var functionName = GetFunctionNameFromToolCall(nextStep?.ToolCall);
+        
+        var nextStepResults = nextStep != null && !string.IsNullOrEmpty(functionName)
+            ? new[] { new NextStepResult(nextStep, functionName) }
+            : Array.Empty<NextStepResult>();
+
         return new LLMReasoningResponse(nextStepResults, response);
+    }
+
+    /// <summary>
+    /// **Maps ToolCall types to their corresponding function names** based on type discriminators.
+    /// 
+    /// This method determines which business function should be called based on the
+    /// specific ToolCall type returned in the NextStep schema.
+    /// </summary>
+    /// <param name="toolCall">The ToolCall object from the LLM response</param>
+    /// <returns>Function name string, or null if ToolCall type is not recognized</returns>
+    private static string? GetFunctionNameFromToolCall(ToolCall? toolCall)
+    {
+        return toolCall switch
+        {
+            SendEmailToolCall => "sendEmail",
+            IssueInvoiceToolCall => "issueInvoice",
+            GetCustomerDataToolCall => "getCustomerData",
+            VoidInvoiceToolCall => "voidInvoice",
+            CreateRuleToolCall => "createRule",
+            ReportTaskCompletionToolCall => "reportTaskCompletion",
+            _ => null
+        };
     }
     
     // /// <summary>

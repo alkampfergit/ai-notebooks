@@ -12,7 +12,7 @@ namespace SkPlayground.BusinessFunctions;
 /// customers, enabling personalized business logic and automated decision-making
 /// based on customer-specific requirements and preferences.
 /// </summary>
-public class CreateRuleFunction : BusinessFunction<CreateRuleParameters>
+public class CreateRuleFunction : BusinessFunction<CreateRuleToolCall>
 {
     private readonly DatabaseService _databaseService;
 
@@ -35,7 +35,7 @@ public class CreateRuleFunction : BusinessFunction<CreateRuleParameters>
     /// <param name="parameters">Rule creation parameters including customer email and rule definition</param>
     /// <param name="cancellationToken">Cancellation token to support cooperative cancellation</param>
     /// <returns>Created rule record containing customer email and rule details</returns>
-    protected override async Task<BusinessFunctionResult> ExecuteAsync(CreateRuleParameters parameters, CancellationToken cancellationToken = default)
+    protected override async Task<BusinessFunctionResult> ExecuteAsync(CreateRuleToolCall parameters, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         
@@ -69,7 +69,7 @@ public class CreateRuleFunction : BusinessFunction<CreateRuleParameters>
 /// required for creating customer-specific business rules.
 /// </summary>
 [Description("Creates a rule for a specific customer")]
-public class CreateRuleParameters : NextStep
+public class CreateRuleToolCall : ToolCall
 {
     /// <summary>
     /// **Customer email address** - identifies the customer for whom

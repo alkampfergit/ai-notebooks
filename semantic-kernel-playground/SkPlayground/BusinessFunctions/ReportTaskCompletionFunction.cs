@@ -11,7 +11,7 @@ namespace SkPlayground.BusinessFunctions;
 /// a final status report for completed tasks. It combines both the
 /// parameter definition and execution logic in a single cohesive unit.
 /// </summary>
-public class ReportTaskCompletionFunction : BusinessFunction<ReportTaskCompletionParameters>
+public class ReportTaskCompletionFunction : BusinessFunction<ReportTaskCompletionToolCall>
 {
     public ReportTaskCompletionFunction(JsonSerializerOptions jsonOptions) : base(jsonOptions)
     {
@@ -28,7 +28,7 @@ public class ReportTaskCompletionFunction : BusinessFunction<ReportTaskCompletio
     /// <param name="parameters">Task completion parameters including summary</param>
     /// <param name="cancellationToken">Cancellation token to support cooperative cancellation</param>
     /// <returns>Formatted completion message</returns>
-    protected override async Task<BusinessFunctionResult> ExecuteAsync(ReportTaskCompletionParameters parameters, CancellationToken cancellationToken = default)
+    protected override async Task<BusinessFunctionResult> ExecuteAsync(ReportTaskCompletionToolCall parameters, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         
@@ -47,7 +47,7 @@ public class ReportTaskCompletionFunction : BusinessFunction<ReportTaskCompletio
 /// task completion with appropriate summary details.
 /// </summary>
 [Description("Conclude the process with a summary")]
-public class ReportTaskCompletionParameters : NextStep
+public class ReportTaskCompletionToolCall : ToolCall
 {
     /// <summary>
     /// **Summary of the completed task** - provides a comprehensive

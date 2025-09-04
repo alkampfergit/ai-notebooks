@@ -1,50 +1,52 @@
 using Fasterflect;
-using Microsoft.SemanticKernel;
 using SkPlayground.Models;
 using SkPlayground.Services;
 using System.ComponentModel;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Schema;
 
 namespace SkPlayground.BusinessFunctions;
 
 /// <summary>
-/// **Record containing both business function and kernel function instances**
+/// **Record containing business function and parameter type information**
 /// 
 /// This record pairs together:
 /// - **BusinessFunction**: The concrete business logic implementation
-/// - **KernelFunction**: The Semantic Kernel function wrapper for LLM integration
 /// - **ParameterType**: The CLR Type used for deserializing the function argument
+/// - **JsonSchema**: The JSON schema for the function parameter type
 /// 
-/// This enables both direct business function calls and LLM-driven function calls
-/// while maintaining consistency between the two execution paths.
+/// This enables direct business function calls with JSON schema validation
+/// for structured LLM responses.
 /// </summary>
 /// <param name="BusinessFunction">The concrete business function instance</param>
-/// <param name="KernelFunction">The corresponding Semantic Kernel function</param>
-/// <param name="ParameterType">The CLR Type of the function parameter (e.g. FooParameters)</param>
+/// <param name="ParameterType">The CLR Type of the function parameter (e.g. FooToolCall)</param>
+/// <param name="JsonSchema">The JSON schema for the parameter type</param>
 public class FunctionInformations
 {
     public BusinessFunction BusinessFunction { get; set; }
-    public KernelFunction KernelFunction { get; set; }
     public Type ParameterType { get; set; }
+    public JsonNode JsonSchema { get; set; }
 
-    public FunctionInformations(BusinessFunction businessFunction, KernelFunction kernelFunction, Type parameterType)
+    public FunctionInformations(BusinessFunction businessFunction, Type parameterType, JsonNode jsonSchema)
     {
         BusinessFunction = businessFunction;
-        KernelFunction = kernelFunction;
         ParameterType = parameterType;
+        JsonSchema = jsonSchema;
     }
 }
 
 /// <summary>
-/// **Factory for creating and managing business function instances and Kernel functions**
+/// **Factory for creating and managing business function instances with JSON schemas**
 /// 
 /// This factory provides a centralized way to:
 /// - Create instances of all business functions with proper dependencies
-/// - Generate corresponding Semantic Kernel functions from business functions
+/// - Generate JSON schemas for function parameters using System.Text.Json
 /// - Maintain consistency between parameter types and function implementations
-/// - Store function pairs in a dictionary for easy access by name
+/// - Store function information in a dictionary for easy access by name
 /// - Enable dependency injection and configuration management
+/// - Support structured LLM responses with JSON schema validation
 /// </summary>
 public class BusinessFunctionFactory
 {
@@ -53,15 +55,15 @@ public class BusinessFunctionFactory
 
     /// <summary>
     /// **Dictionary containing all registered functions** indexed by function name.
-    /// Each entry contains both the business function instance and its corresponding kernel function.
+    /// Each entry contains the business function instance, parameter type, and JSON schema.
     /// </summary>
     public IReadOnlyDictionary<string, FunctionInformations> Functions => _functions;
 
     /// <summary>
-    /// **Constructor that initializes all business functions and their kernel function counterparts**.
+    /// **Constructor that initializes all business functions with JSON schemas**.
     /// 
     /// Creates all function instances with proper dependencies and generates corresponding
-    /// Semantic Kernel functions for LLM integration.
+    /// JSON schemas for structured LLM responses.
     /// </summary>
     /// <param name="jsonOptions">JSON serialization options for parameter handling</param>
     /// <param name="databaseService">Database service instance for all functions</param>
@@ -72,16 +74,17 @@ public class BusinessFunctionFactory
     }
 
     /// <summary>
-    /// **Creates all business function instances** with shared dependencies.
+    /// **Creates all business function instances** with shared dependencies and JSON schemas.
     /// 
     /// This method instantiates all concrete business functions with:
     /// - Shared JSON serialization options for consistency
     /// - Database service for data operations
+    /// - Generated JSON schemas for each parameter type
     /// - Proper dependency injection pattern
     /// </summary>
     /// <param name="jsonOptions">JSON serialization options for parameter handling</param>
     /// <param name="databaseService">Database service instance for all functions</param>
-    /// <returns>Dictionary mapping function names to function pairs</returns>
+    /// <returns>Dictionary mapping function names to function information with JSON schemas</returns>
     private Dictionary<string, FunctionInformations> CreateAllFunctions(
         JsonSerializerOptions jsonOptions,
         DatabaseService databaseService)
@@ -94,61 +97,38 @@ public class BusinessFunctionFactory
         var voidInvoiceFunc = new VoidInvoiceFunction(jsonOptions, databaseService);
         var createRuleFunc = new CreateRuleFunction(jsonOptions, databaseService);
 
-        // Create lambda functions that are empty
-        var reportTaskCompletion = [Description("Conclude the process with a summary")]
-        (ReportTaskCompletionParameters nextStep) =>
-        { };
+        // Generate JSON schemas for each parameter type
+        var reportTaskCompletionSchema = JsonSchemaExporter.GetJsonSchemaAsNode(jsonOptions, typeof(ReportTaskCompletionToolCall));
+        var sendEmailSchema = JsonSchemaExporter.GetJsonSchemaAsNode(jsonOptions, typeof(SendEmailToolCall));
+        var issueInvoiceSchema = JsonSchemaExporter.GetJsonSchemaAsNode(jsonOptions, typeof(IssueInvoiceToolCall));
+        var getCustomerDataSchema = JsonSchemaExporter.GetJsonSchemaAsNode(jsonOptions, typeof(GetCustomerDataToolCall));
+        var voidInvoiceSchema = JsonSchemaExporter.GetJsonSchemaAsNode(jsonOptions, typeof(VoidInvoiceToolCall));
+        var createRuleSchema = JsonSchemaExporter.GetJsonSchemaAsNode(jsonOptions, typeof(CreateRuleToolCall));
 
-        var sendEmail = [Description("Sends an email with optional file attachments")]
-        (SendEmailParameters nextStep) =>
-        { };
-
-        var issueInvoice = [Description("Issues an invoice for specified products with optional discount")]
-        (IssueInvoiceParameters nextStep) =>
-        { };
-
-        var getCustomerData = [Description("Retrieves customer data by email address")]
-        (GetCustomerDataParameters nextStep) =>
-        { };
-
-        var voidInvoice = [Description("Voids an existing invoice with a reason")]
-        (VoidInvoiceParameters nextStep) =>
-        { };
-
-        var createRule = [Description("Creates a rule for a specific customer")]
-        (CreateRuleParameters nextStep) =>
-        { };
-
-        // Create kernel functions from lambda functions
-        var reportTaskCompletionKernel = KernelFunctionFactory.CreateFromMethod(reportTaskCompletion, "reportTaskCompletion");
-        var sendEmailKernel = KernelFunctionFactory.CreateFromMethod(sendEmail, "sendEmail");
-        var issueInvoiceKernel = KernelFunctionFactory.CreateFromMethod(issueInvoice, "issueInvoice");
-        var getCustomerDataKernel = KernelFunctionFactory.CreateFromMethod(getCustomerData, "getCustomerData");
-        var voidInvoiceKernel = KernelFunctionFactory.CreateFromMethod(voidInvoice, "voidInvoice");
-        var createRuleKernel = KernelFunctionFactory.CreateFromMethod(createRule, "createRule");
-
-        // Return dictionary with function pairs (also store parameter types)
+        // Return dictionary with function information including JSON schemas
         return new Dictionary<string, FunctionInformations>
         {
-            ["reportTaskCompletion"] = new FunctionInformations(reportTaskCompletionFunc, reportTaskCompletionKernel, typeof(ReportTaskCompletionParameters)),
-            ["sendEmail"] = new FunctionInformations(sendEmailFunc, sendEmailKernel, typeof(SendEmailParameters)),
-            ["issueInvoice"] = new FunctionInformations(issueInvoiceFunc, issueInvoiceKernel, typeof(IssueInvoiceParameters)),
-            ["getCustomerData"] = new FunctionInformations(getCustomerDataFunc, getCustomerDataKernel, typeof(GetCustomerDataParameters)),
-            ["voidInvoice"] = new FunctionInformations(voidInvoiceFunc, voidInvoiceKernel, typeof(VoidInvoiceParameters)),
-            ["createRule"] = new FunctionInformations(createRuleFunc, createRuleKernel, typeof(CreateRuleParameters))
+            ["reportTaskCompletion"] = new FunctionInformations(reportTaskCompletionFunc, typeof(ReportTaskCompletionToolCall), reportTaskCompletionSchema),
+            ["sendEmail"] = new FunctionInformations(sendEmailFunc, typeof(SendEmailToolCall), sendEmailSchema),
+            ["issueInvoice"] = new FunctionInformations(issueInvoiceFunc, typeof(IssueInvoiceToolCall), issueInvoiceSchema),
+            ["getCustomerData"] = new FunctionInformations(getCustomerDataFunc, typeof(GetCustomerDataToolCall), getCustomerDataSchema),
+            ["voidInvoice"] = new FunctionInformations(voidInvoiceFunc, typeof(VoidInvoiceToolCall), voidInvoiceSchema),
+            ["createRule"] = new FunctionInformations(createRuleFunc, typeof(CreateRuleToolCall), createRuleSchema)
         };
     }
 
     /// <summary>
-    /// **Gets all Kernel functions** for Semantic Kernel integration.
+    /// **Gets all JSON schemas** for LLM integration with structured responses.
     /// 
-    /// This method extracts all KernelFunction instances from the function pairs
-    /// and returns them as a list for use with Semantic Kernel's function calling.
+    /// This method extracts all JSON schema instances from the function information
+    /// and returns them as a dictionary for use with structured LLM responses.
     /// </summary>
-    /// <returns>List of KernelFunction instances ready for LLM integration</returns>
-    public List<KernelFunction> GetAllKernelFunctions()
+    /// <returns>Dictionary mapping function names to JSON schema nodes</returns>
+    public Dictionary<string, JsonNode> GetAllJsonSchemas()
     {
-        return _functions.Values.Select(pair => pair.KernelFunction).ToList();
+        return _functions.ToDictionary(
+            kvp => kvp.Key,
+            kvp => kvp.Value.JsonSchema);
     }
 
     /// <summary>
@@ -166,16 +146,16 @@ public class BusinessFunctionFactory
     }
 
     /// <summary>
-    /// **Gets a specific function pair** by name.
+    /// **Gets a specific function information** by name.
     /// 
-    /// This method allows access to both the business function and kernel function
+    /// This method allows access to the business function, parameter type, and JSON schema
     /// for a specific function by its registered name.
     /// </summary>
     /// <param name="functionName">The name of the function to retrieve</param>
-    /// <returns>FunctionPair containing both business and kernel functions, or null if not found</returns>
+    /// <returns>FunctionInformations containing business function, parameter type, and JSON schema, or null if not found</returns>
     public FunctionInformations? GetFunction(string functionName)
     {
-        return _functions.TryGetValue(functionName, out var pair) ? pair : null;
+        return _functions.TryGetValue(functionName, out var info) ? info : null;
     }
 
     /// <summary>
@@ -399,5 +379,69 @@ public class BusinessFunctionFactory
 
         var result = await businessFunction.ExecuteAsync(nextStep, cancellationToken);
         return result;
+    }
+
+    /// <summary>
+    /// **Generates JSON schema for a specific ToolCall type** using System.Text.Json.
+    /// 
+    /// This method creates a JSON schema definition for the specified ToolCall type,
+    /// enabling dynamic schema generation for function parameters and validation.
+    /// </summary>
+    /// <param name="toolCallType">The ToolCall type to generate schema for</param>
+    /// <returns>JSON schema as JsonNode representing the ToolCall structure</returns>
+    public JsonNode GenerateJsonSchemaForToolCall(Type toolCallType)
+    {
+        if (!typeof(ToolCall).IsAssignableFrom(toolCallType))
+        {
+            throw new ArgumentException($"Type {toolCallType.Name} is not a ToolCall type");
+        }
+
+        var schema = JsonSchemaExporter.GetJsonSchemaAsNode(_jsonOptions, toolCallType);
+        return schema;
+    }
+
+    /// <summary>
+    /// **Generates JSON schemas for all registered ToolCall types**.
+    /// 
+    /// This method creates a dictionary mapping function names to their corresponding
+    /// JSON schemas, useful for dynamic function calling and parameter validation.
+    /// </summary>
+    /// <returns>Dictionary mapping function names to JSON schema nodes</returns>
+    public Dictionary<string, JsonNode> GenerateAllJsonSchemas()
+    {
+        var schemas = new Dictionary<string, JsonNode>();
+
+        foreach (var kvp in _functions)
+        {
+            var functionName = kvp.Key;
+            var parameterType = kvp.Value.ParameterType;
+            
+            if (parameterType != null && typeof(ToolCall).IsAssignableFrom(parameterType))
+            {
+                schemas[functionName] = GenerateJsonSchemaForToolCall(parameterType);
+            }
+        }
+
+        return schemas;
+    }
+
+    /// <summary>
+    /// **Gets JSON schema for a specific function by name**.
+    /// 
+    /// This method retrieves the JSON schema for a specific registered function,
+    /// returning null if the function is not found or doesn't have a ToolCall parameter type.
+    /// </summary>
+    /// <param name="functionName">The name of the function to get schema for</param>
+    /// <returns>JSON schema as JsonNode, or null if not found</returns>
+    public JsonNode? GetJsonSchemaForFunction(string functionName)
+    {
+        if (!_functions.TryGetValue(functionName, out var functionInfo) || 
+            functionInfo.ParameterType == null ||
+            !typeof(ToolCall).IsAssignableFrom(functionInfo.ParameterType))
+        {
+            return null;
+        }
+
+        return GenerateJsonSchemaForToolCall(functionInfo.ParameterType);
     }
 }

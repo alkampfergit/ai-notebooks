@@ -12,7 +12,7 @@ namespace SkPlayground.BusinessFunctions;
 /// product lookup, price calculation, discount application, and
 /// invoice record creation with proper tracking and validation.
 /// </summary>
-public class IssueInvoiceFunction : BusinessFunction<IssueInvoiceParameters>
+public class IssueInvoiceFunction : BusinessFunction<IssueInvoiceToolCall>
 {
     private readonly DatabaseService _databaseService;
 
@@ -36,7 +36,7 @@ public class IssueInvoiceFunction : BusinessFunction<IssueInvoiceParameters>
     /// <param name="parameters">Invoice parameters including customer email, SKUs, and discount</param>
     /// <param name="cancellationToken">Cancellation token to support cooperative cancellation</param>
     /// <returns>BusinessFunctionResult with invoice record and creation summary</returns>
-    protected override async Task<BusinessFunctionResult> ExecuteAsync(IssueInvoiceParameters parameters, CancellationToken cancellationToken = default)
+    protected override async Task<BusinessFunctionResult> ExecuteAsync(IssueInvoiceToolCall parameters, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         
@@ -101,7 +101,7 @@ public class IssueInvoiceFunction : BusinessFunction<IssueInvoiceParameters>
 /// customer details, product selection, and discount application.
 /// </summary>
 [Description("Issues an invoice for specified products with optional discount")]
-public class IssueInvoiceParameters : NextStep
+public class IssueInvoiceToolCall : ToolCall
 {
     /// <summary>
     /// **Customer email address** - identifies the customer for whom

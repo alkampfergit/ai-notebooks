@@ -13,7 +13,7 @@ namespace SkPlayground.BusinessFunctions;
 /// file attachments. It manages the complete email workflow from parameter
 /// validation to delivery simulation and logging.
 /// </summary>
-public class SendEmailFunction : BusinessFunction<SendEmailParameters>
+public class SendEmailFunction : BusinessFunction<SendEmailToolCall>
 {
     private readonly DatabaseService _databaseService;
 
@@ -35,7 +35,7 @@ public class SendEmailFunction : BusinessFunction<SendEmailParameters>
     /// <param name="parameters">Email parameters including recipient, subject, message, and attachments</param>
     /// <param name="cancellationToken">Cancellation token to support cooperative cancellation</param>
     /// <returns>BusinessFunctionResult with email record and delivery summary</returns>
-    protected override async Task<BusinessFunctionResult> ExecuteAsync(SendEmailParameters parameters, CancellationToken cancellationToken = default)
+    protected override async Task<BusinessFunctionResult> ExecuteAsync(SendEmailToolCall parameters, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         
@@ -66,7 +66,7 @@ public class SendEmailFunction : BusinessFunction<SendEmailParameters>
 /// and sending emails with attachment support.
 /// </summary>
 [Description("Sends an email with optional file attachments")]
-public class SendEmailParameters : NextStep
+public class SendEmailToolCall : ToolCall
 {
     /// <summary>
     /// **Email subject line** - the title/topic of the email message

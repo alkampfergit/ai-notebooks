@@ -12,7 +12,7 @@ namespace SkPlayground.BusinessFunctions;
 /// data from multiple database collections including rules, invoices, and
 /// email communications for a complete customer profile.
 /// </summary>
-public class GetCustomerDataFunction : BusinessFunction<GetCustomerDataParameters>
+public class GetCustomerDataFunction : BusinessFunction<GetCustomerDataToolCall>
 {
     private readonly DatabaseService _databaseService;
 
@@ -36,7 +36,7 @@ public class GetCustomerDataFunction : BusinessFunction<GetCustomerDataParameter
     /// <param name="cancellationToken">Cancellation token to support cooperative cancellation</param>
     /// <returns>BusinessFunctionResult with comprehensive customer data and retrieval summary</returns>
     protected override async Task<BusinessFunctionResult> ExecuteAsync(
-        GetCustomerDataParameters parameters,
+        GetCustomerDataToolCall parameters,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -84,7 +84,7 @@ public class GetCustomerDataFunction : BusinessFunction<GetCustomerDataParameter
 /// to retrieve comprehensive customer profile data.
 /// </summary>
 [Description("Retrieves customer data From database using email address")]
-public class GetCustomerDataParameters : NextStep
+public class GetCustomerDataToolCall : ToolCall
 {
     [Description("If true, retrieves data for all customers (ignores Email)")]
     public bool GetAllCustomers { get; set; }

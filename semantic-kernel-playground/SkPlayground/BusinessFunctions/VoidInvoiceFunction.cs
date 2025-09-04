@@ -11,7 +11,7 @@ namespace SkPlayground.BusinessFunctions;
 /// This function handles the cancellation of existing invoices by marking
 /// them as void with proper reason tracking for audit and compliance purposes.
 /// </summary>
-public class VoidInvoiceFunction : BusinessFunction<VoidInvoiceParameters>
+public class VoidInvoiceFunction : BusinessFunction<VoidInvoiceToolCall>
 {
     private readonly DatabaseService _databaseService;
 
@@ -34,7 +34,7 @@ public class VoidInvoiceFunction : BusinessFunction<VoidInvoiceParameters>
     /// <param name="parameters">Voiding parameters including invoice ID and reason</param>
     /// <param name="cancellationToken">Cancellation token to support cooperative cancellation</param>
     /// <returns>BusinessFunctionResult with updated invoice record and voiding summary</returns>
-    protected override async Task<BusinessFunctionResult> ExecuteAsync(VoidInvoiceParameters parameters, CancellationToken cancellationToken = default)
+    protected override async Task<BusinessFunctionResult> ExecuteAsync(VoidInvoiceToolCall parameters, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         
@@ -67,7 +67,7 @@ public class VoidInvoiceFunction : BusinessFunction<VoidInvoiceParameters>
 /// required for proper invoice voiding with audit compliance.
 /// </summary>
 [Description("Voids an existing invoice with a reason")]
-public class VoidInvoiceParameters : NextStep
+public class VoidInvoiceToolCall : ToolCall
 {
     /// <summary>
     /// **Invoice unique identifier** - the specific invoice ID
