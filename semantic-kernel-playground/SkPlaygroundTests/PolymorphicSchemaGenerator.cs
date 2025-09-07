@@ -77,6 +77,21 @@ public static class PolymorphicSchemaGenerator
                     Reference = schema.Definitions[derivedName]
                 });
             }
+            
+            // Remove unused abstract base type definition to clean up schema
+            var baseTypeName = FindBaseTypeInDefinitions(schema);
+            if (!string.IsNullOrEmpty(baseTypeName) && schema.Definitions.ContainsKey(baseTypeName))
+            {
+                // Only remove if it's not being referenced by the derived types
+                var isReferenced = derivedSchemas.Values.Any(def => 
+                    def.Properties.Values.Any(prop => 
+                        prop.Reference?.ActualSchema == schema.Definitions[baseTypeName]));
+                
+                if (!isReferenced)
+                {
+                    schema.Definitions.Remove(baseTypeName);
+                }
+            }
         }
 
         return schema.ToJson();
@@ -180,6 +195,23 @@ public static class PolymorphicSchemaGenerator
             if (property.Value.Reference != null || property.Value.AnyOf.Count > 0 || property.Value.OneOf.Count > 0)
             {
                 return property.Key;
+            }
+        }
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// Finds abstract base type definitions in the schema definitions
+    /// </summary>
+    private static string FindBaseTypeInDefinitions(JsonSchema schema)
+    {
+        foreach (var definition in schema.Definitions)
+        {
+            if (definition.Value.ExtensionData?.ContainsKey("x-abstract") == true || 
+                definition.Value.Properties.Count == 0 ||
+                (definition.Value.Properties.Count == 1 && definition.Value.Properties.ContainsKey("type")))
+            {
+                return definition.Key;
             }
         }
         return string.Empty;
