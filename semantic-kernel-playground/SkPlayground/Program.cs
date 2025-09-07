@@ -354,8 +354,6 @@ class Program
         AnsiConsole.Write(
             new Rule("[bold blue]Conversation Log[/]")
                 .RuleStyle("blue"));
-        
-        reasoner!.PrintConversationLog();
 
         // Display key benefits
         AnsiConsole.WriteLine();
