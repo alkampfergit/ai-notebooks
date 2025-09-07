@@ -7,6 +7,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Schema;
 using System.Text.Json.Serialization.Metadata;
+using Json.Schema;
+using Json.Schema.Generation;
 
 namespace SkPlayground.BusinessFunctions;
 
@@ -98,13 +100,18 @@ public class BusinessFunctionFactory
         var voidInvoiceFunc = new VoidInvoiceFunction(jsonOptions, databaseService);
         var createRuleFunc = new CreateRuleFunction(jsonOptions, databaseService);
 
-        // Generate JSON schemas for each parameter type
-        var reportTaskCompletionSchema = JsonSchemaExporter.GetJsonSchemaAsNode(jsonOptions, typeof(ReportTaskCompletionToolCall));
-        var sendEmailSchema = JsonSchemaExporter.GetJsonSchemaAsNode(jsonOptions, typeof(SendEmailToolCall));
-        var issueInvoiceSchema = JsonSchemaExporter.GetJsonSchemaAsNode(jsonOptions, typeof(IssueInvoiceToolCall));
-        var getCustomerDataSchema = JsonSchemaExporter.GetJsonSchemaAsNode(jsonOptions, typeof(GetCustomerDataToolCall));
-        var voidInvoiceSchema = JsonSchemaExporter.GetJsonSchemaAsNode(jsonOptions, typeof(VoidInvoiceToolCall));
-        var createRuleSchema = JsonSchemaExporter.GetJsonSchemaAsNode(jsonOptions, typeof(CreateRuleToolCall));
+        // Generate JSON schemas for each parameter type using JsonSchema.Net
+        var schemaConfig = new SchemaGeneratorConfiguration
+        {
+            PropertyNameResolver = PropertyNameResolvers.CamelCase
+        };
+        
+        var reportTaskCompletionSchema = JsonNode.Parse(JsonSerializer.Serialize(new JsonSchemaBuilder().FromType<ReportTaskCompletionToolCall>(schemaConfig).Build()));
+        var sendEmailSchema = JsonNode.Parse(JsonSerializer.Serialize(new JsonSchemaBuilder().FromType<SendEmailToolCall>(schemaConfig).Build()));
+        var issueInvoiceSchema = JsonNode.Parse(JsonSerializer.Serialize(new JsonSchemaBuilder().FromType<IssueInvoiceToolCall>(schemaConfig).Build()));
+        var getCustomerDataSchema = JsonNode.Parse(JsonSerializer.Serialize(new JsonSchemaBuilder().FromType<GetCustomerDataToolCall>(schemaConfig).Build()));
+        var voidInvoiceSchema = JsonNode.Parse(JsonSerializer.Serialize(new JsonSchemaBuilder().FromType<VoidInvoiceToolCall>(schemaConfig).Build()));
+        var createRuleSchema = JsonNode.Parse(JsonSerializer.Serialize(new JsonSchemaBuilder().FromType<CreateRuleToolCall>(schemaConfig).Build()));
 
         // Return dictionary with function information including JSON schemas
         return new Dictionary<string, FunctionInformations>
@@ -383,24 +390,79 @@ public class BusinessFunctionFactory
     }
 
     /// <summary>
-    /// **Generates JSON schema for a specific ToolCall type** using System.Text.Json.
+    /// **Generates JSON schema for NextStep type** using JsonSchema.Net.
     /// 
-    /// This method creates a JSON schema definition for the specified ToolCall type,
-    /// enabling dynamic schema generation for function parameters and validation.
+    /// This method creates a JSON schema definition that's compatible with OpenAI's
+    /// response_format requirements, including additionalProperties: false recursively.
     /// </summary>
-    /// <param name="toolCallType">The ToolCall type to generate schema for</param>
-    /// <returns>JSON schema as JsonNode representing the ToolCall structure</returns>
+    /// <returns>JSON schema string representing the NextStep structure</returns>
     public string GenerateJsonSchemaForToolCall()
     {
-        var options = new JsonSerializerOptions
+        // Configure JsonSchema.Net generation options for OpenAI compatibility
+        var configuration = new SchemaGeneratorConfiguration
         {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = true,
-            TypeInfoResolver = new DefaultJsonTypeInfoResolver()
+            // Use camelCase property naming to match our JSON serialization
+            PropertyNameResolver = PropertyNameResolvers.CamelCase
         };
 
-        JsonNode schema = JsonSchemaExporter.GetJsonSchemaAsNode(options, typeof(NextStep));
-        string schemaJson = schema.ToJsonString();
-        return schemaJson;
+        // Generate schema using JsonSchema.Net
+        var schema = new JsonSchemaBuilder()
+            .FromType<NextStep>(configuration)
+            .Build();
+
+        // Convert to JsonNode to recursively add additionalProperties: false
+        var schemaJson = JsonSerializer.Serialize(schema);
+        var schemaNode = JsonNode.Parse(schemaJson);
+        
+        // Recursively set additionalProperties to false for all objects
+        SetAdditionalPropertiesFalseRecursively(schemaNode);
+        
+        // Convert back to formatted JSON string
+        return schemaNode.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    /// <summary>
+    /// Recursively sets additionalProperties to false and makes all properties required for all object types in the schema.
+    /// This ensures OpenAI compatibility by preventing additional properties and requiring all defined properties.
+    /// </summary>
+    private static void SetAdditionalPropertiesFalseRecursively(JsonNode? node)
+    {
+        if (node is JsonObject obj)
+        {
+            // If this object has type "object", set additionalProperties to false
+            if (obj.ContainsKey("type") && obj["type"]?.GetValue<string>() == "object")
+            {
+                obj["additionalProperties"] = false;
+
+                // If this object has properties, make all of them required
+                if (obj.ContainsKey("properties") && obj["properties"] is JsonObject properties)
+                {
+                    var requiredArray = new JsonArray();
+                    foreach (var property in properties)
+                    {
+                        requiredArray.Add(property.Key);
+                    }
+                    
+                    if (requiredArray.Count > 0)
+                    {
+                        obj["required"] = requiredArray;
+                    }
+                }
+            }
+
+            // Recursively process all child nodes
+            foreach (var kvp in obj.ToArray())
+            {
+                SetAdditionalPropertiesFalseRecursively(kvp.Value);
+            }
+        }
+        else if (node is JsonArray array)
+        {
+            // Recursively process array elements
+            foreach (var item in array)
+            {
+                SetAdditionalPropertiesFalseRecursively(item);
+            }
+        }
     }
 }

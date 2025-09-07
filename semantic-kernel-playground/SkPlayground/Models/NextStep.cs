@@ -6,7 +6,7 @@ using SkPlayground.BusinessFunctions;
 namespace SkPlayground.Models;
 
 [Description("Represents the next step in a task workflow")]
-public abstract class NextStep
+public class NextStep
 {
     [Description("Current status of the workflow")]
     public string CurrentState { get; set; }

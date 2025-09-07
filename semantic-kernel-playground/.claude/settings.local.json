@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(dotnet build)",
-      "Bash(dotnet run:*)"
+      "Bash(dotnet run:*)",
+      "Bash(dotnet add package:*)"
     ],
     "deny": [],
     "ask": []

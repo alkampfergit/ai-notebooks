@@ -176,8 +176,8 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
         var response = await _chatService.GetChatMessageContentAsync(chatHistory, executionSettings);
 
         // Parse the JSON response to NextStep object
-        var content = (OpenAIChatMessageContent)response;
-        var jsonContent = response.Content ?? string.Empty;
+        var openAIResponse = (OpenAIChatMessageContent)response;
+        var jsonContent = openAIResponse.Content ?? string.Empty;
 
         return JsonSerializer.Deserialize<NextStep>(jsonContent, _jsonOptions);
     }
