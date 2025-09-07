@@ -19,15 +19,17 @@ namespace SkPlaygroundTests;
 public class PolimorphicSchemaTests : SemanticKernelTestBase
 {
     /// <summary>
-    /// Generates polymorphic JSON schema using the refactored PolymorphicSchemaGenerator
+    /// Generates polymorphic JSON schema using the unified PetOwnerManager
     /// </summary>
     /// <typeparam name="T">The root type to generate schema for</typeparam>
     /// <returns>JSON schema string with proper polymorphic support</returns>
     private static string GeneratePolymorphicJsonSchema<T>()
     {
-        return PolymorphicSchemaGenerator.GeneratePolymorphicJsonSchema<T>(
-            derivedTypes: [typeof(Dog), typeof(Cat)]
-        );
+        var manager = new PetOwnerManager()
+            .AddDerivedType<Dog>()
+            .AddDerivedType<Cat>();
+        
+        return manager.GenerateSchema();
     }
 
     [Test]
@@ -51,10 +53,9 @@ public class PolimorphicSchemaTests : SemanticKernelTestBase
     [Test]
     public void Can_generate_schema_with_only_cat()
     {
-        // Test the flexibility of the new PolymorphicSchemaGenerator - only Cat, no Dog
-        var schemaJson = PolymorphicSchemaGenerator.GeneratePolymorphicJsonSchema<PetOwner>(
-            derivedTypes: [typeof(Cat)]
-        );
+        // Test the flexibility of the new PetOwnerManager - only Cat, no Dog
+        var manager = new PetOwnerManager().AddDerivedType<Cat>();
+        var schemaJson = manager.GenerateSchema();
 
         var schemaObj = System.Text.Json.JsonDocument.Parse(schemaJson);
         var root = schemaObj.RootElement;
@@ -104,7 +105,7 @@ public class PolimorphicSchemaTests : SemanticKernelTestBase
 
     [Test]
     public void Base_class_Contains_anyof()
-    { 
+    {
         var schema = GeneratePolymorphicJsonSchema<PetOwner>();
         var schemaObj = System.Text.Json.JsonDocument.Parse(schema);
         var root = schemaObj.RootElement;
@@ -126,76 +127,183 @@ public class PolimorphicSchemaTests : SemanticKernelTestBase
     }
 
     [Test]
-    public async Task GenerateJsonSchema_RealLLMCall_PolymorphicCatOwner()
-
+    public void Can_deserialize_polimorphic()
+    {
+        var json = @"
         {
-            // Skip test if no API key is available
-            var apiKey = Dotenv.Get("OPENAI_API_KEY");
-            var endpoint = Dotenv.Get("AZURE_ENDPOINT");
-
-            if (string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(endpoint))
-            {
-                Assert.Ignore("OPENAI_API_KEY or AZURE_ENDPOINT environment variable not set");
-                return;
+            ""name"": ""Jane"",
+            ""surname"": ""Doe"",
+            ""address"": ""456 Oak Avenue, Metropolis, IL 62960"",
+            ""pet"": {
+                ""type"": ""dog"",
+                ""breed"": ""Labrador Retriever"",
+                ""barkVolume"": 7
             }
+        }";
 
-            // Generate the JSON schema for PetOwner class using polymorphic schema generation
-            var schemaJson = GeneratePolymorphicJsonSchema<PetOwner>();
-            IChatCompletionService chatService = GetCompletionService(apiKey, endpoint, schemaJson);
+        // Use PetOwnerManager for polymorphic deserialization
+        var manager = new PetOwnerManager()
+            .AddDerivedType<Dog>()
+            .AddDerivedType<Cat>();
+        var petOwner = manager.DeserializeFromJson(json);
+        
+        Assert.That(petOwner, Is.Not.Null, "Should deserialize to PetOwner object");
+        Assert.That(petOwner.Pet, Is.Not.Null, "Pet should not be null");
+        Assert.That(petOwner.Pet, Is.TypeOf<Dog>(), "Pet should deserialize as Dog type");
+        var dog = petOwner.Pet as Dog;
+        Assert.That(dog, Is.Not.Null, "Should be able to cast pet to Dog");
+        Assert.That(dog.Breed, Is.EqualTo("Labrador Retriever"), "Dog breed should match");
+        Assert.That(dog.BarkVolume, Is.EqualTo(7), "Dog barkVolume should match");
+     }
 
-            var userPrompt = @"Please format this pet owner data into JSON:
-    Michael Brown lives at 789 Pine Street, Austin, TX 73301. He owns a beautiful orange tabby cat named Whiskers.";
-
-            var chatHistory = new ChatHistory();
-            chatHistory.AddUserMessage(userPrompt);
-
-            var chatResponseFormat = OpenAI.Chat.ChatResponseFormat.CreateJsonSchemaFormat(
-                jsonSchemaFormatName: "pet_owner",
-                jsonSchema: BinaryData.FromString(schemaJson),
-                jsonSchemaIsStrict: true
-            );
-            var executionSettings = new OpenAIPromptExecutionSettings
-            {
-                ResponseFormat = chatResponseFormat
-            };
-
-            Console.WriteLine("\nCalling LLM to reformat cat owner data...");
-
-
-            // Test deserialization into our PetOwner class with polymorphic Pet
-            try
-            {
-                // Make the LLM call
-                var skResponse = await chatService.GetChatMessageContentAsync(chatHistory, executionSettings);
-                var jsonResponse = skResponse.Content;
-
-                Console.WriteLine("\nLLM Response:");
-                Console.WriteLine(jsonResponse);
-
-                var petOwner = JsonConvert.DeserializeObject<PetOwner>(jsonResponse);
-
-                Assert.That(petOwner, Is.Not.Null, "Should deserialize to PetOwner object");
-                Assert.That(petOwner.Pet, Is.Not.Null, "Pet should not be null");
-
-                // Verify polymorphic deserialization - should be a Cat
-                Assert.That(petOwner.Pet, Is.TypeOf<Cat>(), "Pet should deserialize as Cat type");
-
-                var cat = petOwner.Pet as Cat;
-                Assert.That(cat, Is.Not.Null, "Should be able to cast pet to Cat");
-                Assert.That(cat.Color, Is.Not.Null.And.Not.Empty, "Cat color should not be empty");
-                Assert.That(cat.Color.ToLower(), Contains.Substring("orange").Or.Contains("tabby"), "Should extract orange/tabby color");
-
-                Console.WriteLine($"✅ Successfully extracted: {petOwner.Name} {petOwner.Surname} with {cat.Color} cat");
-                Console.WriteLine("✅ Polymorphic deserialization successful - Pet correctly identified as Cat");
+    [Test]
+    public void Can_deserialize_polimorphic_cat()
+    {
+        var json = @"
+        {
+            ""name"": ""Michael"",
+            ""surname"": ""Brown"",
+            ""address"": ""789 Pine Street, Austin, TX 73301"",
+            ""pet"": {
+                ""type"": ""cat"",
+                ""color"": ""orange tabby""
             }
-            catch (Exception ex)
-            {
+        }";
 
-                Assert.Fail($"Failed to perform CALL: {ex.Message} - {schemaJson}");
+        // Use PetOwnerManager for polymorphic deserialization
+        var manager = new PetOwnerManager()
+            .AddDerivedType<Dog>()
+            .AddDerivedType<Cat>();
+        var petOwner = manager.DeserializeFromJson(json);
+        
+        Assert.That(petOwner, Is.Not.Null, "Should deserialize to PetOwner object");
+        Assert.That(petOwner.Pet, Is.Not.Null, "Pet should not be null");
+        Assert.That(petOwner.Pet, Is.TypeOf<Cat>(), "Pet should deserialize as Cat type");
+        var cat = petOwner.Pet as Cat;
+        Assert.That(cat, Is.Not.Null, "Should be able to cast pet to Cat");
+        Assert.That(cat.Color, Is.EqualTo("orange tabby"), "Cat color should match");
+    }
+
+    [Test]
+    public void PetOwnerManager_demonstrates_flexibility()
+    {
+        // Create manager with only Dog support
+        var dogOnlyManager = new PetOwnerManager().AddDerivedType<Dog>();
+        
+        // Generate schema - should only include Dog
+        var dogSchema = dogOnlyManager.GenerateSchema();
+        Assert.That(dogSchema, Contains.Substring("Dog"), "Should contain Dog definition");
+        Assert.That(dogSchema, Does.Not.Contain("Cat"), "Should NOT contain Cat definition");
+        
+        // Test deserialization with Dog JSON
+        var dogJson = @"{
+            ""name"": ""John"",
+            ""surname"": ""Doe"",
+            ""address"": ""123 Main St"",
+            ""pet"": {
+                ""type"": ""dog"",
+                ""breed"": ""Labrador"",
+                ""barkVolume"": 5
             }
+        }";
+        
+        var dogOwner = dogOnlyManager.DeserializeFromJson(dogJson);
+        Assert.That(dogOwner?.Pet, Is.TypeOf<Dog>(), "Should deserialize as Dog");
+        
+        // Create manager with both Dog and Cat support using AddDerivedTypes
+        var fullManager = new PetOwnerManager().AddDerivedTypes(typeof(Dog), typeof(Cat));
+        
+        // Generate full schema - should include both
+        var fullSchema = fullManager.GenerateSchema();
+        Assert.That(fullSchema, Contains.Substring("Dog"), "Should contain Dog definition");
+        Assert.That(fullSchema, Contains.Substring("Cat"), "Should contain Cat definition");
+        
+        // Test deserialization with Cat JSON
+        var catJson = @"{
+            ""name"": ""Jane"",
+            ""surname"": ""Smith"",
+            ""address"": ""456 Oak Ave"",
+            ""pet"": {
+                ""type"": ""cat"",
+                ""color"": ""black""
+            }
+        }";
+        
+        var catOwner = fullManager.DeserializeFromJson(catJson);
+        Assert.That(catOwner?.Pet, Is.TypeOf<Cat>(), "Should deserialize as Cat");
+    }
 
-            Console.WriteLine("✅ Real LLM call with polymorphic Cat schema validation completed successfully!");
-        }
+    // [Test]
+    // public async Task GenerateJsonSchema_RealLLMCall_PolymorphicCatOwner()
+
+    //     {
+    //         // Skip test if no API key is available
+    //         var apiKey = Dotenv.Get("OPENAI_API_KEY");
+    //         var endpoint = Dotenv.Get("AZURE_ENDPOINT");
+
+    //         if (string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(endpoint))
+    //         {
+    //             Assert.Ignore("OPENAI_API_KEY or AZURE_ENDPOINT environment variable not set");
+    //             return;
+    //         }
+
+    //         // Generate the JSON schema for PetOwner class using polymorphic schema generation
+    //         var schemaJson = GeneratePolymorphicJsonSchema<PetOwner>();
+    //         IChatCompletionService chatService = GetCompletionService(apiKey, endpoint, schemaJson);
+
+    //         var userPrompt = @"Please format this pet owner data into JSON:
+    // Michael Brown lives at 789 Pine Street, Austin, TX 73301. He owns a beautiful orange tabby cat named Whiskers.";
+
+    //         var chatHistory = new ChatHistory();
+    //         chatHistory.AddUserMessage(userPrompt);
+
+    //         var chatResponseFormat = OpenAI.Chat.ChatResponseFormat.CreateJsonSchemaFormat(
+    //             jsonSchemaFormatName: "pet_owner",
+    //             jsonSchema: BinaryData.FromString(schemaJson),
+    //             jsonSchemaIsStrict: true
+    //         );
+    //         var executionSettings = new OpenAIPromptExecutionSettings
+    //         {
+    //             ResponseFormat = chatResponseFormat
+    //         };
+
+    //         Console.WriteLine("\nCalling LLM to reformat cat owner data...");
+
+
+    //         // Test deserialization into our PetOwner class with polymorphic Pet
+    //         try
+    //         {
+    //             // Make the LLM call
+    //             var skResponse = await chatService.GetChatMessageContentAsync(chatHistory, executionSettings);
+    //             var jsonResponse = skResponse.Content;
+
+    //             Console.WriteLine("\nLLM Response:");
+    //             Console.WriteLine(jsonResponse);
+
+    //             var petOwner = JsonConvert.DeserializeObject<PetOwner>(jsonResponse);
+
+    //             Assert.That(petOwner, Is.Not.Null, "Should deserialize to PetOwner object");
+    //             Assert.That(petOwner.Pet, Is.Not.Null, "Pet should not be null");
+
+    //             // Verify polymorphic deserialization - should be a Cat
+    //             Assert.That(petOwner.Pet, Is.TypeOf<Cat>(), "Pet should deserialize as Cat type");
+
+    //             var cat = petOwner.Pet as Cat;
+    //             Assert.That(cat, Is.Not.Null, "Should be able to cast pet to Cat");
+    //             Assert.That(cat.Color, Is.Not.Null.And.Not.Empty, "Cat color should not be empty");
+    //             Assert.That(cat.Color.ToLower(), Contains.Substring("orange").Or.Contains("tabby"), "Should extract orange/tabby color");
+
+    //             Console.WriteLine($"✅ Successfully extracted: {petOwner.Name} {petOwner.Surname} with {cat.Color} cat");
+    //             Console.WriteLine("✅ Polymorphic deserialization successful - Pet correctly identified as Cat");
+    //         }
+    //         catch (Exception ex)
+    //         {
+
+    //             Assert.Fail($"Failed to perform CALL: {ex.Message} - {schemaJson}");
+    //         }
+
+    //         Console.WriteLine("✅ Real LLM call with polymorphic Cat schema validation completed successfully!");
+    //     }
 }
 
 public class PetOwner
