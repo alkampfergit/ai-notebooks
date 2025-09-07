@@ -21,14 +21,7 @@ public class NextStep
     public ToolCall ToolCall { get; set; }
 }
 
-[JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
-[JsonDerivedType(typeof(SendEmailToolCall), typeDiscriminator: "send_email")]
-[JsonDerivedType(typeof(IssueInvoiceToolCall), typeDiscriminator: "issue_invoice")]
-[JsonDerivedType(typeof(GetCustomerDataToolCall), typeDiscriminator: "get_customer_data")]
-[JsonDerivedType(typeof(VoidInvoiceToolCall), typeDiscriminator: "void_invoice")]
-[JsonDerivedType(typeof(CreateRuleToolCall), typeDiscriminator: "create_rule")]
-[JsonDerivedType(typeof(ReportTaskCompletionToolCall), typeDiscriminator: "report_task_completion")]
 public abstract class ToolCall
 {
-    public string Tool { get; set; } = default!;
+    
 }

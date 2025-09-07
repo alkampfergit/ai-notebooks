@@ -170,7 +170,7 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
         );
         var executionSettings = new OpenAIPromptExecutionSettings
         {
-            ResponseFormat = chatResponseFormat
+            ResponseFormat = typeof(NextStep)
         };
 
         var response = await _chatService.GetChatMessageContentAsync(chatHistory, executionSettings);

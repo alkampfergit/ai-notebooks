@@ -153,7 +153,7 @@ public class BusinessFunctionFactory
         var configuration = new SchemaGeneratorConfiguration
         {
             // Use camelCase property naming to match our JSON serialization
-            PropertyNameResolver = PropertyNameResolvers.CamelCase
+            PropertyNameResolver = PropertyNameResolvers.CamelCase,  
         };
 
         // Generate schema using JsonSchema.Net

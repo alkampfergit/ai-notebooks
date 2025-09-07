@@ -119,4 +119,79 @@ public class JsonSchemaTest
         Assert.That(schema2, Is.EqualTo(schema3), "Second and third schema generation should be identical");
         Assert.That(schema1, Is.EqualTo(schema3), "First and third schema generation should be identical");
     }
+
+    /// <summary>
+    /// **Test that verifies the schema contains anyOf pattern for polymorphic ToolCall property**
+    /// 
+    /// This test ensures that:
+    /// - The toolCall property in the schema uses the anyOf pattern for discriminated unions
+    /// - Each tool type is properly represented in the anyOf array
+    /// - The discriminator property "$type" is correctly configured
+    /// - All expected tool types are included (send_email, issue_invoice, get_customer_data, void_invoice, create_rule, report_task_completion)
+    /// </summary>
+    [Test]
+    public void GenerateJsonSchemaForToolCall_ShouldContainAnyOfForPolymorphicToolCall()
+    {
+        // **Act**: Generate JSON schema using the business function factory
+        var schemaJson = _businessFunctionFactory.GenerateJsonSchemaForToolCall();
+        var schemaNode = JsonNode.Parse(schemaJson);
+
+        // **Assert**: Navigate to the toolCall property in the schema
+        var schemaObject = schemaNode!.AsObject();
+        var properties = schemaObject["properties"]?.AsObject();
+        var toolCallProperty = properties!["toolCall"]?.AsObject();
+        
+        Assert.That(toolCallProperty, Is.Not.Null, "toolCall property should be present in schema");
+
+        // **Assert**: Verify that toolCall property contains anyOf for polymorphic types
+        Assert.That(toolCallProperty!.ContainsKey("anyOf"), Is.True, "toolCall property should contain 'anyOf' for discriminated union");
+
+        var anyOfArray = toolCallProperty["anyOf"]?.AsArray();
+        Assert.That(anyOfArray, Is.Not.Null, "anyOf should be an array");
+        Assert.That(anyOfArray!.Count, Is.GreaterThan(0), "anyOf array should contain at least one type");
+
+        // **Assert**: Verify expected tool types are present in anyOf
+        var expectedToolTypes = new[]
+        {
+            "send_email",
+            "issue_invoice", 
+            "get_customer_data",
+            "void_invoice",
+            "create_rule",
+            "report_task_completion"
+        };
+
+        var actualToolTypes = new List<string>();
+        foreach (var item in anyOfArray)
+        {
+            var itemObject = item?.AsObject();
+            if (itemObject != null && itemObject.ContainsKey("properties"))
+            {
+                var itemProperties = itemObject["properties"]?.AsObject();
+                if (itemProperties != null && itemProperties.ContainsKey("$type"))
+                {
+                    var typeProperty = itemProperties["$type"]?.AsObject();
+                    if (typeProperty != null && typeProperty.ContainsKey("const"))
+                    {
+                        var constValue = typeProperty["const"]?.GetValue<string>();
+                        if (constValue != null)
+                        {
+                            actualToolTypes.Add(constValue);
+                        }
+                    }
+                }
+            }
+        }
+
+        // **Assert**: Verify all expected tool types are present
+        foreach (var expectedType in expectedToolTypes)
+        {
+            Assert.That(actualToolTypes, Contains.Item(expectedType), 
+                $"anyOf should contain tool type '{expectedType}'");
+        }
+
+        // **Assert**: Verify the number of tool types matches expectations
+        Assert.That(actualToolTypes.Count, Is.EqualTo(expectedToolTypes.Length),
+            $"Expected {expectedToolTypes.Length} tool types, but found {actualToolTypes.Count}");
+    }
 }
