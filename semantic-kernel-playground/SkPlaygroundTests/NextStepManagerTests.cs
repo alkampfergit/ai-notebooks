@@ -3,6 +3,9 @@ using System.Text.Json;
 using SkPlayground.Utils;
 using SkPlayground.Models;
 using SkPlayground.BusinessFunctions;
+using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+using OpenAI.Chat;
 
 namespace SkPlaygroundTests;
 
@@ -11,7 +14,7 @@ namespace SkPlaygroundTests;
 /// Comprehensive test suite ported from PetOwnerManager tests to ensure feature parity
 /// </summary>
 [TestFixture]
-public class NextStepManagerTests
+public class NextStepManagerTests : SemanticKernelTestBase
 {
     /// <summary>
     /// Helper method to generate NextStep schema with all ToolCall types
@@ -495,4 +498,105 @@ public class NextStepManagerTests
         Assert.Throws<InvalidOperationException>(() => manager.DeserializeFromJson("{}"), 
             "Should throw exception when no types are added");
     }
+    
+    /// <summary>
+    /// Real LLM test that validates NextStep schema generation and polymorphic deserialization with OpenAI
+    /// This test mimics the GenerateJsonSchema_RealLLMCall_PolymorphicCatOwner test for NextStep domain
+    /// </summary>
+    [Test]
+    public async Task GenerateNextStepSchema_RealLLMCall_PolymorphicSendEmailToolCall()
+    {
+        // Skip test if no API key is available
+        var apiKey = Dotenv.Get("OPENAI_API_KEY");
+        var endpoint = Dotenv.Get("AZURE_ENDPOINT");
+
+        if (string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(endpoint))
+        {
+            Assert.Ignore("OPENAI_API_KEY or AZURE_ENDPOINT environment variable not set");
+            return;
+        }
+
+        // Generate the JSON schema for NextStep class using polymorphic schema generation
+        var schemaJson = GeneratePolymorphicNextStepJsonSchema();
+        IChatCompletionService chatService = GetCompletionService(apiKey, endpoint, schemaJson);
+
+        var userPrompt = @"Please format this workflow step data into JSON:
+    Current workflow state: 'Ready to send notification email'
+    Remaining steps: ['Send email to customer', 'Wait for confirmation', 'Update status']
+    Task is not yet completed.
+    Next action: Send an email with subject 'Order Confirmation' and message 'Your order #12345 has been processed successfully' to customer@example.com with attached receipt.pdf";
+
+        var chatHistory = new ChatHistory();
+        chatHistory.AddUserMessage(userPrompt);
+
+        var chatResponseFormat = ChatResponseFormat.CreateJsonSchemaFormat(
+            jsonSchemaFormatName: "next_step",
+            jsonSchema: BinaryData.FromString(schemaJson),
+            jsonSchemaIsStrict: true
+        );
+        var executionSettings = new OpenAIPromptExecutionSettings
+        {
+            ResponseFormat = chatResponseFormat
+        };
+
+        Console.WriteLine("\nCalling LLM to reformat NextStep workflow data...");
+        Console.WriteLine($"Generated Schema:\n{schemaJson}\n");
+
+        // Test deserialization into our NextStep class with polymorphic ToolCall
+        try
+        {
+            // Make the LLM call
+            var skResponse = await chatService.GetChatMessageContentAsync(chatHistory, executionSettings);
+            var jsonResponse = skResponse.Content;
+
+            Console.WriteLine("\nLLM Response:");
+            Console.WriteLine(jsonResponse);
+
+            var manager = new NextStepManager()
+                .AddDerivedType<SendEmailToolCall>()
+                .AddDerivedType<GetCustomerDataToolCall>()
+                .AddDerivedType<IssueInvoiceToolCall>();
+            var nextStep = manager.DeserializeFromJson(jsonResponse);
+
+            Assert.That(nextStep, Is.Not.Null, "Should deserialize to NextStep object");
+            Assert.That(nextStep.ToolCall, Is.Not.Null, "ToolCall should not be null");
+
+            // Verify polymorphic deserialization - should be a SendEmailToolCall
+            Assert.That(nextStep.ToolCall, Is.TypeOf<SendEmailToolCall>(), "ToolCall should deserialize as SendEmailToolCall type");
+
+            var sendEmailCall = nextStep.ToolCall as SendEmailToolCall;
+            Assert.That(sendEmailCall, Is.Not.Null, "Should be able to cast ToolCall to SendEmailToolCall");
+            Assert.That(sendEmailCall.Subject, Is.Not.Null.And.Not.Empty, "Email subject should not be empty");
+            Assert.That(sendEmailCall.Message, Is.Not.Null.And.Not.Empty, "Email message should not be empty");
+            Assert.That(sendEmailCall.RecipientEmail, Is.Not.Null.And.Not.Empty, "Recipient email should not be empty");
+            
+            Assert.That(sendEmailCall.Subject.ToLower(), Contains.Substring("confirmation").Or.Contains("order"), "Should extract order confirmation subject");
+            Assert.That(sendEmailCall.RecipientEmail.ToLower(), Contains.Substring("customer@example.com"), "Should extract recipient email");
+
+            Console.WriteLine($"✅ Successfully extracted NextStep: '{nextStep.CurrentState}' with SendEmailToolCall");
+            Console.WriteLine($"✅ Email details: '{sendEmailCall.Subject}' to '{sendEmailCall.RecipientEmail}'");
+            Console.WriteLine("✅ Polymorphic deserialization successful - ToolCall correctly identified as SendEmailToolCall");
+        }
+        catch (Exception ex)
+        {
+            Assert.Fail($"Failed to perform LLM call: {ex.Message} - Schema: {schemaJson}");
+        }
+
+        Console.WriteLine("✅ Real LLM call with polymorphic NextStep schema validation completed successfully!");
+    }
+    
+    /// <summary>
+    /// Generates polymorphic JSON schema for NextStep using the NextStepManager
+    /// </summary>
+    /// <returns>JSON schema string with proper polymorphic ToolCall support</returns>
+    private static string GeneratePolymorphicNextStepJsonSchema()
+    {
+        var manager = new NextStepManager()
+            .AddDerivedType<SendEmailToolCall>()
+            .AddDerivedType<GetCustomerDataToolCall>()
+            .AddDerivedType<IssueInvoiceToolCall>();
+        
+        return manager.GenerateSchema();
+    }
+    
 }

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 using SkPlayground.BusinessFunctions;
 
 namespace SkPlayground.Models;
@@ -26,7 +27,7 @@ public abstract class ToolCall
     /// <summary>
     /// Discriminator property to identify the tool call type
     /// </summary>
-    [JsonPropertyName("type")]
+    [JsonProperty("type")]
     [Required]
     public abstract string Type { get; }
 }

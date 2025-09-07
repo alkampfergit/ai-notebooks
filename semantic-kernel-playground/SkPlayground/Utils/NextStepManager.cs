@@ -145,9 +145,6 @@ public class NextStepManager
         schema.Type = JsonObjectType.Object;
         schema.AllowAdditionalProperties = false;
 
-        // Clear any existing definitions - we only want the ones we explicitly add
-        schema.Definitions.Clear();
-
         // Find the polymorphic property (ToolCall property)
         var targetProperty = FindPolymorphicProperty(schema);
         
@@ -170,6 +167,7 @@ public class NextStepManager
             // Replace polymorphic property with anyOf constraint (OpenAI pattern)
             polymorphicProp.Reference = null;
             polymorphicProp.AnyOf.Clear();
+            polymorphicProp.OneOf.Clear(); // Also clear any oneOf references to abstract classes
             
             foreach (var type in includedTypesList)
             {
@@ -178,6 +176,12 @@ public class NextStepManager
                     Reference = schema.Definitions[type.Name]
                 });
             }
+        }
+
+        // Remove the abstract ToolCall definition as it's not needed and causes OpenAI rejection
+        if (schema.Definitions.ContainsKey("ToolCall"))
+        {
+            schema.Definitions.Remove("ToolCall");
         }
 
         // Ensure required properties are present
