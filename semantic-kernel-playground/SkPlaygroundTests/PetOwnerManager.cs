@@ -15,8 +15,10 @@ namespace SkPlaygroundTests;
 public class PetOwnerManager
 {
     private readonly List<Type> _derivedPetTypes = new();
+    private readonly Dictionary<Type, JsonSchema> _derivedSchemaCache = new();
     private readonly string _discriminatorProperty;
     private readonly JsonSerializerSettings _jsonSettings;
+    private readonly NewtonsoftJsonSchemaGeneratorSettings _schemaSettings;
 
     /// <summary>
     /// Creates a new PetOwnerManager instance
@@ -31,6 +33,16 @@ public class PetOwnerManager
             NullValueHandling = NullValueHandling.Ignore,
             MissingMemberHandling = MissingMemberHandling.Ignore
         };
+
+        // Initialize schema generator settings - consistent settings for all schema generation
+        _schemaSettings = new NewtonsoftJsonSchemaGeneratorSettings
+        {
+            SchemaType = SchemaType.JsonSchema,
+            DefaultReferenceTypeNullHandling = ReferenceTypeNullHandling.NotNull,
+            FlattenInheritanceHierarchy = false,
+            GenerateAbstractProperties = false,
+            AlwaysAllowAdditionalObjectProperties = false
+        };
     }
 
     /// <summary>
@@ -44,6 +56,8 @@ public class PetOwnerManager
         if (!_derivedPetTypes.Contains(type))
         {
             _derivedPetTypes.Add(type);
+            // Pre-generate and cache the schema for this type
+            _derivedSchemaCache[type] = GenerateAndProcessDerivedSchema(type);
         }
         return this;
     }
@@ -65,6 +79,8 @@ public class PetOwnerManager
             if (!_derivedPetTypes.Contains(type))
             {
                 _derivedPetTypes.Add(type);
+                // Pre-generate and cache the schema for this type
+                _derivedSchemaCache[type] = GenerateAndProcessDerivedSchema(type);
             }
         }
         return this;
@@ -81,10 +97,185 @@ public class PetOwnerManager
             throw new InvalidOperationException("No derived Pet types have been added. Use AddDerivedType<T>() or AddDerivedTypes() first.");
         }
 
-        return PolymorphicSchemaGenerator.GeneratePolymorphicJsonSchema<PetOwner>(
-            _derivedPetTypes.ToArray(),
-            _discriminatorProperty
-        );
+        return GenerateSchemaInternal(_derivedPetTypes);
+    }
+
+    /// <summary>
+    /// Generates an OpenAI-compatible JSON schema for PetOwner with only the specified derived Pet types
+    /// </summary>
+    /// <param name="includedTypes">The specific derived Pet types to include in the schema</param>
+    /// <returns>JSON schema string compatible with OpenAI structured output</returns>
+    public string GenerateSchema(IEnumerable<Type> includedTypes)
+    {
+        if (_derivedPetTypes.Count == 0)
+        {
+            throw new InvalidOperationException("No derived Pet types have been added. Use AddDerivedType<T>() or AddDerivedTypes() first.");
+        }
+
+        var typesToInclude = includedTypes.ToList();
+        
+        // Validate that all included types are configured in this manager
+        foreach (var type in typesToInclude)
+        {
+            if (!_derivedPetTypes.Contains(type))
+            {
+                throw new ArgumentException($"Type {type.Name} is not configured in this PetOwnerManager. Add it first using AddDerivedType<T>() or AddDerivedTypes().", nameof(includedTypes));
+            }
+        }
+
+        if (typesToInclude.Count == 0)
+        {
+            throw new ArgumentException("At least one type must be included in the schema.", nameof(includedTypes));
+        }
+
+        return GenerateSchemaInternal(typesToInclude);
+    }
+
+    /// <summary>
+    /// Internal method to generate schema using cached derived schemas
+    /// </summary>
+    private string GenerateSchemaInternal(IEnumerable<Type> typesToInclude)
+    {
+        var generator = new JsonSchemaGenerator(_schemaSettings);
+        var schema = generator.Generate(typeof(PetOwner));
+
+        // Find the polymorphic property (pet property)
+        var targetProperty = FindPolymorphicProperty(schema);
+        
+        if (!string.IsNullOrEmpty(targetProperty) && schema.Properties.ContainsKey(targetProperty))
+        {
+            var polymorphicProp = schema.Properties[targetProperty];
+            
+            // Use cached schemas for the specified types
+            var includedTypesList = typesToInclude.ToList();
+            
+            // Add cached schemas to the main schema definitions
+            foreach (var type in includedTypesList)
+            {
+                if (_derivedSchemaCache.TryGetValue(type, out var cachedSchema))
+                {
+                    schema.Definitions[type.Name] = cachedSchema;
+                }
+            }
+            
+            // Replace polymorphic property with anyOf constraint (OpenAI pattern)
+            polymorphicProp.Reference = null;
+            polymorphicProp.AnyOf.Clear();
+            
+            foreach (var type in includedTypesList)
+            {
+                polymorphicProp.AnyOf.Add(new JsonSchema
+                {
+                    Reference = schema.Definitions[type.Name]
+                });
+            }
+        }
+
+        return schema.ToJson();
+    }
+
+    /// <summary>
+    /// Generates and processes a schema for a specific derived type
+    /// </summary>
+    private JsonSchema GenerateAndProcessDerivedSchema(Type derivedType)
+    {
+        var generator = new JsonSchemaGenerator(_schemaSettings);
+        var derivedSchema = generator.Generate(derivedType);
+        
+        // Extract and flatten the derived schema
+        var derivedName = derivedType.Name;
+        var derivedDef = derivedSchema.Definitions.ContainsKey(derivedName) 
+            ? derivedSchema.Definitions[derivedName] 
+            : derivedSchema;
+        
+        var flattened = FlattenInheritanceSchema(derivedDef);
+        
+        // Add const/enum discriminators
+        AddDiscriminatorToSchema(flattened, _discriminatorProperty, GetDiscriminatorValue(derivedType));
+        
+        return flattened;
+    }
+
+    /// <summary>
+    /// Flattens inheritance schema by removing allOf patterns and merging properties
+    /// </summary>
+    private static JsonSchema FlattenInheritanceSchema(JsonSchema schema)
+    {
+        var flattened = new JsonSchema
+        {
+            Type = JsonObjectType.Object,
+            AllowAdditionalProperties = false
+        };
+
+        // Add properties from allOf sections if they exist
+        if (schema.AllOf.Count > 0)
+        {
+            foreach (var allOfItem in schema.AllOf)
+            {
+                foreach (var prop in allOfItem.Properties)
+                {
+                    flattened.Properties[prop.Key] = prop.Value;
+                }
+                foreach (var req in allOfItem.RequiredProperties)
+                {
+                    flattened.RequiredProperties.Add(req);
+                }
+            }
+        }
+        else
+        {
+            // If no allOf, copy properties directly
+            foreach (var prop in schema.Properties)
+            {
+                flattened.Properties[prop.Key] = prop.Value;
+            }
+            foreach (var req in schema.RequiredProperties)
+            {
+                flattened.RequiredProperties.Add(req);
+            }
+        }
+
+        return flattened;
+    }
+
+    /// <summary>
+    /// Adds const/enum discriminator to the specified property in the schema
+    /// </summary>
+    private static void AddDiscriminatorToSchema(JsonSchema schema, string discriminatorProperty, string discriminatorValue)
+    {
+        // Ensure discriminator property is required
+        if (!schema.RequiredProperties.Contains(discriminatorProperty))
+        {
+            schema.RequiredProperties.Add(discriminatorProperty);
+        }
+
+        // Add const/enum discriminators to the discriminator property (OpenAI pattern)
+        if (schema.Properties.ContainsKey(discriminatorProperty))
+        {
+            var discriminatorProp = schema.Properties[discriminatorProperty];
+            discriminatorProp.Enumeration.Clear();
+            discriminatorProp.Enumeration.Add(discriminatorValue);
+            discriminatorProp.Title = char.ToUpper(discriminatorProperty[0]) + discriminatorProperty[1..];
+            
+            // Set const value using ExtensionData
+            discriminatorProp.ExtensionData ??= new Dictionary<string, object?>();
+            discriminatorProp.ExtensionData["const"] = discriminatorValue;
+        }
+    }
+
+    /// <summary>
+    /// Finds the polymorphic property by looking for properties that reference abstract types
+    /// </summary>
+    private static string FindPolymorphicProperty(JsonSchema schema)
+    {
+        foreach (var property in schema.Properties)
+        {
+            if (property.Value.Reference != null || property.Value.AnyOf.Count > 0 || property.Value.OneOf.Count > 0)
+            {
+                return property.Key;
+            }
+        }
+        return string.Empty;
     }
 
     /// <summary>

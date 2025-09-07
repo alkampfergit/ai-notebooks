@@ -233,6 +233,222 @@ public class PolimorphicSchemaTests : SemanticKernelTestBase
         Assert.That(catOwner?.Pet, Is.TypeOf<Cat>(), "Should deserialize as Cat");
     }
 
+    [Test]
+    public void GenerateSchema_WithSpecificTypes_OnlyIncludesSpecifiedTypes()
+    {
+        // Create manager with both Dog and Cat configured
+        var manager = new PetOwnerManager()
+            .AddDerivedType<Dog>()
+            .AddDerivedType<Cat>();
+        
+        // Generate schema with only Dog
+        var dogOnlySchema = manager.GenerateSchema(new[] { typeof(Dog) });
+        var schemaObj = System.Text.Json.JsonDocument.Parse(dogOnlySchema);
+        var root = schemaObj.RootElement;
+        
+        Assert.That(root.TryGetProperty("definitions", out var definitions), Is.True);
+        Assert.That(definitions.TryGetProperty("Dog", out _), Is.True, "Should have Dog definition");
+        Assert.That(definitions.TryGetProperty("Cat", out _), Is.False, "Should NOT have Cat definition");
+        
+        // Verify pet property has anyOf with only Dog
+        Assert.That(root.TryGetProperty("properties", out var properties), Is.True);
+        Assert.That(properties.TryGetProperty("pet", out var petProp), Is.True);
+        Assert.That(petProp.TryGetProperty("anyOf", out var anyOf), Is.True);
+        Assert.That(anyOf.GetArrayLength(), Is.EqualTo(1), "Should have exactly one anyOf option (Dog only)");
+        
+        var refValue = anyOf.EnumerateArray().First().GetProperty("$ref").GetString();
+        Assert.That(refValue, Is.EqualTo("#/definitions/Dog"), "anyOf should contain reference to Dog only");
+    }
+
+    [Test]
+    public void GenerateSchema_WithSpecificTypes_CanIncludeCatOnly()
+    {
+        // Create manager with both Dog and Cat configured
+        var manager = new PetOwnerManager()
+            .AddDerivedType<Dog>()
+            .AddDerivedType<Cat>();
+        
+        // Generate schema with only Cat
+        var catOnlySchema = manager.GenerateSchema(new[] { typeof(Cat) });
+        var schemaObj = System.Text.Json.JsonDocument.Parse(catOnlySchema);
+        var root = schemaObj.RootElement;
+        
+        Assert.That(root.TryGetProperty("definitions", out var definitions), Is.True);
+        Assert.That(definitions.TryGetProperty("Cat", out _), Is.True, "Should have Cat definition");
+        Assert.That(definitions.TryGetProperty("Dog", out _), Is.False, "Should NOT have Dog definition");
+        
+        // Verify pet property has anyOf with only Cat
+        Assert.That(root.TryGetProperty("properties", out var properties), Is.True);
+        Assert.That(properties.TryGetProperty("pet", out var petProp), Is.True);
+        Assert.That(petProp.TryGetProperty("anyOf", out var anyOf), Is.True);
+        Assert.That(anyOf.GetArrayLength(), Is.EqualTo(1), "Should have exactly one anyOf option (Cat only)");
+        
+        var refValue = anyOf.EnumerateArray().First().GetProperty("$ref").GetString();
+        Assert.That(refValue, Is.EqualTo("#/definitions/Cat"), "anyOf should contain reference to Cat only");
+    }
+
+    [Test]
+    public void GenerateSchema_WithSpecificTypes_CanIncludeBothTypes()
+    {
+        // Create manager with both Dog and Cat configured
+        var manager = new PetOwnerManager()
+            .AddDerivedType<Dog>()
+            .AddDerivedType<Cat>();
+        
+        // Generate schema with both types explicitly specified
+        var fullSchema = manager.GenerateSchema(new[] { typeof(Dog), typeof(Cat) });
+        var schemaObj = System.Text.Json.JsonDocument.Parse(fullSchema);
+        var root = schemaObj.RootElement;
+        
+        Assert.That(root.TryGetProperty("definitions", out var definitions), Is.True);
+        Assert.That(definitions.TryGetProperty("Dog", out _), Is.True, "Should have Dog definition");
+        Assert.That(definitions.TryGetProperty("Cat", out _), Is.True, "Should have Cat definition");
+        
+        // Verify pet property has anyOf with both Dog and Cat
+        Assert.That(root.TryGetProperty("properties", out var properties), Is.True);
+        Assert.That(properties.TryGetProperty("pet", out var petProp), Is.True);
+        Assert.That(petProp.TryGetProperty("anyOf", out var anyOf), Is.True);
+        Assert.That(anyOf.GetArrayLength(), Is.EqualTo(2), "Should have exactly two anyOf options");
+        
+        var refValues = anyOf.EnumerateArray()
+            .Select(v => v.GetProperty("$ref").GetString())
+            .ToList();
+        
+        Assert.That(refValues, Contains.Item("#/definitions/Dog"), "anyOf should contain reference to Dog");
+        Assert.That(refValues, Contains.Item("#/definitions/Cat"), "anyOf should contain reference to Cat");
+    }
+
+    [Test]
+    public void GenerateSchema_WithUnconfiguredType_ThrowsException()
+    {
+        // Create manager with only Dog configured
+        var manager = new PetOwnerManager().AddDerivedType<Dog>();
+        
+        // Try to generate schema with Cat (not configured)
+        Assert.Throws<ArgumentException>(() => 
+            manager.GenerateSchema(new[] { typeof(Cat) }),
+            "Should throw ArgumentException when trying to include unconfigured type");
+    }
+
+    [Test]
+    public void GenerateSchema_WithEmptyTypesList_ThrowsException()
+    {
+        var manager = new PetOwnerManager()
+            .AddDerivedType<Dog>()
+            .AddDerivedType<Cat>();
+        
+        Assert.Throws<ArgumentException>(() => 
+            manager.GenerateSchema(new Type[0]),
+            "Should throw ArgumentException when no types are specified");
+    }
+
+    [Test]
+    public void GenerateSchema_WithSpecificTypes_DeserializationStillWorksForAllConfiguredTypes()
+    {
+        // Create manager with both types configured
+        var manager = new PetOwnerManager()
+            .AddDerivedType<Dog>()
+            .AddDerivedType<Cat>();
+        
+        // Generate schema with only Dog
+        var dogOnlySchema = manager.GenerateSchema(new[] { typeof(Dog) });
+        Assert.That(dogOnlySchema, Contains.Substring("Dog"), "Schema should contain Dog");
+        Assert.That(dogOnlySchema, Does.Not.Contain("Cat"), "Schema should NOT contain Cat");
+        
+        // But deserialization should still work for both types since both are configured
+        var dogJson = @"{
+            ""name"": ""John"",
+            ""surname"": ""Doe"",
+            ""address"": ""123 Main St"",
+            ""pet"": {
+                ""type"": ""dog"",
+                ""breed"": ""Labrador"",
+                ""barkVolume"": 5
+            }
+        }";
+        
+        var catJson = @"{
+            ""name"": ""Jane"",
+            ""surname"": ""Smith"",
+            ""address"": ""456 Oak Ave"",
+            ""pet"": {
+                ""type"": ""cat"",
+                ""color"": ""black""
+            }
+        }";
+        
+        var dogOwner = manager.DeserializeFromJson(dogJson);
+        var catOwner = manager.DeserializeFromJson(catJson);
+        
+        Assert.That(dogOwner?.Pet, Is.TypeOf<Dog>(), "Should still deserialize Dog");
+        Assert.That(catOwner?.Pet, Is.TypeOf<Cat>(), "Should still deserialize Cat even though it wasn't in the schema");
+    }
+
+    [Test]
+    public void SchemaCaching_GeneratesConsistentSchemas()
+    {
+        // Create manager and add types
+        var manager = new PetOwnerManager()
+            .AddDerivedType<Dog>()
+            .AddDerivedType<Cat>();
+        
+        // Generate schema multiple times - should be identical due to caching
+        var schema1 = manager.GenerateSchema();
+        var schema2 = manager.GenerateSchema();
+        var schema3 = manager.GenerateSchema(new[] { typeof(Dog), typeof(Cat) });
+        
+        Assert.That(schema1, Is.EqualTo(schema2), "Multiple calls to GenerateSchema() should return identical results");
+        Assert.That(schema1, Is.EqualTo(schema3), "GenerateSchema() and GenerateSchema(allTypes) should return identical results");
+    }
+
+    [Test]
+    public void SchemaCaching_WorksWithSelectiveGeneration()
+    {
+        // Create manager and add types
+        var manager = new PetOwnerManager()
+            .AddDerivedType<Dog>()
+            .AddDerivedType<Cat>();
+        
+        // Generate selective schemas multiple times
+        var dogSchema1 = manager.GenerateSchema(new[] { typeof(Dog) });
+        var dogSchema2 = manager.GenerateSchema(new[] { typeof(Dog) });
+        var catSchema1 = manager.GenerateSchema(new[] { typeof(Cat) });
+        var catSchema2 = manager.GenerateSchema(new[] { typeof(Cat) });
+        
+        Assert.That(dogSchema1, Is.EqualTo(dogSchema2), "Multiple Dog-only schema generations should be identical");
+        Assert.That(catSchema1, Is.EqualTo(catSchema2), "Multiple Cat-only schema generations should be identical");
+        Assert.That(dogSchema1, Is.Not.EqualTo(catSchema1), "Dog-only and Cat-only schemas should be different");
+    }
+
+    [Test]
+    public void SchemaCaching_AddingTypesInDifferentOrder_ProducesSameResult()
+    {
+        // Create two managers with types added in different orders
+        var manager1 = new PetOwnerManager()
+            .AddDerivedType<Dog>()
+            .AddDerivedType<Cat>();
+            
+        var manager2 = new PetOwnerManager()
+            .AddDerivedType<Cat>()
+            .AddDerivedType<Dog>();
+        
+        var schema1 = manager1.GenerateSchema();
+        var schema2 = manager2.GenerateSchema();
+        
+        // Parse and compare the schemas structurally since property order might differ
+        var schemaObj1 = System.Text.Json.JsonDocument.Parse(schema1);
+        var schemaObj2 = System.Text.Json.JsonDocument.Parse(schema2);
+        
+        // Both should have the same definitions
+        Assert.That(schemaObj1.RootElement.TryGetProperty("definitions", out var defs1), Is.True);
+        Assert.That(schemaObj2.RootElement.TryGetProperty("definitions", out var defs2), Is.True);
+        
+        Assert.That(defs1.TryGetProperty("Dog", out _), Is.True, "Manager1 should have Dog definition");
+        Assert.That(defs1.TryGetProperty("Cat", out _), Is.True, "Manager1 should have Cat definition");
+        Assert.That(defs2.TryGetProperty("Dog", out _), Is.True, "Manager2 should have Dog definition");
+        Assert.That(defs2.TryGetProperty("Cat", out _), Is.True, "Manager2 should have Cat definition");
+    }
+
     // [Test]
     // public async Task GenerateJsonSchema_RealLLMCall_PolymorphicCatOwner()
 
