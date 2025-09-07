@@ -521,6 +521,39 @@ public class PolimorphicSchemaTests : SemanticKernelTestBase
 
             Console.WriteLine("✅ Real LLM call with polymorphic Cat schema validation completed successfully!");
         }
+
+    /// <summary>
+    /// Regression test to ensure abstract Pet class is not included in generated schema
+    /// OpenAI rejects schemas with unused definitions, so we must exclude the abstract Pet class
+    /// </summary>
+    [Test]
+    public void Schema_ShouldNotContainAbstractPetDefinition()
+    {
+        var manager = new PetOwnerManager()
+            .AddDerivedType<Dog>()
+            .AddDerivedType<Cat>();
+        
+        var schemaJson = manager.GenerateSchema();
+        var schemaObj = System.Text.Json.JsonDocument.Parse(schemaJson);
+        var root = schemaObj.RootElement;
+        
+        // Verify that definitions section exists
+        Assert.That(root.TryGetProperty("definitions", out var definitions), Is.True, "Schema should have 'definitions' section");
+        
+        // Verify that abstract Pet class is NOT included in definitions
+        Assert.That(definitions.TryGetProperty("Pet", out _), Is.False, 
+            "Schema should NOT contain abstract 'Pet' definition as it's unused and causes OpenAI rejection");
+        
+        // Verify that only concrete derived types are included
+        Assert.That(definitions.TryGetProperty("Dog", out _), Is.True, "Schema should contain 'Dog' definition");
+        Assert.That(definitions.TryGetProperty("Cat", out _), Is.True, "Schema should contain 'Cat' definition");
+        
+        // Verify the definitions count - should only have Dog and Cat
+        var definitionCount = definitions.EnumerateObject().Count();
+        Assert.That(definitionCount, Is.EqualTo(2), "Schema should contain exactly 2 definitions (Dog and Cat), not including abstract Pet");
+        
+        Console.WriteLine("✅ Regression test passed: Abstract Pet class correctly excluded from schema");
+    }
 }
 
 public class PetOwner
