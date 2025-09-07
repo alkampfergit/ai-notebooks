@@ -139,6 +139,13 @@ public class PetOwnerManager
         var generator = new JsonSchemaGenerator(_schemaSettings);
         var schema = generator.Generate(typeof(PetOwner));
 
+        // Ensure root schema is an object and has all required properties
+        schema.Type = JsonObjectType.Object;
+        schema.AllowAdditionalProperties = false;
+
+        // Clear any existing definitions - we only want the ones we explicitly add
+        schema.Definitions.Clear();
+
         // Find the polymorphic property (pet property)
         var targetProperty = FindPolymorphicProperty(schema);
         
@@ -168,6 +175,25 @@ public class PetOwnerManager
                 {
                     Reference = schema.Definitions[type.Name]
                 });
+            }
+        }
+
+        // Ensure required properties are present
+        var required = new[] { "name", "surname", "address", "pet" };
+        foreach (var prop in required)
+        {
+            if (!schema.RequiredProperties.Contains(prop))
+            {
+                schema.RequiredProperties.Add(prop);
+            }
+        }
+
+        // Ensure all required properties exist in the schema
+        foreach (var prop in required)
+        {
+            if (!schema.Properties.ContainsKey(prop))
+            {
+                schema.Properties[prop] = new JsonSchemaProperty { Type = JsonObjectType.String };
             }
         }
 

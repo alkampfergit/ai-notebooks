@@ -449,77 +449,78 @@ public class PolimorphicSchemaTests : SemanticKernelTestBase
         Assert.That(defs2.TryGetProperty("Cat", out _), Is.True, "Manager2 should have Cat definition");
     }
 
-    // [Test]
-    // public async Task GenerateJsonSchema_RealLLMCall_PolymorphicCatOwner()
+    [Test]
+    public async Task GenerateJsonSchema_RealLLMCall_PolymorphicCatOwner()
 
-    //     {
-    //         // Skip test if no API key is available
-    //         var apiKey = Dotenv.Get("OPENAI_API_KEY");
-    //         var endpoint = Dotenv.Get("AZURE_ENDPOINT");
+        {
+            // Skip test if no API key is available
+            var apiKey = Dotenv.Get("OPENAI_API_KEY");
+            var endpoint = Dotenv.Get("AZURE_ENDPOINT");
 
-    //         if (string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(endpoint))
-    //         {
-    //             Assert.Ignore("OPENAI_API_KEY or AZURE_ENDPOINT environment variable not set");
-    //             return;
-    //         }
+            if (string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(endpoint))
+            {
+                Assert.Ignore("OPENAI_API_KEY or AZURE_ENDPOINT environment variable not set");
+                return;
+            }
 
-    //         // Generate the JSON schema for PetOwner class using polymorphic schema generation
-    //         var schemaJson = GeneratePolymorphicJsonSchema<PetOwner>();
-    //         IChatCompletionService chatService = GetCompletionService(apiKey, endpoint, schemaJson);
+            // Generate the JSON schema for PetOwner class using polymorphic schema generation
+            var schemaJson = GeneratePolymorphicJsonSchema<PetOwner>();
+            IChatCompletionService chatService = GetCompletionService(apiKey, endpoint, schemaJson);
 
-    //         var userPrompt = @"Please format this pet owner data into JSON:
-    // Michael Brown lives at 789 Pine Street, Austin, TX 73301. He owns a beautiful orange tabby cat named Whiskers.";
+            var userPrompt = @"Please format this pet owner data into JSON:
+    Michael Brown lives at 789 Pine Street, Austin, TX 73301. He owns a beautiful orange tabby cat named Whiskers.";
 
-    //         var chatHistory = new ChatHistory();
-    //         chatHistory.AddUserMessage(userPrompt);
+            var chatHistory = new ChatHistory();
+            chatHistory.AddUserMessage(userPrompt);
 
-    //         var chatResponseFormat = OpenAI.Chat.ChatResponseFormat.CreateJsonSchemaFormat(
-    //             jsonSchemaFormatName: "pet_owner",
-    //             jsonSchema: BinaryData.FromString(schemaJson),
-    //             jsonSchemaIsStrict: true
-    //         );
-    //         var executionSettings = new OpenAIPromptExecutionSettings
-    //         {
-    //             ResponseFormat = chatResponseFormat
-    //         };
+            var chatResponseFormat = OpenAI.Chat.ChatResponseFormat.CreateJsonSchemaFormat(
+                jsonSchemaFormatName: "pet_owner",
+                jsonSchema: BinaryData.FromString(schemaJson),
+                jsonSchemaIsStrict: true
+            );
+            var executionSettings = new OpenAIPromptExecutionSettings
+            {
+                ResponseFormat = chatResponseFormat
+            };
 
-    //         Console.WriteLine("\nCalling LLM to reformat cat owner data...");
+            Console.WriteLine("\nCalling LLM to reformat cat owner data...");
 
 
-    //         // Test deserialization into our PetOwner class with polymorphic Pet
-    //         try
-    //         {
-    //             // Make the LLM call
-    //             var skResponse = await chatService.GetChatMessageContentAsync(chatHistory, executionSettings);
-    //             var jsonResponse = skResponse.Content;
+            // Test deserialization into our PetOwner class with polymorphic Pet
+            try
+            {
+                // Make the LLM call
+                var skResponse = await chatService.GetChatMessageContentAsync(chatHistory, executionSettings);
+                var jsonResponse = skResponse.Content;
 
-    //             Console.WriteLine("\nLLM Response:");
-    //             Console.WriteLine(jsonResponse);
+                Console.WriteLine("\nLLM Response:");
+                Console.WriteLine(jsonResponse);
 
-    //             var petOwner = JsonConvert.DeserializeObject<PetOwner>(jsonResponse);
+                var manager = new PetOwnerManager().AddDerivedType<Dog>().AddDerivedType<Cat>();
+                var petOwner = manager.DeserializeFromJson(jsonResponse);
 
-    //             Assert.That(petOwner, Is.Not.Null, "Should deserialize to PetOwner object");
-    //             Assert.That(petOwner.Pet, Is.Not.Null, "Pet should not be null");
+                Assert.That(petOwner, Is.Not.Null, "Should deserialize to PetOwner object");
+                Assert.That(petOwner.Pet, Is.Not.Null, "Pet should not be null");
 
-    //             // Verify polymorphic deserialization - should be a Cat
-    //             Assert.That(petOwner.Pet, Is.TypeOf<Cat>(), "Pet should deserialize as Cat type");
+                // Verify polymorphic deserialization - should be a Cat
+                Assert.That(petOwner.Pet, Is.TypeOf<Cat>(), "Pet should deserialize as Cat type");
 
-    //             var cat = petOwner.Pet as Cat;
-    //             Assert.That(cat, Is.Not.Null, "Should be able to cast pet to Cat");
-    //             Assert.That(cat.Color, Is.Not.Null.And.Not.Empty, "Cat color should not be empty");
-    //             Assert.That(cat.Color.ToLower(), Contains.Substring("orange").Or.Contains("tabby"), "Should extract orange/tabby color");
+                var cat = petOwner.Pet as Cat;
+                Assert.That(cat, Is.Not.Null, "Should be able to cast pet to Cat");
+                Assert.That(cat.Color, Is.Not.Null.And.Not.Empty, "Cat color should not be empty");
+                Assert.That(cat.Color.ToLower(), Contains.Substring("orange").Or.Contains("tabby"), "Should extract orange/tabby color");
 
-    //             Console.WriteLine($"✅ Successfully extracted: {petOwner.Name} {petOwner.Surname} with {cat.Color} cat");
-    //             Console.WriteLine("✅ Polymorphic deserialization successful - Pet correctly identified as Cat");
-    //         }
-    //         catch (Exception ex)
-    //         {
+                Console.WriteLine($"✅ Successfully extracted: {petOwner.Name} {petOwner.Surname} with {cat.Color} cat");
+                Console.WriteLine("✅ Polymorphic deserialization successful - Pet correctly identified as Cat");
+            }
+            catch (Exception ex)
+            {
 
-    //             Assert.Fail($"Failed to perform CALL: {ex.Message} - {schemaJson}");
-    //         }
+                Assert.Fail($"Failed to perform CALL: {ex.Message} - {schemaJson}");
+            }
 
-    //         Console.WriteLine("✅ Real LLM call with polymorphic Cat schema validation completed successfully!");
-    //     }
+            Console.WriteLine("✅ Real LLM call with polymorphic Cat schema validation completed successfully!");
+        }
 }
 
 public class PetOwner
