@@ -95,4 +95,9 @@ public class GetCustomerDataToolCall : ToolCall
     /// </summary>
     [Description("The customer's email address to look up")]
     public string Email { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Type discriminator for polymorphic deserialization
+    /// </summary>
+    public override string Type => "get_customer_data_tool_call";
 }

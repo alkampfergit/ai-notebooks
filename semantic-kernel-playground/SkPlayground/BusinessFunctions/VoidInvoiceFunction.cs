@@ -82,4 +82,9 @@ public class VoidInvoiceToolCall : ToolCall
     /// </summary>
     [Description("The reason for voiding the invoice")]
     public string Reason { get; set; }
+
+    /// <summary>
+    /// Type discriminator for polymorphic deserialization
+    /// </summary>
+    public override string Type => "void_invoice_tool_call";
 }

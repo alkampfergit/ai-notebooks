@@ -84,4 +84,9 @@ public class CreateRuleToolCall : ToolCall
     /// </summary>
     [Description("The rule to be created and stored")]
     public string Rule { get; set; }
+
+    /// <summary>
+    /// Type discriminator for polymorphic deserialization
+    /// </summary>
+    public override string Type => "create_rule_tool_call";
 }

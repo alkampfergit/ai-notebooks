@@ -123,4 +123,9 @@ public class IssueInvoiceToolCall : ToolCall
     /// </summary>
     [Description("Discount percentage to apply (0-50%)")]
     public int DiscountPercent { get; set; } = 0;
+
+    /// <summary>
+    /// Type discriminator for polymorphic deserialization
+    /// </summary>
+    public override string Type => "issue_invoice_tool_call";
 }

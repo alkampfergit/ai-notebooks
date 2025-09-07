@@ -55,4 +55,9 @@ public class ReportTaskCompletionToolCall : ToolCall
     /// </summary>
     [Description("A summary of the completed task")]
     public string Summary { get; set; }
+
+    /// <summary>
+    /// Type discriminator for polymorphic deserialization
+    /// </summary>
+    public override string Type => "report_task_completion_tool_call";
 }

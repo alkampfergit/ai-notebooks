@@ -23,5 +23,10 @@ public class NextStep
 
 public abstract class ToolCall
 {
-    
+    /// <summary>
+    /// Discriminator property to identify the tool call type
+    /// </summary>
+    [JsonPropertyName("type")]
+    [Required]
+    public abstract string Type { get; }
 }

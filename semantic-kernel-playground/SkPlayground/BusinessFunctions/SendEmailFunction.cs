@@ -95,4 +95,9 @@ public class SendEmailToolCall : ToolCall
     /// </summary>
     [Description("The email address of the recipient")]
     public string RecipientEmail { get; set; }
+
+    /// <summary>
+    /// Type discriminator for polymorphic deserialization
+    /// </summary>
+    public override string Type => "send_email_tool_call";
 }

@@ -8,7 +8,8 @@
       "Bash(dotnet add reference:*)",
       "Bash(dotnet test)",
       "Bash(dotnet sln:*)",
-      "Bash(dotnet test:*)"
+      "Bash(dotnet test:*)",
+      "Bash(dotnet script:*)"
     ],
     "deny": [],
     "ask": []
