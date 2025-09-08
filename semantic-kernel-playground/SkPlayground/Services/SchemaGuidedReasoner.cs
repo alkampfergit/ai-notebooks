@@ -57,7 +57,7 @@ public class SchemaGuidedReasoner
         };
 
         // Initialize the business function factory
-        _functionFactory = new BusinessFunctionFactory(_jsonOptions, _databaseService);
+        _functionFactory = new BusinessFunctionFactory(_databaseService);
 
         // Initialize conversation history with system prompt for structured JSON responses
         _systemPrompt = $@"

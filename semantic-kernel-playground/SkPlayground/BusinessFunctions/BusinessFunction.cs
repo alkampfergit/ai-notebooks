@@ -15,25 +15,6 @@ namespace SkPlayground.BusinessFunctions;
 /// </summary>
 public abstract class BusinessFunction
 {
-    protected readonly JsonSerializerOptions _jsonOptions;
-
-    protected BusinessFunction(JsonSerializerOptions jsonOptions)
-    {
-        _jsonOptions = jsonOptions;
-    }
-
-    /// <summary>
-    /// **Abstract execute method** that must be implemented by derived classes
-    /// to handle JSON parameter deserialization and business logic execution.
-    /// 
-    /// This method provides the common contract for all business functions
-    /// while allowing each implementation to handle its specific parameter types.
-    /// </summary>
-    /// <param name="jsonParameters">JSON string representation of the parameters</param>
-    /// <param name="cancellationToken">Cancellation token to support cooperative cancellation</param>
-    /// <returns>BusinessFunctionResult containing both result object and summary description</returns>
-    public abstract Task<BusinessFunctionResult> ExecuteAsync(string jsonParameters, CancellationToken cancellationToken = default);
-
     /// <summary>
     /// **Execute method that accepts a NextStep instance** for direct parameter passing
     /// without JSON serialization. This enables type-safe execution when the parameter
@@ -62,37 +43,6 @@ public abstract class BusinessFunction
 /// <typeparam name="T">The parameter type for this business function</typeparam>
 public abstract class BusinessFunction<T> : BusinessFunction where T : class
 {
-    protected BusinessFunction(JsonSerializerOptions jsonOptions) : base(jsonOptions)
-    {
-    }
-
-    /// <summary>
-    /// **Main entry point** that accepts JSON string parameters and deserializes them
-    /// to the strongly-typed parameter object before calling the concrete implementation.
-    /// 
-    /// This method implements the **Template Method Pattern** by:
-    /// 1. Deserializing JSON to typed parameters
-    /// 2. Calling the concrete ExecuteAsync method
-    /// 3. Handling any serialization errors gracefully
-    /// </summary>
-    /// <param name="jsonParameters">JSON string representation of the parameters</param>
-    /// <param name="cancellationToken">Cancellation token to support cooperative cancellation</param>
-    /// <returns>BusinessFunctionResult containing both result object and summary description</returns>
-    public override async Task<BusinessFunctionResult> ExecuteAsync(string jsonParameters, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var parameters = JsonSerializer.Deserialize<T>(jsonParameters, _jsonOptions)
-                ?? throw new ArgumentException("Failed to deserialize parameters", nameof(jsonParameters));
-            
-            return await ExecuteAsync(parameters, cancellationToken);
-        }
-        catch (JsonException ex)
-        {
-            throw new ArgumentException($"Invalid JSON parameters: {ex.Message}", nameof(jsonParameters), ex);
-        }
-    }
-
     /// <summary>
     /// **Execute method that accepts a NextStep instance** and casts it to the specific type T.
     /// This provides a way to execute the function with a strongly-typed NextStep parameter.

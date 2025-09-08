@@ -16,8 +16,8 @@ public class VoidInvoiceFunction : BusinessFunction<VoidInvoiceToolCall>
 {
     private readonly DatabaseService _databaseService;
 
-    public VoidInvoiceFunction(JsonSerializerOptions jsonOptions, DatabaseService databaseService) 
-        : base(jsonOptions)
+    public VoidInvoiceFunction(DatabaseService databaseService) 
+        : base()
     {
         _databaseService = databaseService;
     }
@@ -76,7 +76,7 @@ public class VoidInvoiceToolCall : ToolCall
     /// </summary>
     [Description("The unique identifier of the invoice to void")]
     [Required]
-    public string InvoiceId { get; set; }
+    public required string InvoiceId { get; set; }
 
     /// <summary>
     /// **Voiding reason** - explanation for why the invoice is being
@@ -84,7 +84,7 @@ public class VoidInvoiceToolCall : ToolCall
     /// </summary>
     [Description("The reason for voiding the invoice")]
     [Required]
-    public string Reason { get; set; }
+    public required string Reason { get; set; }
 
     /// <summary>
     /// Type discriminator for polymorphic deserialization

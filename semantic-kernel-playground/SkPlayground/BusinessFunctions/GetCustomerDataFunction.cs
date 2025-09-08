@@ -17,8 +17,8 @@ public class GetCustomerDataFunction : BusinessFunction<GetCustomerDataToolCall>
 {
     private readonly DatabaseService _databaseService;
 
-    public GetCustomerDataFunction(JsonSerializerOptions jsonOptions, DatabaseService databaseService)
-        : base(jsonOptions)
+    public GetCustomerDataFunction(DatabaseService databaseService)
+        : base()
     {
         _databaseService = databaseService;
     }

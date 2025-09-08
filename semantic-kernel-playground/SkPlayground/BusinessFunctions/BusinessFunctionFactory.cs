@@ -1,14 +1,8 @@
-using Fasterflect;
 using SkPlayground.Models;
 using SkPlayground.Services;
-using System.ComponentModel;
-using System.Reflection;
+using SkPlayground.Utils;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.Json.Schema;
-using System.Text.Json.Serialization.Metadata;
-using Json.Schema;
-using Json.Schema.Generation;
 
 namespace SkPlayground.BusinessFunctions;
 
@@ -45,29 +39,40 @@ public class FunctionInformations
 /// 
 /// This factory provides a centralized way to:
 /// - Create instances of all business functions with proper dependencies
-/// - Generate JSON schemas for function parameters using System.Text.Json
+/// - Generate JSON schemas for function parameters using PolymorphicSchemaManager
 /// - Maintain consistency between parameter types and function implementations
 /// - Store function information in a dictionary for easy access by name
 /// - Enable dependency injection and configuration management
-/// - Support structured LLM responses with JSON schema validation
+/// - Support structured LLM responses with JSON schema validation and polymorphic deserialization
 /// </summary>
 public class BusinessFunctionFactory
 {
     private readonly Dictionary<string, FunctionInformations> _functions;
-    private readonly JsonSerializerOptions _jsonOptions;
+
+    private readonly PolymorphicSchemaManager<NextStep, ToolCall> _schemaManager;
 
     /// <summary>
-    /// **Constructor that initializes all business functions with JSON schemas**.
+    /// **Constructor that initializes all business functions with polymorphic schema support**.
     /// 
-    /// Creates all function instances with proper dependencies and generates corresponding
-    /// JSON schemas for structured LLM responses.
+    /// Creates all function instances with proper dependencies and configures the PolymorphicSchemaManager
+    /// for NextStep/ToolCall polymorphic handling and JSON schema generation.
     /// </summary>
     /// <param name="jsonOptions">JSON serialization options for parameter handling</param>
     /// <param name="databaseService">Database service instance for all functions</param>
-    public BusinessFunctionFactory(JsonSerializerOptions jsonOptions, DatabaseService databaseService)
+    public BusinessFunctionFactory(DatabaseService databaseService)
     {
-        _jsonOptions = jsonOptions;
-        _functions = CreateAllFunctions(jsonOptions, databaseService);
+        // **Initialize PolymorphicSchemaManager with all ToolCall derived types**
+        _schemaManager = new PolymorphicSchemaManager<NextStep, ToolCall>("type")
+            .AddDerivedTypes(
+                typeof(ReportTaskCompletionToolCall),
+                typeof(SendEmailToolCall), 
+                typeof(IssueInvoiceToolCall),
+                typeof(GetCustomerDataToolCall),
+                typeof(VoidInvoiceToolCall),
+                typeof(CreateRuleToolCall)
+            );
+            
+        _functions = CreateAllFunctions(databaseService);
     }
 
     /// <summary>
@@ -76,38 +81,33 @@ public class BusinessFunctionFactory
     /// This method instantiates all concrete business functions with:
     /// - Shared JSON serialization options for consistency
     /// - Database service for data operations
-    /// - Generated JSON schemas for each parameter type
+    /// - JSON schemas managed by PolymorphicSchemaManager
     /// - Proper dependency injection pattern
     /// </summary>
     /// <param name="jsonOptions">JSON serialization options for parameter handling</param>
     /// <param name="databaseService">Database service instance for all functions</param>
     /// <returns>Dictionary mapping function names to function information with JSON schemas</returns>
     private Dictionary<string, FunctionInformations> CreateAllFunctions(
-        JsonSerializerOptions jsonOptions,
         DatabaseService databaseService)
     {
-        // Create business function instances
-        var reportTaskCompletionFunc = new ReportTaskCompletionFunction(jsonOptions);
-        var sendEmailFunc = new SendEmailFunction(jsonOptions, databaseService);
-        var issueInvoiceFunc = new IssueInvoiceFunction(jsonOptions, databaseService);
-        var getCustomerDataFunc = new GetCustomerDataFunction(jsonOptions, databaseService);
-        var voidInvoiceFunc = new VoidInvoiceFunction(jsonOptions, databaseService);
-        var createRuleFunc = new CreateRuleFunction(jsonOptions, databaseService);
+        // **Create business function instances**
+        var reportTaskCompletionFunc = new ReportTaskCompletionFunction();
+        var sendEmailFunc = new SendEmailFunction(databaseService);
+        var issueInvoiceFunc = new IssueInvoiceFunction(databaseService);
+        var getCustomerDataFunc = new GetCustomerDataFunction(databaseService);
+        var voidInvoiceFunc = new VoidInvoiceFunction(databaseService);
+        var createRuleFunc = new CreateRuleFunction(databaseService);
 
-        // Generate JSON schemas for each parameter type using JsonSchema.Net
-        var schemaConfig = new SchemaGeneratorConfiguration
-        {
-            PropertyNameResolver = PropertyNameResolvers.CamelCase
-        };
-        
-        var reportTaskCompletionSchema = JsonNode.Parse(JsonSerializer.Serialize(new JsonSchemaBuilder().FromType<ReportTaskCompletionToolCall>(schemaConfig).Build()));
-        var sendEmailSchema = JsonNode.Parse(JsonSerializer.Serialize(new JsonSchemaBuilder().FromType<SendEmailToolCall>(schemaConfig).Build()));
-        var issueInvoiceSchema = JsonNode.Parse(JsonSerializer.Serialize(new JsonSchemaBuilder().FromType<IssueInvoiceToolCall>(schemaConfig).Build()));
-        var getCustomerDataSchema = JsonNode.Parse(JsonSerializer.Serialize(new JsonSchemaBuilder().FromType<GetCustomerDataToolCall>(schemaConfig).Build()));
-        var voidInvoiceSchema = JsonNode.Parse(JsonSerializer.Serialize(new JsonSchemaBuilder().FromType<VoidInvoiceToolCall>(schemaConfig).Build()));
-        var createRuleSchema = JsonNode.Parse(JsonSerializer.Serialize(new JsonSchemaBuilder().FromType<CreateRuleToolCall>(schemaConfig).Build()));
+        // **Generate individual schemas for each ToolCall type using PolymorphicSchemaManager**
+        // This allows getting schema for specific tool call types when needed
+        var reportTaskCompletionSchema = JsonNode.Parse(_schemaManager.GenerateSchema(new[] { typeof(ReportTaskCompletionToolCall) }));
+        var sendEmailSchema = JsonNode.Parse(_schemaManager.GenerateSchema(new[] { typeof(SendEmailToolCall) }));
+        var issueInvoiceSchema = JsonNode.Parse(_schemaManager.GenerateSchema(new[] { typeof(IssueInvoiceToolCall) }));
+        var getCustomerDataSchema = JsonNode.Parse(_schemaManager.GenerateSchema(new[] { typeof(GetCustomerDataToolCall) }));
+        var voidInvoiceSchema = JsonNode.Parse(_schemaManager.GenerateSchema(new[] { typeof(VoidInvoiceToolCall) }));
+        var createRuleSchema = JsonNode.Parse(_schemaManager.GenerateSchema(new[] { typeof(CreateRuleToolCall) }));
 
-        // Return dictionary with function information including JSON schemas
+        // **Return dictionary with function information including JSON schemas**
         return new Dictionary<string, FunctionInformations>
         {
             ["reportTaskCompletion"] = new FunctionInformations(reportTaskCompletionFunc, typeof(ReportTaskCompletionToolCall), reportTaskCompletionSchema),
@@ -141,111 +141,48 @@ public class BusinessFunctionFactory
     }
 
     /// <summary>
-    /// **Generates JSON schema for NextStep type** using JsonSchema.Net.
+    /// **Generates JSON schema for NextStep type** using PolymorphicSchemaManager.
     /// 
-    /// This method creates a JSON schema definition that's compatible with OpenAI's
-    /// response_format requirements, including additionalProperties: false recursively.
+    /// This method creates an OpenAI-compatible JSON schema definition that includes
+    /// all configured ToolCall types with proper polymorphic support and discriminators.
+    /// The schema is automatically configured with additionalProperties: false and proper
+    /// const/enum discriminators for each ToolCall type.
     /// </summary>
-    /// <returns>JSON schema string representing the NextStep structure</returns>
+    /// <returns>JSON schema string representing the NextStep structure with polymorphic ToolCall support</returns>
     public string GenerateJsonSchemaForToolCall()
     {
-        // Configure JsonSchema.Net generation options for OpenAI compatibility
-        var configuration = new SchemaGeneratorConfiguration
-        {
-            // Use camelCase property naming to match our JSON serialization
-            PropertyNameResolver = PropertyNameResolvers.CamelCase,  
-        };
-
-        // Generate schema using JsonSchema.Net
-        var schema = new JsonSchemaBuilder()
-            .FromType<NextStep>(configuration)
-            .Build();
-
-        // Convert to JsonNode to recursively add additionalProperties: false
-        var schemaJson = JsonSerializer.Serialize(schema);
-        var schemaNode = JsonNode.Parse(schemaJson);
-        
-        // Recursively set additionalProperties to false for all objects
-        SetAdditionalPropertiesFalseRecursively(schemaNode);
-        
-        // Convert back to formatted JSON string
-        return schemaNode.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        // **Use PolymorphicSchemaManager to generate complete schema with all ToolCall types**
+        // This automatically handles:
+        // - Polymorphic ToolCall property with anyOf constraint
+        // - Const discriminators for each derived type  
+        // - additionalProperties: false recursively
+        // - OpenAI compatibility requirements
+        return _schemaManager.GenerateSchema();
     }
 
     /// <summary>
-    /// Helper method to safely check if a JsonNode represents the "object" type.
-    /// JSON Schema allows type to be either a string or an array of strings.
+    /// **Deserializes JSON into a NextStep object with polymorphic ToolCall support**.
+    /// 
+    /// This method uses the PolymorphicSchemaManager to properly deserialize NextStep objects
+    /// where the ToolCall property can be any of the configured derived types. The correct
+    /// concrete ToolCall type is determined by the "type" discriminator property.
     /// </summary>
-    private static bool IsObjectType(JsonNode? typeNode)
+    /// <param name="json">JSON string to deserialize</param>
+    /// <returns>NextStep object with correctly typed ToolCall property</returns>
+    public NextStep? DeserializeNextStep(string json)
     {
-        if (typeNode is JsonValue jsonValue)
-        {
-            // Single type as string
-            try
-            {
-                return jsonValue.GetValue<string>() == "object";
-            }
-            catch
-            {
-                return false;
-            }
-        }
-        else if (typeNode is JsonArray jsonArray)
-        {
-            // Array of types
-            return jsonArray.Any(item => 
-                item is JsonValue value && 
-                value.TryGetValue<string>(out var str) && 
-                str == "object");
-        }
-        
-        return false;
+        // **Use PolymorphicSchemaManager for proper polymorphic deserialization**
+        // This automatically handles discriminator-based type resolution for ToolCall property
+        return _schemaManager.DeserializeFromJson(json);
     }
 
     /// <summary>
-    /// Recursively sets additionalProperties to false and makes all properties required for all object types in the schema.
-    /// This ensures OpenAI compatibility by preventing additional properties and requiring all defined properties.
+    /// **Provides access to the PolymorphicSchemaManager instance** for advanced schema operations.
+    /// 
+    /// This allows external components to:
+    /// - Generate schemas with specific ToolCall type subsets
+    /// - Access polymorphic deserialization capabilities
+    /// - Perform schema validation and type checking
     /// </summary>
-    private static void SetAdditionalPropertiesFalseRecursively(JsonNode? node)
-    {
-        if (node is JsonObject obj)
-        {
-            // If this object has type "object", set additionalProperties to false
-            // Handle both string type and array of types (JSON Schema supports both)
-            if (obj.ContainsKey("type") && IsObjectType(obj["type"]))
-            {
-                obj["additionalProperties"] = false;
-
-                // For OpenAI compatibility with additionalProperties: false,
-                // ALL properties must be in the required array, not just those with [Required] attributes
-                if (obj.ContainsKey("properties") && obj["properties"] is JsonObject properties)
-                {
-                    var requiredArray = new JsonArray();
-                    foreach (var property in properties)
-                    {
-                        requiredArray.Add(property.Key);
-                    }
-                    
-                    if (requiredArray.Count > 0)
-                    {
-                        obj["required"] = requiredArray;
-                    }
-                }
-            }
-
-            // Recursively process all child nodes
-            foreach (var kvp in obj.ToArray())
-            {
-                SetAdditionalPropertiesFalseRecursively(kvp.Value);
-            }
-        }
-        else if (node is JsonArray array)
-        {
-            // Recursively process array elements
-            foreach (var item in array)
-            {
-                SetAdditionalPropertiesFalseRecursively(item);
-            }
-        }
-    }
+    public PolymorphicSchemaManager<NextStep, ToolCall> SchemaManager => _schemaManager;
 }

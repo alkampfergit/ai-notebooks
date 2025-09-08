@@ -18,8 +18,8 @@ public class SendEmailFunction : BusinessFunction<SendEmailToolCall>
 {
     private readonly DatabaseService _databaseService;
 
-    public SendEmailFunction(JsonSerializerOptions jsonOptions, DatabaseService databaseService) 
-        : base(jsonOptions)
+    public SendEmailFunction(DatabaseService databaseService) 
+        : base()
     {
         _databaseService = databaseService;
     }
@@ -75,7 +75,7 @@ public class SendEmailToolCall : ToolCall
     /// </summary>
     [Description("The subject line of the email")]
     [Required]
-    public string Subject { get; set; }
+    public required string Subject { get; set; }
 
     /// <summary>
     /// **Email body content** - the main message text that will be
@@ -83,7 +83,7 @@ public class SendEmailToolCall : ToolCall
     /// </summary>
     [Description("The body content of the email")]
     [Required]
-    public string Message { get; set; }
+    public required string Message { get; set; }
 
     /// <summary>
     /// **File attachments** - list of file paths to be attached to the email.
@@ -98,7 +98,7 @@ public class SendEmailToolCall : ToolCall
     /// </summary>
     [Description("The email address of the recipient")]
     [Required]
-    public string RecipientEmail { get; set; }
+    public required string RecipientEmail { get; set; }
 
     /// <summary>
     /// Type discriminator for polymorphic deserialization

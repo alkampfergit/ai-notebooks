@@ -17,8 +17,8 @@ public class IssueInvoiceFunction : BusinessFunction<IssueInvoiceToolCall>
 {
     private readonly DatabaseService _databaseService;
 
-    public IssueInvoiceFunction(JsonSerializerOptions jsonOptions, DatabaseService databaseService) 
-        : base(jsonOptions)
+    public IssueInvoiceFunction(DatabaseService databaseService) 
+        : base()
     {
         _databaseService = databaseService;
     }
@@ -110,7 +110,7 @@ public class IssueInvoiceToolCall : ToolCall
     /// </summary>
     [Description("The customer's email address for the invoice")]
     [Required]
-    public string Email { get; set; }
+    public required string Email { get; set; }
 
     /// <summary>
     /// **Product SKUs list** - collection of product identifiers

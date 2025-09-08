@@ -17,8 +17,7 @@ public class CreateRuleFunction : BusinessFunction<CreateRuleToolCall>
 {
     private readonly DatabaseService _databaseService;
 
-    public CreateRuleFunction(JsonSerializerOptions jsonOptions, DatabaseService databaseService) 
-        : base(jsonOptions)
+    public CreateRuleFunction(DatabaseService databaseService) : base()
     {
         _databaseService = databaseService;
     }
@@ -78,7 +77,7 @@ public class CreateRuleToolCall : ToolCall
     /// </summary>
     [Description("The customer's email address for the rule")]
     [Required]
-    public string Email { get; set; }
+    public required string Email { get; set; }
 
     /// <summary>
     /// **Business rule definition** - the specific rule logic or condition
@@ -86,7 +85,7 @@ public class CreateRuleToolCall : ToolCall
     /// </summary>
     [Description("The rule to be created and stored")]
     [Required]
-    public string Rule { get; set; }
+    public required string Rule { get; set; }
 
     /// <summary>
     /// Type discriminator for polymorphic deserialization

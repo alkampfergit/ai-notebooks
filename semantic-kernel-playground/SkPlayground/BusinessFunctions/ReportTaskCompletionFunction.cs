@@ -14,7 +14,7 @@ namespace SkPlayground.BusinessFunctions;
 /// </summary>
 public class ReportTaskCompletionFunction : BusinessFunction<ReportTaskCompletionToolCall>
 {
-    public ReportTaskCompletionFunction(JsonSerializerOptions jsonOptions) : base(jsonOptions)
+    public ReportTaskCompletionFunction() : base()
     {
     }
 
@@ -56,7 +56,7 @@ public class ReportTaskCompletionToolCall : ToolCall
     /// </summary>
     [Description("A summary of the completed task")]
     [Required]
-    public string Summary { get; set; }
+    public required string Summary { get; set; }
 
     /// <summary>
     /// Type discriminator for polymorphic deserialization
