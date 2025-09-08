@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using SkPlayground.Models;
 using SkPlayground.Services;
@@ -108,6 +109,7 @@ public class IssueInvoiceToolCall : ToolCall
     /// the invoice is being generated and delivered.
     /// </summary>
     [Description("The customer's email address for the invoice")]
+    [Required]
     public string Email { get; set; }
 
     /// <summary>
@@ -115,6 +117,7 @@ public class IssueInvoiceToolCall : ToolCall
     /// to be included in the invoice for pricing calculation.
     /// </summary>
     [Description("List of product SKUs to include in the invoice")]
+    [Required]
     public required List<string> Skus { get; set; }
 
     /// <summary>

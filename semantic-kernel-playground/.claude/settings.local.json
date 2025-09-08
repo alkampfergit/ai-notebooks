@@ -9,7 +9,8 @@
       "Bash(dotnet test)",
       "Bash(dotnet sln:*)",
       "Bash(dotnet test:*)",
-      "Bash(dotnet script:*)"
+      "Bash(dotnet script:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

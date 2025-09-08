@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using SkPlayground.Models;
 using SkPlayground.Services;
@@ -76,6 +77,7 @@ public class CreateRuleToolCall : ToolCall
     /// the custom business rule is being created and applied.
     /// </summary>
     [Description("The customer's email address for the rule")]
+    [Required]
     public string Email { get; set; }
 
     /// <summary>
@@ -83,6 +85,7 @@ public class CreateRuleToolCall : ToolCall
     /// that will be created and stored for this customer.
     /// </summary>
     [Description("The rule to be created and stored")]
+    [Required]
     public string Rule { get; set; }
 
     /// <summary>

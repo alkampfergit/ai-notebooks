@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using SkPlayground.Models;
@@ -73,6 +74,7 @@ public class SendEmailToolCall : ToolCall
     /// that appears in the recipient's inbox.
     /// </summary>
     [Description("The subject line of the email")]
+    [Required]
     public string Subject { get; set; }
 
     /// <summary>
@@ -80,6 +82,7 @@ public class SendEmailToolCall : ToolCall
     /// delivered to the recipient.
     /// </summary>
     [Description("The body content of the email")]
+    [Required]
     public string Message { get; set; }
 
     /// <summary>
@@ -94,6 +97,7 @@ public class SendEmailToolCall : ToolCall
     /// where the message will be delivered.
     /// </summary>
     [Description("The email address of the recipient")]
+    [Required]
     public string RecipientEmail { get; set; }
 
     /// <summary>

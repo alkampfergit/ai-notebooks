@@ -1,6 +1,7 @@
 using SkPlayground.Models;
 using SkPlayground.Services;
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 
 namespace SkPlayground.BusinessFunctions;
@@ -94,6 +95,7 @@ public class GetCustomerDataToolCall : ToolCall
     /// and retrieve all associated customer data across the system.
     /// </summary>
     [Description("The customer's email address to look up")]
+    [Required]
     public string Email { get; set; } = string.Empty;
 
     /// <summary>

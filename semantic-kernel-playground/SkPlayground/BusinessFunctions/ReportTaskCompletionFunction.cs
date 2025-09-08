@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using SkPlayground.Models;
 
@@ -54,6 +55,7 @@ public class ReportTaskCompletionToolCall : ToolCall
     /// overview of what was accomplished during the workflow execution.
     /// </summary>
     [Description("A summary of the completed task")]
+    [Required]
     public string Summary { get; set; }
 
     /// <summary>

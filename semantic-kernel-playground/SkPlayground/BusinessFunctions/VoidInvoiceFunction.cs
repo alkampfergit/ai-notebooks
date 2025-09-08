@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using SkPlayground.Models;
 using SkPlayground.Services;
@@ -74,6 +75,7 @@ public class VoidInvoiceToolCall : ToolCall
     /// that needs to be cancelled/voided in the system.
     /// </summary>
     [Description("The unique identifier of the invoice to void")]
+    [Required]
     public string InvoiceId { get; set; }
 
     /// <summary>
@@ -81,6 +83,7 @@ public class VoidInvoiceToolCall : ToolCall
     /// cancelled, required for audit trail and compliance purposes.
     /// </summary>
     [Description("The reason for voiding the invoice")]
+    [Required]
     public string Reason { get; set; }
 
     /// <summary>

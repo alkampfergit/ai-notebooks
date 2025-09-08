@@ -173,6 +173,36 @@ public class BusinessFunctionFactory
     }
 
     /// <summary>
+    /// Helper method to safely check if a JsonNode represents the "object" type.
+    /// JSON Schema allows type to be either a string or an array of strings.
+    /// </summary>
+    private static bool IsObjectType(JsonNode? typeNode)
+    {
+        if (typeNode is JsonValue jsonValue)
+        {
+            // Single type as string
+            try
+            {
+                return jsonValue.GetValue<string>() == "object";
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        else if (typeNode is JsonArray jsonArray)
+        {
+            // Array of types
+            return jsonArray.Any(item => 
+                item is JsonValue value && 
+                value.TryGetValue<string>(out var str) && 
+                str == "object");
+        }
+        
+        return false;
+    }
+
+    /// <summary>
     /// Recursively sets additionalProperties to false and makes all properties required for all object types in the schema.
     /// This ensures OpenAI compatibility by preventing additional properties and requiring all defined properties.
     /// </summary>
@@ -181,11 +211,13 @@ public class BusinessFunctionFactory
         if (node is JsonObject obj)
         {
             // If this object has type "object", set additionalProperties to false
-            if (obj.ContainsKey("type") && obj["type"]?.GetValue<string>() == "object")
+            // Handle both string type and array of types (JSON Schema supports both)
+            if (obj.ContainsKey("type") && IsObjectType(obj["type"]))
             {
                 obj["additionalProperties"] = false;
 
-                // If this object has properties, make all of them required
+                // For OpenAI compatibility with additionalProperties: false,
+                // ALL properties must be in the required array, not just those with [Required] attributes
                 if (obj.ContainsKey("properties") && obj["properties"] is JsonObject properties)
                 {
                     var requiredArray = new JsonArray();

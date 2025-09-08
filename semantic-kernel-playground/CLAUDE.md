@@ -9,3 +9,4 @@ The purpose is to quickly experiment then move all the code in a .dib file, a C#
 ## General Rules
 
 - Always verify that the code compiles before considering a task completed.
+- Always verify if the unit tests are all green before considering a task completed.

@@ -279,6 +279,16 @@ public class NextStepManager
             }
         }
 
+        // For OpenAI compatibility with additionalProperties: false,
+        // ALL properties must be in the required array, not just those with [Required] attributes
+        foreach (var property in flattened.Properties)
+        {
+            if (!flattened.RequiredProperties.Contains(property.Key))
+            {
+                flattened.RequiredProperties.Add(property.Key);
+            }
+        }
+
         return flattened;
     }
 
