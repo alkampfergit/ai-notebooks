@@ -182,12 +182,12 @@ public class PolymorphicSchemaManager<TContainer, TPolymorphicBase>
         schema.Type = JsonObjectType.Object;
         schema.AllowAdditionalProperties = false;
 
-        // Find the polymorphic property using reflection
-        var targetPropertyName = GetPolymorphicPropertyName();
+        // Find the polymorphic property (exact same logic as NextStepManager)
+        var targetProperty = FindPolymorphicProperty(schema);
         
-        if (!string.IsNullOrEmpty(targetPropertyName) && schema.Properties.ContainsKey(targetPropertyName))
+        if (!string.IsNullOrEmpty(targetProperty) && schema.Properties.ContainsKey(targetProperty))
         {
-            var polymorphicProp = schema.Properties[targetPropertyName];
+            var polymorphicProp = schema.Properties[targetProperty];
             
             // Use cached schemas for the specified types
             var includedTypesList = typesToInclude.ToList();
@@ -248,6 +248,22 @@ public class PolymorphicSchemaManager<TContainer, TPolymorphicBase>
     }
 
     /// <summary>
+    /// Finds the polymorphic property by looking for properties that reference abstract types
+    /// (copied from NextStepManager)
+    /// </summary>
+    private static string FindPolymorphicProperty(JsonSchema schema)
+    {
+        foreach (var property in schema.Properties)
+        {
+            if (property.Value.Reference != null || property.Value.AnyOf.Count > 0 || property.Value.OneOf.Count > 0)
+            {
+                return property.Key;
+            }
+        }
+        return string.Empty;
+    }
+
+    /// <summary>
     /// Gets the name of the polymorphic property using camelCase naming convention
     /// </summary>
     private string GetPolymorphicPropertyName()
@@ -267,9 +283,8 @@ public class PolymorphicSchemaManager<TContainer, TPolymorphicBase>
 
         foreach (var prop in properties)
         {
-            // Convert to camelCase for JSON schema
-            var jsonPropertyName = char.ToLower(prop.Name[0]) + prop.Name[1..];
-            requiredProps.Add(jsonPropertyName);
+            // Use PascalCase to match NJsonSchema default naming convention
+            requiredProps.Add(prop.Name);
         }
 
         return requiredProps;
