@@ -170,7 +170,7 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
         );
         var executionSettings = new OpenAIPromptExecutionSettings
         {
-            ResponseFormat = typeof(NextStep)
+            ResponseFormat = chatResponseFormat
         };
 
         var response = await _chatService.GetChatMessageContentAsync(chatHistory, executionSettings);
@@ -179,6 +179,6 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
         var openAIResponse = (OpenAIChatMessageContent)response;
         var jsonContent = openAIResponse.Content ?? string.Empty;
 
-        return JsonSerializer.Deserialize<NextStep>(jsonContent, _jsonOptions);
+        return _functionFactory.DeserializeNextStep(jsonContent);
     }
 }

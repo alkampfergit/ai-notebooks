@@ -157,7 +157,7 @@ public class BusinessFunctionFactory
         // - Const discriminators for each derived type  
         // - additionalProperties: false recursively
         // - OpenAI compatibility requirements
-        return _schemaManager.GenerateSchema();
+        return _schemaManager.GenerateSchema([typeof(SendEmailToolCall)]);
     }
 
     /// <summary>
