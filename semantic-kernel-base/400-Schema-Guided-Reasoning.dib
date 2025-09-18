@@ -1,0 +1,542 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp","languageName":"C#","aliases":["c#","cs"]},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"kql","languageName":"KQL"},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"sql","languageName":"SQL"},{"name":"value"}]}}
+
+#!csharp
+
+#!import ../dotenv.cs
+#r "nuget: Microsoft.SemanticKernel"
+#r "nuget: Microsoft.Extensions.Logging"
+#r "nuget: Microsoft.Extensions.Logging.Console"
+#r "nuget: Microsoft.Extensions.Logging.Debug"
+#r "nuget: System.Text.Json"
+#r "nuget: Microsoft.Extensions.Options.DataAnnotations"
+
+#!markdown
+
+# Schema-Guided Reasoning with C# and Semantic Kernel
+
+This notebook demonstrates the Schema-Guided Reasoning (SGR) pattern, translating the Python example from [abdullin.com](https://abdullin.com/schema-guided-reasoning/demo) to C# using Semantic Kernel.
+
+Key concepts:
+- **Structured Tool Definitions**: Use strongly typed classes to define tool interfaces
+- **Reasoning Schema**: Guide the LLM's reasoning with structured schemas
+- **Dispatch Mechanism**: Centralized tool execution with simulated database interactions
+- **Conversation Context**: Maintain conversation logs for accumulated reasoning
+
+#!csharp
+
+using Microsoft.SemanticKernel;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using System.Net.Http;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.ComponentModel;
+
+// Setup kernel with local LM Studio or OpenAI
+//var redirectUrl = "http://10.0.0.39:1234/v1"; // Local LM Studio
+var redirectUrl = "https://api.openai.com/v1"; // OpenAI
+
+var kernelBuilder = Kernel.CreateBuilder();
+kernelBuilder.Services.AddLogging(l => l
+    .SetMinimumLevel(LogLevel.Warning)
+    .AddConsole()
+    .AddDebug()
+);
+
+var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+
+var deployment = Dotenv.Get("OPENAI_DEFAULT_DEPLOYMENT");
+#pragma warning disable SKEXP0010 // Suppress the warning for evaluation purposes
+kernelBuilder.AddOpenAIChatCompletion(
+    modelId: deployment, 
+    apiKey: null,
+    endpoint: new Uri(redirectUrl),
+    httpClient: httpClient); 
+#pragma warning restore SKEXP0010
+
+var kernel = kernelBuilder.Build();
+
+#!markdown
+
+## Define Tool Schemas
+
+We'll create strongly typed classes representing different tools the LLM can use, with discriminated union pattern for routing.
+
+#!csharp
+
+using Microsoft.Extensions.Options;
+
+// Base abstract class for all tools
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "tool")]
+[JsonDerivedType(typeof(ReportTaskCompletion), "report_task_completion")]
+[JsonDerivedType(typeof(SendEmail), "send_email")]
+[JsonDerivedType(typeof(IssueInvoice), "issue_invoice")]
+[JsonDerivedType(typeof(QueryDatabase), "query_database")]
+[JsonDerivedType(typeof(UpdateDatabase), "update_database")]
+public abstract record ToolFunction
+{
+    [JsonPropertyName("tool")]
+    public abstract string Tool { get; }
+}
+
+// Tool implementations
+public record ReportTaskCompletion : ToolFunction
+{
+    public override string Tool => "report_task_completion";
+    
+    [JsonPropertyName("summary")]
+    [Required]
+    public required string Summary { get; init; }
+}
+
+public record SendEmail : ToolFunction
+{
+    public override string Tool => "send_email";
+    
+    [JsonPropertyName("to")]
+    [Required]
+    [EmailAddress]
+    public required string To { get; init; }
+    
+    [JsonPropertyName("subject")]
+    [Required]
+    public required string Subject { get; init; }
+    
+    [JsonPropertyName("body")]
+    [Required]
+    public required string Body { get; init; }
+}
+
+public record IssueInvoice : ToolFunction
+{
+    public override string Tool => "issue_invoice";
+    
+    [JsonPropertyName("email")]
+    [Required]
+    [EmailAddress]
+    public required string Email { get; init; }
+    
+    [JsonPropertyName("skus")]
+    [Required]
+    public required List<string> Skus { get; init; }
+    
+    [JsonPropertyName("discount_percent")]
+    [Range(0, 50)]
+    public int DiscountPercent { get; init; } = 0;
+}
+
+public record QueryDatabase : ToolFunction
+{
+    public override string Tool => "query_database";
+    
+    [JsonPropertyName("query")]
+    [Required]
+    public required string Query { get; init; }
+}
+
+public record UpdateDatabase : ToolFunction
+{
+    public override string Tool => "update_database";
+    
+    [JsonPropertyName("table")]
+    [Required]
+    public required string Table { get; init; }
+    
+    [JsonPropertyName("updates")]
+    [Required]
+    public required Dictionary<string, object> Updates { get; init; }
+    
+    [JsonPropertyName("where_clause")]
+    [Required]
+    public required string WhereClause { get; init; }
+}
+
+Console.WriteLine("Tool schemas defined successfully!");
+
+#!markdown
+
+## Define Reasoning Schema
+
+The `NextStep` schema guides the LLM's reasoning process, ensuring structured thinking and planning.
+
+#!csharp
+
+public record NextStep
+{
+    [JsonPropertyName("current_state")]
+    [Required]
+    public required string CurrentState { get; init; }
+    
+    [JsonPropertyName("plan_remaining_steps_brief")]
+    [Required]
+    [MinLength(1)]
+    [MaxLength(5)]
+    public required List<string> PlanRemainingStepsBrief { get; init; }
+    
+    [JsonPropertyName("task_completed")]
+    public bool TaskCompleted { get; init; } = false;
+    
+    [JsonPropertyName("function")]
+    [Required]
+    public required ToolFunction Function { get; init; }
+}
+
+// Custom JsonConverter options for proper serialization
+var jsonOptions = new JsonSerializerOptions
+{
+    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+    WriteIndented = true,
+    PropertyNameCaseInsensitive = true,
+    Converters = { new JsonStringEnumConverter() }
+};
+
+Console.WriteLine("Reasoning schema defined!");
+
+#!markdown
+
+## Implement Tool Dispatch System
+
+The dispatch system simulates tool execution and database interactions, returning structured results.
+
+#!csharp
+
+public class ToolDispatcher
+{
+    private readonly Dictionary<string, List<Dictionary<string, object>>> _mockDatabase;
+    private readonly List<string> _emailLog;
+    private readonly List<Dictionary<string, object>> _invoiceLog;
+    
+    public ToolDispatcher()
+    {
+        _mockDatabase = new Dictionary<string, List<Dictionary<string, object>>>
+        {
+            ["customers"] = new()
+            {
+                new() { ["id"] = 1, ["email"] = "john@example.com", ["name"] = "John Doe" },
+                new() { ["id"] = 2, ["email"] = "jane@example.com", ["name"] = "Jane Smith" }
+            },
+            ["products"] = new()
+            {
+                new() { ["sku"] = "LAPTOP001", ["name"] = "Gaming Laptop", ["price"] = 1200.00 },
+                new() { ["sku"] = "MOUSE001", ["name"] = "Wireless Mouse", ["price"] = 25.99 }
+            }
+        };
+        
+        _emailLog = new List<string>();
+        _invoiceLog = new List<Dictionary<string, object>>();
+    }
+    
+    public async Task<string> DispatchAsync(ToolFunction tool)
+    {
+        await Task.Delay(100); // Simulate async operation
+        
+        return tool switch
+        {
+            ReportTaskCompletion completion => HandleTaskCompletion(completion),
+            SendEmail email => HandleSendEmail(email),
+            IssueInvoice invoice => HandleIssueInvoice(invoice),
+            QueryDatabase query => HandleQueryDatabase(query),
+            UpdateDatabase update => HandleUpdateDatabase(update),
+            _ => "Unknown tool type"
+        };
+    }
+    
+    private string HandleTaskCompletion(ReportTaskCompletion completion)
+    {
+        return $"Task completed successfully: {completion.Summary}";
+    }
+    
+    private string HandleSendEmail(SendEmail email)
+    {
+        var logEntry = $"Email sent to {email.To}: '{email.Subject}'";
+        _emailLog.Add(logEntry);
+        Console.WriteLine($"=� {logEntry}");
+        return $"Email sent successfully to {email.To}";
+    }
+    
+    private string HandleIssueInvoice(IssueInvoice invoice)
+    {
+        var products = _mockDatabase["products"];
+        var matchedProducts = products.Where(p => invoice.Skus.Contains(p["sku"].ToString())).ToList();
+        
+        if (!matchedProducts.Any())
+        {
+            return $"Error: No products found for SKUs: {string.Join(", ", invoice.Skus)}";
+        }
+        
+        var total = matchedProducts.Sum(p => Convert.ToDouble(p["price"]));
+        var discountAmount = total * (invoice.DiscountPercent / 100.0);
+        var finalAmount = total - discountAmount;
+        
+        var invoiceRecord = new Dictionary<string, object>
+        {
+            ["email"] = invoice.Email,
+            ["skus"] = invoice.Skus,
+            ["total"] = total,
+            ["discount_percent"] = invoice.DiscountPercent,
+            ["discount_amount"] = discountAmount,
+            ["final_amount"] = finalAmount,
+            ["timestamp"] = DateTime.UtcNow
+        };
+        
+        _invoiceLog.Add(invoiceRecord);
+        
+        Console.WriteLine($"=� Invoice issued to {invoice.Email}: ${finalAmount:F2} (${total:F2} - ${discountAmount:F2} discount)");
+        return $"Invoice issued successfully. Total: ${finalAmount:F2}";
+    }
+    
+    private string HandleQueryDatabase(QueryDatabase query)
+    {
+        Console.WriteLine($"=
+ Executing query: {query.Query}");
+        
+        // Simple query simulation
+        var results = query.Query.ToLower() switch
+        {
+            var q when q.Contains("customers") => _mockDatabase["customers"],
+            var q when q.Contains("products") => _mockDatabase["products"],
+            _ => new List<Dictionary<string, object>>()
+        };
+        
+        return $"Query executed. Found {results.Count} records: {JsonSerializer.Serialize(results, jsonOptions)}";
+    }
+    
+    private string HandleUpdateDatabase(UpdateDatabase update)
+    {
+        Console.WriteLine($" Updating {update.Table} where {update.WhereClause}");
+        return $"Database updated successfully. Table: {update.Table}, Updates: {JsonSerializer.Serialize(update.Updates)}";
+    }
+}
+
+var dispatcher = new ToolDispatcher();
+Console.WriteLine("Tool dispatcher initialized!");
+
+#!markdown
+
+## Create Semantic Kernel Function for Schema-Guided Reasoning
+
+We'll create a Semantic Kernel function that enforces the NextStep schema for structured reasoning.
+
+#!csharp
+
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+using Microsoft.SemanticKernel.ChatCompletion;
+
+public class SchemaGuidedReasoner
+{
+    private readonly Kernel _kernel;
+    private readonly ToolDispatcher _dispatcher;
+    private readonly List<string> _conversationLog;
+    
+    public SchemaGuidedReasoner(Kernel kernel, ToolDispatcher dispatcher)
+    {
+        _kernel = kernel;
+        _dispatcher = dispatcher;
+        _conversationLog = new List<string>();
+    }
+    
+    public async Task<string> ReasonAndActAsync(string userRequest)
+    {
+        _conversationLog.Add($"User: {userRequest}");
+        
+        var systemPrompt = """
+        You are an AI assistant that follows a Schema-Guided Reasoning approach. 
+        
+        You must ALWAYS respond with a JSON object matching the NextStep schema:
+        {
+          "current_state": "string describing what you understand about the current situation",
+          "plan_remaining_steps_brief": ["step1", "step2", "..."] (1-5 brief steps),
+          "task_completed": boolean,
+          "function": {
+            "tool": "tool_name",
+            "...": "tool-specific parameters"
+          }
+        }
+        
+        Available tools:
+        - report_task_completion: {"tool": "report_task_completion", "summary": "string"}
+        - send_email: {"tool": "send_email", "to": "email", "subject": "string", "body": "string"}
+        - issue_invoice: {"tool": "issue_invoice", "email": "email", "skus": ["SKU1", "SKU2"], "discount_percent": 0-50}
+        - query_database: {"tool": "query_database", "query": "string"}
+        - update_database: {"tool": "update_database", "table": "string", "updates": {}, "where_clause": "string"}
+        
+        Think step by step, break down complex tasks, and use the appropriate tools.
+        """;
+        
+        var conversationContext = string.Join("\n", _conversationLog);
+        var fullPrompt = $"{systemPrompt}\n\nConversation so far:\n{conversationContext}\n\nRespond with NextStep JSON:";
+        
+        try
+        {
+            var result = await _kernel.InvokePromptAsync(fullPrompt);
+            var responseText = result.ToString().Trim();
+            
+            // Clean up response (remove markdown code blocks if present)
+            if (responseText.StartsWith("```json"))
+            {
+                responseText = responseText.Substring(7);
+            }
+            if (responseText.EndsWith("```"))
+            {
+                responseText = responseText.Substring(0, responseText.Length - 3);
+            }
+            responseText = responseText.Trim();
+            
+            Console.WriteLine($"> LLM Response: {responseText}");
+            
+            // Parse the NextStep
+            var nextStep = JsonSerializer.Deserialize<NextStep>(responseText, jsonOptions);
+            
+            if (nextStep == null)
+            {
+                throw new InvalidOperationException("Failed to parse NextStep from LLM response");
+            }
+            
+            // Log the reasoning
+            _conversationLog.Add($"AI State: {nextStep.CurrentState}");
+            _conversationLog.Add($"AI Plan: {string.Join(", ", nextStep.PlanRemainingStepsBrief)}");
+            
+            // Execute the function
+            var toolResult = await _dispatcher.DispatchAsync(nextStep.Function);
+            _conversationLog.Add($"Tool Result: {toolResult}");
+            
+            return toolResult;
+        }
+        catch (JsonException ex)
+        {
+            var errorMsg = $"JSON parsing error: {ex.Message}";
+            _conversationLog.Add($"Error: {errorMsg}");
+            return errorMsg;
+        }
+        catch (Exception ex)
+        {
+            var errorMsg = $"Error: {ex.Message}";
+            _conversationLog.Add($"Error: {errorMsg}");
+            return errorMsg;
+        }
+    }
+    
+    public void PrintConversationLog()
+    {
+        Console.WriteLine("\n=� Conversation Log:");
+        Console.WriteLine("==================");
+        foreach (var entry in _conversationLog)
+        {
+            Console.WriteLine(entry);
+        }
+        Console.WriteLine("==================\n");
+    }
+}
+
+var reasoner = new SchemaGuidedReasoner(kernel, dispatcher);
+Console.WriteLine("Schema-guided reasoner initialized!");
+
+#!markdown
+
+## Test the Schema-Guided Reasoning System
+
+Let's test the system with various scenarios to see how it breaks down complex tasks.
+
+#!csharp
+
+// Test 1: Simple email task
+Console.WriteLine(">� Test 1: Simple Email Task");
+Console.WriteLine("================================");
+
+var result1 = await reasoner.ReasonAndActAsync("Send an email to john@example.com with subject 'Welcome' and body 'Thank you for joining us!'");
+Console.WriteLine($"Result: {result1}");
+
+reasoner.PrintConversationLog();
+
+#!csharp
+
+// Test 2: Database query
+Console.WriteLine(">� Test 2: Database Query");
+Console.WriteLine("==========================");
+
+var result2 = await reasoner.ReasonAndActAsync("Query the customers database to see all available customers");
+Console.WriteLine($"Result: {result2}");
+
+#!csharp
+
+// Test 3: Complex invoice task
+Console.WriteLine(">� Test 3: Complex Invoice Task");
+Console.WriteLine("================================");
+
+var result3 = await reasoner.ReasonAndActAsync("Issue an invoice to jane@example.com for LAPTOP001 and MOUSE001 with 15% discount");
+Console.WriteLine($"Result: {result3}");
+
+#!csharp
+
+// Test 4: Multi-step task
+Console.WriteLine(">� Test 4: Multi-step Task");
+Console.WriteLine("===========================");
+
+var result4 = await reasoner.ReasonAndActAsync("Find all products, then send an email to john@example.com with a list of available products, and finally issue him an invoice for LAPTOP001 with 10% discount");
+Console.WriteLine($"Result: {result4}");
+
+// Continue the conversation to complete the multi-step task
+var result4b = await reasoner.ReasonAndActAsync("Continue with the next step");
+Console.WriteLine($"Result: {result4b}");
+
+var result4c = await reasoner.ReasonAndActAsync("Continue with the final step");
+Console.WriteLine($"Result: {result4c}");
+
+reasoner.PrintConversationLog();
+
+#!markdown
+
+## Advanced Example: Customer Support Workflow
+
+Let's create a more sophisticated example that demonstrates the power of schema-guided reasoning in a customer support scenario.
+
+#!csharp
+
+// Test 5: Customer support workflow
+Console.WriteLine(">� Test 5: Customer Support Workflow");
+Console.WriteLine("=====================================");
+
+var supportRequest = """
+A customer john@example.com contacted us saying they want to purchase a gaming laptop 
+but they're a loyal customer and should get a discount. Please:
+1. Check if they're in our customer database
+2. Send them information about our gaming laptop
+3. Issue them an invoice with appropriate discount (20% for existing customers, 10% for new ones)
+""";
+
+Console.WriteLine($"Support Request: {supportRequest}");
+Console.WriteLine();
+
+var step1 = await reasoner.ReasonAndActAsync(supportRequest);
+Console.WriteLine($"Step 1 Result: {step1}\n");
+
+var step2 = await reasoner.ReasonAndActAsync("Continue with the next step in the workflow");
+Console.WriteLine($"Step 2 Result: {step2}\n");
+
+var step3 = await reasoner.ReasonAndActAsync("Continue with the final step");
+Console.WriteLine($"Step 3 Result: {step3}\n");
+
+reasoner.PrintConversationLog();
+
+#!markdown
+
+## Key Benefits of Schema-Guided Reasoning
+
+1. **Structured Thinking**: Forces the LLM to break down complex tasks into manageable steps
+2. **Type Safety**: Strongly typed schemas prevent malformed tool calls
+3. **Predictable Behavior**: Consistent reasoning patterns make the system more reliable
+4. **Debugging**: Clear conversation logs make it easy to trace decision-making
+5. **Extensibility**: Easy to add new tools and reasoning patterns
+
+## Conclusion
+
+This C# implementation demonstrates how Schema-Guided Reasoning can be effectively implemented using Semantic Kernel. The pattern provides:
+
+- **Clear structure** for complex multi-step workflows
+- **Type-safe** tool definitions and function calls  
+- **Flexible reasoning** that adapts to different scenarios
+- **Maintainable code** that's easy to extend and debug
+
+The key insight is using strongly typed schemas to guide LLM reasoning, making AI systems more predictable and controllable while maintaining flexibility for complex problem-solving.

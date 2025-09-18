@@ -5,6 +5,11 @@ using Microsoft.Extensions.Logging;
 
 public static class Common
 {
+    public static string GetDeployment()
+    {
+        return Dotenv.Get("OPENAI_DEFAULT_DEPLOYMENT");
+    }
+
     public static Kernel GetKernel(bool enableLogging) 
     {
         var kernelBuilder = Kernel.CreateBuilder();
@@ -17,12 +22,13 @@ public static class Common
             );
         }
 
+        var deployment = Dotenv.Get("OPENAI_DEFAULT_DEPLOYMENT");
         kernelBuilder.Services.AddAzureOpenAIChatCompletion(
-            "GPT4o", //"GPT35_2",//"GPT42",
+            deployment, //"GPT35_2",//"GPT42",
             Dotenv.Get("OPENAI_API_BASE"),
             Dotenv.Get("OPENAI_API_KEY"),
             serviceId: "default",
-            modelId: "gpt4o");
+            modelId: deployment);
 
         return kernelBuilder.Build();
     }

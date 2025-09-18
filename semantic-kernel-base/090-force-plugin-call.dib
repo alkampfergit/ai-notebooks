@@ -1,6 +1,6 @@
 #!meta
 
-{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
 
 #!csharp
 
@@ -52,13 +52,12 @@ var kernel = Common.Resolve<Kernel>();
 var ka = new KernelArguments();
 ka.ExecutionSettings =  new Dictionary<string, PromptExecutionSettings>()
 {
-        ["default"] = new OpenAIPromptExecutionSettings()
         {
                 MaxTokens = 1000,
                 Temperature = 0,
-                ModelId = "gpt4o",
-                ToolCallBehavior = ToolCallBehavior.RequireFunction(openAIFunction, autoInvoke: false),
-        }
+                ModelId = Common.GetDeployment(),
+                ToolCallBehavior = ToolCallBehavior.RequireFunction(functionToCall, autoInvoke: false),
+            }
 };
 
 #!csharp

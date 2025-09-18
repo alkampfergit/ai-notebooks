@@ -1,6 +1,6 @@
 #!meta
 
-{"kernelInfo":{"defaultKernelName":null,"items":[{"name":"csharp","languageName":"C#","aliases":["c#","cs"]},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"html","languageName":"HTML"},{"name":"sql","languageName":"SQL"},{"name":"kql","languageName":"KQL"},{"name":"mermaid","languageName":"Mermaid"},{"name":"http","languageName":"HTTP"},{"name":"value"}]}}
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp","languageName":"C#","aliases":["c#","cs"]},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"kql","languageName":"KQL"},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"sql","languageName":"SQL"},{"name":"value"}]}}
 
 #!csharp
 
@@ -36,9 +36,10 @@ kernelBuilder.Services.AddLogging(l => l
 );
 var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
 
+var deployment = Dotenv.Get("OPENAI_DEFAULT_DEPLOYMENT");
 #pragma warning disable SKEXP0010 // Suppress the warning for evaluation purposes
 kernelBuilder.AddOpenAIChatCompletion(
-    modelId: "gpt4o", 
+    modelId: deployment, 
     apiKey: null,
     endpoint: new Uri(redirectUrl),
     httpClient: httpClient); 

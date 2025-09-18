@@ -22,6 +22,11 @@ public static class Common
     }
 
     public static ServiceCollection Services => _sc;
+    
+    public static string GetDeployment()
+    {
+        return Dotenv.Get("OPENAI_DEFAULT_DEPLOYMENT");
+    }
 
     public static DumpLoggingProvider DumpLoggingProvider = new DumpLoggingProvider();
 
@@ -50,12 +55,13 @@ public static class Common
                 .AddLogger(s => DumpLoggingProvider.CreateHttpRequestBodyLogger(s.GetRequiredService<ILogger<DumpLoggingProvider>>())));
         }
 
+        var deployment = Dotenv.Get("OPENAI_DEFAULT_DEPLOYMENT");
         _sc.AddAzureOpenAIChatCompletion(
-            "GPT4o", //"GPT35_2",//"GPT42",
+            deployment, //"GPT35_2",//"GPT42",
             Dotenv.Get("OPENAI_API_BASE"),
             Dotenv.Get("OPENAI_API_KEY"),
             serviceId: null, //this is used as keyed service
-            modelId: "gpt4o");
+            modelId: deployment);
 
         return kernelBuilder;
     }

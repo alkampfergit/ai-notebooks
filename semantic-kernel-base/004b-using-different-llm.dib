@@ -1,6 +1,6 @@
 #!meta
 
-{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
 
 #!csharp
 
@@ -28,19 +28,21 @@ kernelBuilder.Services.AddLogging(l => l
     .AddDebug()
 );
 
+var deployment = Dotenv.Get("OPENAI_DEFAULT_DEPLOYMENT");
 kernelBuilder.Services.AddAzureOpenAIChatCompletion(
-    "GPT4o", 
+    deployment, 
     Dotenv.Get("OPENAI_API_BASE"),
     Dotenv.Get("OPENAI_API_KEY"),
     serviceId: "gpt4o",
-    modelId: "gpt4o");
+    modelId: deployment);
 
+var deploymentMini = Dotenv.Get("OPENAI_DEFAULT_MINI_DEPLOYMENT");
 kernelBuilder.Services.AddAzureOpenAIChatCompletion(
-    "GPT35_2", 
+    deploymentMini, 
     Dotenv.Get("OPENAI_API_BASE"),
     Dotenv.Get("OPENAI_API_KEY"),
     serviceId: "default",
-    modelId: "gpt35");
+    modelId: deploymentMini);
 
 var kernel = kernelBuilder.Build();
 
@@ -70,7 +72,7 @@ ka.ExecutionSettings = new Dictionary<string, PromptExecutionSettings>()
     {
         MaxTokens = 1000,
         Temperature = 0,
-        ModelId = "gpt4o",
+        ModelId = deployment,
     }
 };
 

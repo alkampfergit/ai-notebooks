@@ -10,6 +10,8 @@ skdata
 **/output/
 **/azure-di-output/
 
+**/.vs/** 
+
 # User-specific files
 *.user
 *.suo

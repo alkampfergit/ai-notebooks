@@ -15,6 +15,11 @@ using System.Threading.Tasks;
 public static class Common
 {
     public static DumpLoggingProvider DumpLoggingProvider = new DumpLoggingProvider();
+    
+    public static string GetDeployment()
+    {
+        return Dotenv.Get("OPENAI_DEFAULT_DEPLOYMENT");
+    }
 
     public static Kernel GetKernel(
         bool enableLogging, 
@@ -52,12 +57,13 @@ public static class Common
                 .AddLogger(s => DumpLoggingProvider.CreateHttpRequestBodyLogger(s.GetRequiredService<ILogger<DumpLoggingProvider>>())));
         }
 
+        var deployment = Dotenv.Get("OPENAI_DEFAULT_DEPLOYMENT");
         kernelBuilder.Services.AddAzureOpenAIChatCompletion(
-            "GPT4o", //"GPT35_2",//"GPT42",
+            deployment, //"GPT35_2",//"GPT42",
             Dotenv.Get("OPENAI_API_BASE"),
             Dotenv.Get("OPENAI_API_KEY"),
             serviceId: "default",
-            modelId: "gpt4o");
+            modelId: deployment);
 
         return kernelBuilder;
     }

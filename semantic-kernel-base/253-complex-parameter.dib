@@ -1,0 +1,161 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
+
+#!csharp
+
+//https://learn.microsoft.com/en-us/semantic-kernel/concepts/plugins/adding-native-plugins?pivots=programming-language-csharp
+
+#!import ../dotenv.cs
+#r "nuget: Microsoft.SemanticKernel, 1.32.0"
+#r "nuget: Microsoft.Extensions.Logging, 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Console, 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Debug, 8.*"
+
+#!csharp
+
+using Microsoft.SemanticKernel;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.SemanticKernel.ChatCompletion;
+
+var kernelBuilder = Kernel.CreateBuilder();
+kernelBuilder.Services.AddLogging(l => l
+    .SetMinimumLevel(LogLevel.Trace)
+    .AddConsole()
+    .AddDebug()
+);
+
+var deployment = Dotenv.Get("OPENAI_DEFAULT_DEPLOYMENT");
+kernelBuilder.Services.AddAzureOpenAIChatCompletion(
+    deployment, //"GPT35_2",//"GPT42",
+    Dotenv.Get("OPENAI_API_BASE"),
+    Dotenv.Get("OPENAI_API_KEY"),
+    serviceId: "default",
+    modelId: deployment);
+
+
+var kernel = kernelBuilder.Build();
+var chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
+
+#!csharp
+
+using System.ComponentModel;
+
+public abstract record NextStep
+{
+    [Description("Current status")]
+    public string CurrentState { get; init; }
+
+    [Description("Brief list of next step planned") ]
+    public List<string> PlanRemainingStepsBrief { get; init; }
+
+    [Description("Indicates if the task is completed")]
+    public bool TaskCompleted { get; init; } = false;
+}
+
+[Description("Sends an email with optional file attachments")]
+public record SendEmail : NextStep
+{    
+    [Description("The subject line of the email")]
+    public required string Subject { get; init; }
+    
+    [Description("The body content of the email")]
+    public required string Message { get; init; }
+    
+    [Description("The email address of the recipient")]
+    public required string RecipientEmail { get; init; }
+}
+
+[Description("Search for Telephone Number in Directory")]
+public record SearchInTelephoneDirectory : NextStep
+{
+    [Description("The name of the person to get the Telephone Number")]
+    public required string PersonName { get; init; }
+}
+
+[Description("Conclude the process")]
+public record ConcludeProcess : NextStep
+{
+    [Description("Description of the Process")]
+    public required string ProcessDescription { get; init; }
+}
+
+[Description("Sends an SMS message")]
+public record SendSms : NextStep
+{
+    [Description("The Telephone number of the recipient.")]
+    public required string TelephoneNumber { get; init; }
+
+    [Description("The body content of the SMS")]
+    public required string Message { get; init; }
+};
+
+//Define the function
+var sendEmail = [Description("Send an Email")] (SendEmail nextStep) =>{ };
+var sendEmailfn = KernelFunctionFactory.CreateFromMethod(sendEmail, "sendEmail");
+
+var sendSms = [Description("Send an SMS")] (SendSms nextStep) =>{ };
+var sendSmsfn = KernelFunctionFactory.CreateFromMethod(sendSms, "sendSms");
+
+var searchInTelephoneDirectory = [Description("Search in Telephone Directory")] (SearchInTelephoneDirectory nextStep) =>{ };
+var searchInTelephoneDirectoryfn = KernelFunctionFactory.CreateFromMethod(searchInTelephoneDirectory, "searchInTelephoneDirectory");
+
+var concludeProcess = [Description("Conclude the process")] (ConcludeProcess nextStep) =>{ };
+var concludeProcessfn = KernelFunctionFactory.CreateFromMethod(concludeProcess, "concludeProcess");
+
+#!csharp
+
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+var settings = new PromptExecutionSettings
+{
+    FunctionChoiceBehavior = FunctionChoiceBehavior.Required([
+        sendEmailfn, sendSmsfn, searchInTelephoneDirectoryfn
+    ], autoInvoke: false)
+};
+
+ChatHistory chatMessages = new();
+chatMessages.AddSystemMessage(@"You are an assistant specialized in helping the user to solve problems
+
+- Clearly report when tasks are done.
+- You should give me the next task or tasks to proceed with
+- If you need to send an SMS you should search in Telephone number directory if you have name and not a number
+- Telephone numbers are in standard format, if no country code is provided suppose +39 (Italy)
+- When you think that the process is ended conclude with the conclude task process");
+
+//chatMessages.AddUserMessage("Write an email to John with christmas wishes. Very polite and formal, he is my chief");
+chatMessages.AddUserMessage("Write an SMS to john smith telling him that the meeting is rescheduled to tomorrow at 10 AM.");
+var result = await chatCompletionService.GetChatMessageContentAsync(chatMessages, settings); 
+
+#!csharp
+
+// now dump the content of the result
+var functionCall = result.Items.OfType<FunctionCallContent>().ToList();
+foreach (var fc in functionCall)
+{
+    Console.WriteLine($"FunctionCall: {fc.FunctionName}");
+    foreach (var param in fc.Arguments)
+    {
+        Console.WriteLine($"  Param: {param.Key} = {param.Value}");
+    }
+}
+
+#!csharp
+
+// You should have the answer the search in telephone directory now suppose you searched
+chatMessages.AddAssistantMessage("Searching for John's phone number to send the SMS.");
+//TODO: call the search directory
+chatMessages.AddUserMessage("The telephone number of John Smith is +320 4456736");
+
+//now you go to the llm again
+result = await chatCompletionService.GetChatMessageContentAsync(chatMessages, settings);
+// now dump the content of the result
+var functionCall = result.Items.OfType<FunctionCallContent>().ToList();
+foreach (var fc in functionCall)
+{
+    Console.WriteLine($"FunctionCall: {fc.FunctionName}");
+    foreach (var param in fc.Arguments)
+    {
+        Console.WriteLine($"  Param: {param.Key} = {param.Value}");
+    }
+}

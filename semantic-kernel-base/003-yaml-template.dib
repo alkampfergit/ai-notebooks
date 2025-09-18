@@ -1,6 +1,6 @@
 #!meta
 
-{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
 
 #!csharp
 
@@ -31,7 +31,9 @@ var chatPrompt = Path.Combine(
 var promptContent = File.ReadAllText(chatPrompt);
 KernelFunction prompt = kernel.CreateFunctionFromPromptYaml(
     promptContent,
-    promptTemplateFactory: new HandlebarsPromptTemplateFactory()
+    promptTemplateFactory: new HandlebarsPromptTemplateFactory() {
+        AllowDangerouslySetContent = true
+    }
 );
 
 ChatHistory chatMessages = new();

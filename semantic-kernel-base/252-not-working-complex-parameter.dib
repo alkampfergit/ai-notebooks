@@ -1,0 +1,118 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
+
+#!csharp
+
+//https://learn.microsoft.com/en-us/semantic-kernel/concepts/plugins/adding-native-plugins?pivots=programming-language-csharp
+
+#!import ../dotenv.cs
+#r "nuget: Microsoft.SemanticKernel, 1.32.0"
+#r "nuget: Microsoft.Extensions.Logging, 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Console, 8.*"
+#r "nuget: Microsoft.Extensions.Logging.Debug, 8.*"
+
+#!csharp
+
+using Microsoft.SemanticKernel;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.SemanticKernel.ChatCompletion;
+
+var kernelBuilder = Kernel.CreateBuilder();
+kernelBuilder.Services.AddLogging(l => l
+    .SetMinimumLevel(LogLevel.Trace)
+    .AddConsole()
+    .AddDebug()
+);
+
+var deployment = Dotenv.Get("OPENAI_DEFAULT_DEPLOYMENT");
+kernelBuilder.Services.AddAzureOpenAIChatCompletion(
+    deployment, //"GPT35_2",//"GPT42",
+    Dotenv.Get("OPENAI_API_BASE"),
+    Dotenv.Get("OPENAI_API_KEY"),
+    serviceId: "default",
+    modelId: deployment);
+
+
+var kernel = kernelBuilder.Build();
+var chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
+
+#!csharp
+
+using System.ComponentModel;
+
+[Description("Represents the next step in a task workflow")]
+public record NextStep
+{
+    [Description("Current status")]
+    public string CurrentState { get; init; }
+
+    [Description("Brief list of next step planned") ]
+    public List<string> PlanRemainingStepsBrief { get; init; }
+
+    [Description("Indicates if the task is completed")]
+    public bool TaskCompleted { get; init; } = false;
+
+    [Description("The tool function to execute")]
+    public ToolFunction ToolFunction { get; init; }
+}
+
+public abstract record ToolFunction
+{
+    [Description("The type of tool function to execute")]
+    public abstract string Tool { get; }
+}
+
+[Description("Sends an email with optional file attachments")]
+public record SendEmail : ToolFunction
+{
+    public override string Tool => "send_email";
+    
+    [Description("The subject line of the email")]
+    public required string Subject { get; init; }
+    
+    [Description("The body content of the email")]
+    public required string Message { get; init; }
+    
+    [Description("The email address of the recipient")]
+    public required string RecipientEmail { get; init; }
+}
+
+//Define the function
+var getNextStep = [Description("Get next step")] (
+    NextStep nextStep
+) =>
+{
+   return;
+};
+
+var function = KernelFunctionFactory.CreateFromMethod(getNextStep, "getNextStep");
+
+#!csharp
+
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+var settings = new PromptExecutionSettings
+{
+    FunctionChoiceBehavior = FunctionChoiceBehavior.Required([function], autoInvoke: false)
+};
+
+ChatHistory chatMessages = new();
+chatMessages.AddSystemMessage("You are an assistant specialized in writing email");
+
+chatMessages.AddUserMessage("Write an email to John with christmas wishes. Very polite and formal, he is my chief");
+var result = await chatCompletionService.GetChatMessageContentAsync(chatMessages, settings); 
+
+var functionCall = result.Items.OfType<FunctionCallContent>().ToList();
+
+#!csharp
+
+// now dump the content of the result
+foreach (var fc in functionCall)
+{
+    Console.WriteLine($"FunctionCall: {fc.FunctionName}");
+    foreach (var param in fc.Arguments)
+    {
+        Console.WriteLine($"  Param: {param.Key} = {param.Value}");
+    }
+}

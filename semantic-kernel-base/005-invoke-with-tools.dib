@@ -1,6 +1,6 @@
 #!meta
 
-{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
 
 #!csharp
 
@@ -57,7 +57,7 @@ var openAIFunction = plugin.GetFunctionsMetadata().First().ToOpenAIFunction();
               {
                   MaxTokens = 1000,
                   Temperature = 0,
-                  ModelId = "gpt4o",
+                  ModelId = Common.GetDeployment(),
                   ToolCallBehavior = ToolCallBehavior.RequireFunction(openAIFunction, autoInvoke: false),
               }
           },
@@ -89,11 +89,15 @@ Console.WriteLine(openaiMessageContent.ToolCalls[0].Display());
 #!csharp
 
 Console.WriteLine("ModelId: {0}", openaiMessageContent.ModelId);
-var completionsUsage = openaiMessageContent.Metadata["Usage"] as CompletionsUsage;
+Console.WriteLine("Usage type: {0}", openaiMessageContent.Metadata["Usage"].GetType());
 
-Console.WriteLine("PromptTokens: {0}", completionsUsage.PromptTokens);
-Console.WriteLine("CompletionTokens: {0}", completionsUsage.CompletionTokens);
-Console.WriteLine("TotalTokens: {0}", completionsUsage.TotalTokens);
+#!csharp
+
+var completionsUsage = openaiMessageContent.Metadata["Usage"] as OpenAI.Chat.ChatTokenUsage;
+
+Console.WriteLine("PromptTokens: {0}", completionsUsage.InputTokenCount);
+Console.WriteLine("CompletionTokens: {0}", completionsUsage.OutputTokenCount);
+Console.WriteLine("TotalTokens: {0}", completionsUsage.TotalTokenCount);
 
 Console.WriteLine("FinishReason: {0}", openaiMessageContent.Metadata["FinishReason"]);
 

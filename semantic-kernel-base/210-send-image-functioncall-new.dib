@@ -31,12 +31,13 @@ kernelBuilder.Services.AddLogging(l => l
     .AddDebug()
 );
 
+var deployment = Dotenv.Get("OPENAI_DEFAULT_DEPLOYMENT");
 kernelBuilder.Services.AddAzureOpenAIChatCompletion(
-    "GPT4omini", //"GPT35_2",//"GPT42",
+    deployment, //"GPT35_2",//"GPT42",
     Dotenv.Get("OPENAI_API_BASE"),
     Dotenv.Get("OPENAI_API_KEY"),
     serviceId: "default",
-    modelId: "gpt4o");
+    modelId: deployment);
 
 #!markdown
 

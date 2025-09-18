@@ -27,12 +27,13 @@ kernelBuilder.Services.AddLogging(l => l
     .AddDebug()
 );
 
+var deployment = Dotenv.Get("OPENAI_DEFAULT_DEPLOYMENT");
 kernelBuilder.Services.AddAzureOpenAIChatCompletion(
-    "GPT4omini", //"GPT35_2",//"GPT42",
+    deployment, //"GPT35_2",//"GPT42",
     Dotenv.Get("OPENAI_API_BASE"),
     Dotenv.Get("OPENAI_API_KEY"),
     serviceId: "default",
-    modelId: "gpt4o");
+    modelId: deployment);
 
 #!csharp
 
@@ -60,14 +61,13 @@ var openAIFunction = function.Metadata.ToOpenAIFunction();
 
 #!csharp
 
-var settings = new OpenAIPromptExecutionSettings()
+var settings = new OpenAIPromptExecutionSettings() 
 {
         MaxTokens = 1000,
         Temperature = 0,
-        ModelId = "gpt4o",
+        ModelId = deployment,
         ToolCallBehavior = ToolCallBehavior.RequireFunction(openAIFunction, autoInvoke: false),
 };
-
 ChatHistory chatMessages = new();
 chatMessages.AddSystemMessage("you are an expert technician that will extract information from images");
 
