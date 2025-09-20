@@ -69,9 +69,34 @@ public class GetCustomerDataFunction : BusinessFunction<GetCustomerDataToolCall>
         var invoicesCount = invoices.Count();
         var emailsCount = emails.Count();
 
-        var summary = parameters.GetAllCustomers 
-            ? $"🔍 Retrieved data for all customers: {rulesCount} rules, {invoicesCount} invoices, {emailsCount} emails"
-            : $"🔍 Retrieved customer data for {parameters.Email}: {rulesCount} rules, {invoicesCount} invoices, {emailsCount} emails";
+        //ok now we must be explicit to the return value to tell the LLM what actually happened
+        string summary;
+        if (parameters.GetAllCustomers)
+        {
+            if (emailsCount == 0)
+            {
+                summary = "Currently we have no customers in the system.";
+            }
+            else
+            {
+                summary = $"We have {emailsCount} customers in the system";
+            }
+        }
+        else
+        {
+            //we are searching data for a single customer
+            if (emailsCount == 0)
+            {
+                summary = $"No customer found with email {parameters.Email}.";
+            }
+            else
+            {
+                summary = $"Found customer with email {parameters.Email}: {rulesCount} rules, {invoicesCount} invoices, {emailsCount} emails.";
+            }
+            customerData["summary"] = summary;
+        }
+
+
         Console.WriteLine(summary);
 
         return new BusinessFunctionResult(customerData, summary);

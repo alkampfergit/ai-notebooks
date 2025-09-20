@@ -126,8 +126,8 @@ public class PolymorphicSchemaManagerDocumentationTests : SemanticKernelTestBase
         // **Assert**: Verify result structure
         Assert.That(result, Is.Not.Null, "Schema generation result should not be null");
         Assert.That(result.JsonSchema, Is.Not.Null.And.Not.Empty, "JSON schema should be populated");
-        Assert.That(result.PropertyDescriptions, Is.Not.Null.And.Not.Empty, "Property descriptions should be populated");
-        Assert.That(result.ToolDescription, Is.Not.Null.And.Not.Empty, "Tool description should be populated");
+        Assert.That(result.OuterObjectDescription, Is.Not.Null.And.Not.Empty, "Outer object description should be populated");
+        Assert.That(result.AvailableTools, Is.Not.Null.And.Not.Empty, "Available tools should be populated");
 
         // **Assert**: Verify JSON schema is valid
         JsonNode? schemaNode = null;
@@ -140,8 +140,8 @@ public class PolymorphicSchemaManagerDocumentationTests : SemanticKernelTestBase
 
         Console.WriteLine("Generated Schema Result:");
         Console.WriteLine($"JSON Schema Length: {result.JsonSchema.Length}");
-        Console.WriteLine($"Property Descriptions Length: {result.PropertyDescriptions.Length}");
-        Console.WriteLine($"Tool Description: {result.ToolDescription}");
+        Console.WriteLine($"Outer Object Description Length: {result.OuterObjectDescription.Length}");
+        Console.WriteLine($"Available Tools Count: {result.AvailableTools.Length}");
     }
 
     /// <summary>
@@ -158,95 +158,102 @@ public class PolymorphicSchemaManagerDocumentationTests : SemanticKernelTestBase
         // **Act**: Generate comprehensive schema result
         var result = _manager.GenerateSchemaWithDocumentation();
 
-        // **Assert**: Verify tool description content
-        Assert.That(result.ToolDescription, Is.Not.Null.And.Not.Empty, "Tool description should be populated");
-        Assert.That(result.ToolDescription, Does.Contain("Advanced business automation tool"),
-            "Tool description should contain the BusinessTool class description");
-        Assert.That(result.ToolDescription, Does.Contain("managing customer operations"),
-            "Tool description should describe the tool's purpose");
+        // **Assert**: Verify outer object description content
+        Assert.That(result.OuterObjectDescription, Is.Not.Null.And.Not.Empty, "Outer object description should be populated");
+        Assert.That(result.OuterObjectDescription, Does.Contain("Advanced business automation tool"),
+            "Outer object description should contain the BusinessTool class description");
+        Assert.That(result.OuterObjectDescription, Does.Contain("managing customer operations"),
+            "Outer object description should describe the tool's purpose");
 
-        Console.WriteLine("Tool Description:");
-        Console.WriteLine(result.ToolDescription);
+        Console.WriteLine("Outer Object Description:");
+        Console.WriteLine(result.OuterObjectDescription);
     }
 
     /// <summary>
-    /// **Test that verifies property descriptions are formatted as markdown**
+    /// **Test that verifies tool parameter descriptions are formatted correctly**
     ///
     /// This test ensures that:
-    /// - Property descriptions are formatted as proper markdown
-    /// - Container properties are documented with their descriptions
-    /// - Polymorphic type properties are documented separately
-    /// - Markdown structure includes headers and bullet points
+    /// - Tool parameter descriptions are provided for each tool
+    /// - Parameters are documented with their descriptions from attributes
+    /// - Each tool has its own parameter documentation
     /// </summary>
     [Test]
-    public void GenerateSchemaWithDocumentation_ShouldGenerateMarkdownPropertyDescriptions()
+    public void GenerateSchemaWithDocumentation_ShouldGenerateToolParameterDescriptions()
     {
         // **Act**: Generate comprehensive schema result
         var result = _manager.GenerateSchemaWithDocumentation();
 
-        // **Assert**: Verify markdown structure
-        var markdown = result.PropertyDescriptions;
-        Assert.That(markdown, Is.Not.Null.And.Not.Empty, "Property descriptions should be populated");
+        // **Assert**: Verify available tools have parameter descriptions
+        Assert.That(result.AvailableTools.Length, Is.EqualTo(2), "Should have 2 available tools");
 
-        // **Assert**: Verify markdown headers
-        Assert.That(markdown, Does.Contain("# Property Descriptions"), "Should contain main header");
-        Assert.That(markdown, Does.Contain("## BusinessTool Properties"), "Should contain container properties section");
-        Assert.That(markdown, Does.Contain("## CustomerCommunication Properties"), "Should contain derived type section");
-        Assert.That(markdown, Does.Contain("## DataProcessing Properties"), "Should contain second derived type section");
+        var customerCommTool = result.AvailableTools.FirstOrDefault(t => t.ToolName == "CustomerCommunication");
+        var dataProcessingTool = result.AvailableTools.FirstOrDefault(t => t.ToolName == "DataProcessing");
 
-        // **Assert**: Verify property documentation
-        Assert.That(markdown, Does.Contain("**Status**"), "Should document Status property");
-        Assert.That(markdown, Does.Contain("**CustomerEmail**"), "Should document CustomerEmail property");
-        Assert.That(markdown, Does.Contain("**DataSource**"), "Should document DataSource property");
+        Assert.That(customerCommTool, Is.Not.Null, "Should have CustomerCommunication tool");
+        Assert.That(dataProcessingTool, Is.Not.Null, "Should have DataProcessing tool");
 
-        // **Assert**: Verify property descriptions
-        Assert.That(markdown, Does.Contain("Current operational status"), "Should include Status description");
-        Assert.That(markdown, Does.Contain("Customer's email address"), "Should include CustomerEmail description");
-        Assert.That(markdown, Does.Contain("Source system from which data"), "Should include DataSource description");
+        // **Assert**: Verify parameter descriptions contain expected content
+        Assert.That(customerCommTool!.ParameterDescriptions, Does.Contain("**CustomerEmail**"), "Should document CustomerEmail property");
+        Assert.That(customerCommTool.ParameterDescriptions, Does.Contain("Customer's email address"), "Should include CustomerEmail description");
+        Assert.That(customerCommTool.ParameterDescriptions, Does.Contain("**Priority**"), "Should document inherited Priority property");
 
-        Console.WriteLine("Property Descriptions Markdown:");
-        Console.WriteLine(markdown);
+        Assert.That(dataProcessingTool!.ParameterDescriptions, Does.Contain("**DataSource**"), "Should document DataSource property");
+        Assert.That(dataProcessingTool.ParameterDescriptions, Does.Contain("Source system from which data"), "Should include DataSource description");
+
+        Console.WriteLine("Tool Parameter Descriptions:");
+        foreach (var tool in result.AvailableTools)
+        {
+            Console.WriteLine($"\n{tool.ToolName}:");
+            Console.WriteLine(tool.ParameterDescriptions);
+        }
     }
 
     /// <summary>
-    /// **Test that verifies property descriptions include all expected properties**
+    /// **Test that verifies all expected tools and properties are included**
     ///
     /// This test ensures that:
-    /// - All container properties are documented
-    /// - All polymorphic type properties are documented
-    /// - Inherited properties (like Priority) are included
-    /// - Property descriptions match the Description attributes
+    /// - All tools are present in the available tools array
+    /// - Container properties are documented in outer object description
+    /// - All tool properties are documented in their respective parameter descriptions
+    /// - Inherited properties (like Priority) are included in tool parameter descriptions
     /// </summary>
     [Test]
-    public void GenerateSchemaWithDocumentation_ShouldIncludeAllProperties()
+    public void GenerateSchemaWithDocumentation_ShouldIncludeAllToolsAndProperties()
     {
         // **Act**: Generate comprehensive schema result
         var result = _manager.GenerateSchemaWithDocumentation();
 
-        var markdown = result.PropertyDescriptions;
+        // **Assert**: Verify both tools are present
+        Assert.That(result.AvailableTools.Length, Is.EqualTo(2), "Should have 2 tools");
+        var toolNames = result.AvailableTools.Select(t => t.ToolName).ToList();
+        Assert.That(toolNames, Does.Contain("CustomerCommunication"), "Should include CustomerCommunication");
+        Assert.That(toolNames, Does.Contain("DataProcessing"), "Should include DataProcessing");
 
-        // **Assert**: Verify all BusinessTool properties are documented
-        Assert.That(markdown, Does.Contain("**Status**"), "Should document Status property");
-        Assert.That(markdown, Does.Contain("**PendingOperations**"), "Should document PendingOperations property");
-        Assert.That(markdown, Does.Contain("**Operation**"), "Should document Operation property");
-        Assert.That(markdown, Does.Contain("**AllCompleted**"), "Should document AllCompleted property");
+        // **Assert**: Verify outer object properties are documented
+        var outerDesc = result.OuterObjectDescription;
+        Assert.That(outerDesc, Does.Contain("**Status**"), "Should document Status property");
+        Assert.That(outerDesc, Does.Contain("**PendingOperations**"), "Should document PendingOperations property");
+        Assert.That(outerDesc, Does.Contain("**Operation**"), "Should document Operation property");
+        Assert.That(outerDesc, Does.Contain("**AllCompleted**"), "Should document AllCompleted property");
 
-        // **Assert**: Verify all CustomerCommunication properties are documented
-        Assert.That(markdown, Does.Contain("**CustomerEmail**"), "Should document CustomerEmail property");
-        Assert.That(markdown, Does.Contain("**CommunicationType**"), "Should document CommunicationType property");
-        Assert.That(markdown, Does.Contain("**MessageContent**"), "Should document MessageContent property");
-        Assert.That(markdown, Does.Contain("**Urgency**"), "Should document Urgency property");
-        Assert.That(markdown, Does.Contain("**Priority**"), "Should document inherited Priority property");
-        Assert.That(markdown, Does.Contain("**OperationType**"), "Should document OperationType property");
+        // **Assert**: Verify CustomerCommunication tool properties
+        var customerCommTool = result.AvailableTools.First(t => t.ToolName == "CustomerCommunication");
+        Assert.That(customerCommTool.ParameterDescriptions, Does.Contain("**CustomerEmail**"), "Should document CustomerEmail property");
+        Assert.That(customerCommTool.ParameterDescriptions, Does.Contain("**CommunicationType**"), "Should document CommunicationType property");
+        Assert.That(customerCommTool.ParameterDescriptions, Does.Contain("**MessageContent**"), "Should document MessageContent property");
+        Assert.That(customerCommTool.ParameterDescriptions, Does.Contain("**Urgency**"), "Should document Urgency property");
+        Assert.That(customerCommTool.ParameterDescriptions, Does.Contain("**Priority**"), "Should document inherited Priority property");
+        Assert.That(customerCommTool.ParameterDescriptions, Does.Contain("**OperationType**"), "Should document OperationType property");
 
-        // **Assert**: Verify all DataProcessing properties are documented
-        Assert.That(markdown, Does.Contain("**DataSource**"), "Should document DataSource property");
-        Assert.That(markdown, Does.Contain("**ProcessingAlgorithm**"), "Should document ProcessingAlgorithm property");
-        Assert.That(markdown, Does.Contain("**OutputFormat**"), "Should document OutputFormat property");
+        // **Assert**: Verify DataProcessing tool properties
+        var dataProcessingTool = result.AvailableTools.First(t => t.ToolName == "DataProcessing");
+        Assert.That(dataProcessingTool.ParameterDescriptions, Does.Contain("**DataSource**"), "Should document DataSource property");
+        Assert.That(dataProcessingTool.ParameterDescriptions, Does.Contain("**ProcessingAlgorithm**"), "Should document ProcessingAlgorithm property");
+        Assert.That(dataProcessingTool.ParameterDescriptions, Does.Contain("**OutputFormat**"), "Should document OutputFormat property");
 
         // **Assert**: Verify property descriptions are meaningful
-        Assert.That(markdown, Does.Contain("Priority level for operation execution"), "Should include Priority description");
-        Assert.That(markdown, Does.Contain("Processing algorithm to apply"), "Should include ProcessingAlgorithm description");
+        Assert.That(customerCommTool.ParameterDescriptions, Does.Contain("Priority level for operation execution"), "Should include Priority description");
+        Assert.That(dataProcessingTool.ParameterDescriptions, Does.Contain("Processing algorithm to apply"), "Should include ProcessingAlgorithm description");
     }
 
     /// <summary>
@@ -267,12 +274,11 @@ public class PolymorphicSchemaManagerDocumentationTests : SemanticKernelTestBase
         // **Assert**: Verify result structure
         Assert.That(result, Is.Not.Null, "Schema generation result should not be null");
         Assert.That(result.JsonSchema, Is.Not.Null.And.Not.Empty, "JSON schema should be populated");
-        Assert.That(result.PropertyDescriptions, Is.Not.Null.And.Not.Empty, "Property descriptions should be populated");
+        Assert.That(result.AvailableTools, Is.Not.Null.And.Not.Empty, "Available tools should be populated");
 
         // **Assert**: Verify only CustomerCommunication is included
-        var markdown = result.PropertyDescriptions;
-        Assert.That(markdown, Does.Contain("## CustomerCommunication Properties"), "Should include CustomerCommunication section");
-        Assert.That(markdown, Does.Not.Contain("## DataProcessing Properties"), "Should not include DataProcessing section");
+        Assert.That(result.AvailableTools.Length, Is.EqualTo(1), "Should have exactly 1 tool");
+        Assert.That(result.AvailableTools[0].ToolName, Is.EqualTo("CustomerCommunication"), "Should include only CustomerCommunication");
 
         // **Assert**: Verify JSON schema only contains CustomerCommunication
         var schemaNode = JsonNode.Parse(result.JsonSchema);
@@ -282,9 +288,10 @@ public class PolymorphicSchemaManagerDocumentationTests : SemanticKernelTestBase
         Assert.That(definitions.ContainsKey("DataProcessing"), Is.False, "Should not contain DataProcessing definition");
 
         Console.WriteLine("Filtered Schema Result:");
-        Console.WriteLine($"Tool Description: {result.ToolDescription}");
-        Console.WriteLine("Property Descriptions:");
-        Console.WriteLine(result.PropertyDescriptions);
+        Console.WriteLine($"Outer Object Description Length: {result.OuterObjectDescription.Length}");
+        Console.WriteLine($"Available Tool: {result.AvailableTools[0].ToolName} ({result.AvailableTools[0].ToolType})");
+        Console.WriteLine("Tool Description:");
+        Console.WriteLine(result.AvailableTools[0].ToolDescription);
     }
 
     /// <summary>
@@ -322,6 +329,7 @@ public class PolymorphicSchemaManagerDocumentationTests : SemanticKernelTestBase
         Console.WriteLine("Backward Compatibility Verification:");
         Console.WriteLine($"Original schema length: {originalSchema.Length}");
         Console.WriteLine($"New schema length: {comprehensiveResult.JsonSchema.Length}");
+        Console.WriteLine($"Available tools count: {comprehensiveResult.AvailableTools.Length}");
         Console.WriteLine("Both methods produce equivalent schemas ✓");
     }
 }

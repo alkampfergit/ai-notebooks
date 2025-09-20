@@ -38,7 +38,6 @@ public class SchemaGuidedReasoner
     private readonly JsonSerializerOptions _jsonOptions;
     private readonly DatabaseService _databaseService;
     private readonly BusinessFunctionFactory _functionFactory;
-    private readonly string _systemPrompt;
 
     /// <summary>
     /// Initialize the Schema-Guided Reasoner with the kernel and database service
@@ -60,28 +59,37 @@ public class SchemaGuidedReasoner
 
         // Initialize the business function factory
         _functionFactory = new BusinessFunctionFactory(_databaseService);
+    }
 
-        // Generate comprehensive schema documentation
-        var schemaResult = _functionFactory.GenerateSchemaWithDocumentationForToolCall();
+    private record ToolExecutionResult(string ToolName, string Summary);
 
-        // Initialize conversation history with system prompt for structured JSON responses
-        _systemPrompt = $@"
+    /// <summary>
+    /// **Generates dynamic system prompt based on available tools**
+    ///
+    /// Creates a context-aware system prompt that includes only the tools
+    /// that should be available for the current reasoning step.
+    /// </summary>
+    /// <param name="availableToolTypes">Types of tools that should be available for this request. If null, uses all tools.</param>
+    /// <returns>Complete system prompt with tool documentation</returns>
+    private string GenerateSystemPrompt(IEnumerable<Type>? availableToolTypes = null)
+    {
+        // Generate comprehensive schema documentation for available tools
+        var schemaResult = availableToolTypes != null
+            ? _functionFactory.GenerateSchemaWithDocumentationForToolCall(availableToolTypes)
+            : _functionFactory.GenerateSchemaWithDocumentationForToolCall();
+
+        return $@"
 You are a business assistant helping Rinat Abdullin with customer interactions.
 
 IMPORTANT: You must always respond with structured JSON that includes:
 1. Current state analysis
-2. List of remaining steps briefly described
+2. List of remaining steps briefly described and include corresponding tool if applicable
 3. Whether the task is completed
-4. The specific tool call to execute next (with proper type discriminator)
+4. The specific tool call to execute next
+5. The tool call to execute next is that one that logically follows from the current state and remaining steps
 
-## Tool Description:
-{schemaResult.ToolDescription}
-
-## Available Functions:
-{GenerateFunctionSummary(schemaResult)}
-
-## Property Documentation:
-{schemaResult.PropertyDescriptions}
+## Available Tools:
+{GenerateToolsSummary(schemaResult.AvailableTools)}
 
 Guidelines:
 - Clearly report when tasks are done using report_task_completion
@@ -94,75 +102,48 @@ Guidelines:
 Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
     }
 
-    private record ToolExecutionResult(string ToolName, string Summary);
+    /// <summary>
+    /// **Determines which tools should be available for a given request context**
+    ///
+    /// This method can be extended in the future to implement sophisticated
+    /// tool selection logic based on request context, user permissions,
+    /// workflow state, or other business rules.
+    /// </summary>
+    /// <param name="userRequest">The user's request</param>
+    /// <param name="executedTasks">Previously executed tasks in this session</param>
+    /// <returns>Collection of tool types that should be available, or null for all tools</returns>
+    private IEnumerable<Type>? DetermineAvailableTools(string userRequest, List<ToolExecutionResult> executedTasks)
+    {
+        // Future implementation could include sophisticated logic such as:
+        // - Role-based tool access control
+        // - Context-aware tool filtering
+        // - Workflow state-based tool availability
+        // - Security-based tool restrictions
+        // - Dynamic tool loading based on request analysis
+
+        // For now, return null to indicate all tools should be available
+        // This maintains current behavior while enabling future customization
+        return null;
+    }
 
     /// <summary>
-    /// **Generates a summary of available functions from schema documentation**
+    /// **Generates a summary of available tools from tool information array**
     ///
-    /// Extracts function information from the schema result to create a concise
-    /// summary of available business functions for the LLM system prompt.
+    /// Creates a concise summary of available business tools for the LLM system prompt
+    /// using the structured ToolInformation objects.
     /// </summary>
-    /// <param name="schemaResult">The comprehensive schema result with documentation</param>
-    /// <returns>Formatted function summary string</returns>
-    private static string GenerateFunctionSummary(SchemaGenerationResult schemaResult)
+    /// <param name="availableTools">Array of ToolInformation objects with tool details</param>
+    /// <returns>Formatted tools summary string</returns>
+    private static string GenerateToolsSummary(ToolInformation[] availableTools)
     {
         var summary = new StringBuilder();
 
-        // Extract function types from the schema by looking at the JSON definitions
-        var schemaNode = JsonNode.Parse(schemaResult.JsonSchema);
-        var definitions = schemaNode?["definitions"]?.AsObject();
-
-        if (definitions != null)
+        foreach (var tool in availableTools)
         {
-            foreach (var definition in definitions)
-            {
-                var functionName = definition.Key;
-                var functionSchema = definition.Value?.AsObject();
-
-                // Get description from the schema if available
-                var description = functionSchema?["description"]?.ToString() ??
-                                 GetFunctionDescriptionFromName(functionName);
-
-                // Convert from PascalCase to readable format
-                var readableName = ConvertToReadableName(functionName);
-
-                summary.AppendLine($"- **{readableName}**: {description}");
-            }
+            summary.AppendLine($"- **{tool.ToolName}**: {tool.ToolDescription}");
         }
 
         return summary.ToString();
-    }
-
-    /// <summary>
-    /// **Converts PascalCase function names to readable format**
-    /// </summary>
-    private static string ConvertToReadableName(string functionName)
-    {
-        // Remove "ToolCall" suffix if present
-        var cleanName = functionName.EndsWith("ToolCall")
-            ? functionName[..^8]
-            : functionName;
-
-        // Convert PascalCase to space-separated words
-        return System.Text.RegularExpressions.Regex.Replace(cleanName,
-            "([a-z])([A-Z])", "$1 $2").ToLowerInvariant();
-    }
-
-    /// <summary>
-    /// **Provides default descriptions for function names**
-    /// </summary>
-    private static string GetFunctionDescriptionFromName(string functionName)
-    {
-        return functionName.ToLowerInvariant() switch
-        {
-            var name when name.Contains("email") => "Send emails to customers",
-            var name when name.Contains("invoice") => "Create invoices for customers",
-            var name when name.Contains("customer") => "Retrieve customer information",
-            var name when name.Contains("void") => "Cancel existing invoices",
-            var name when name.Contains("rule") => "Create business rules",
-            var name when name.Contains("completion") => "Complete tasks with summary",
-            _ => "Business operation function"
-        };
     }
 
     /// <summary>
@@ -189,18 +170,18 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
                 AnsiConsole.MarkupLine($"[cyan]  → {currentPlan}[/]");
 
                 // Check if task is completed
-                if (nextStep.ToolCall is ReportTaskCompletionToolCall completionParameter)
+                if (nextStep.NextStepToolToCall is ReportTaskCompletionToolCall completionParameter)
                 {
                     AnsiConsole.MarkupLine($"[blue]Task completed: {completionParameter.Summary}[/]");
                     return completionParameter.Summary;
                 }
 
                 // Manually dispatch the tool function
-                var businessResult = await _functionFactory.DispatchToolFunction(nextStep.ToolCall);
+                var businessResult = await _functionFactory.DispatchToolFunction(nextStep.NextStepToolToCall);
 
                 // Add execution result to the list for next iteration
                 var resultSummary = businessResult.Summary;
-                var toolName = nextStep.ToolCall.GetType().Name.Replace("ToolCall", "");
+                var toolName = nextStep.NextStepToolToCall.GetType().Name.Replace("ToolCall", "");
                 executionTaskResult.Add(new ToolExecutionResult(toolName, resultSummary));
            
 
@@ -229,6 +210,12 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
     /// </summary>
     private async Task<NextStep> GetNextStepFromLLM(string userRequest, List<ToolExecutionResult> executedTasks)
     {
+        // Determine which tools should be available for this request
+        var availableToolTypes = DetermineAvailableTools(userRequest, executedTasks);
+
+        // Generate dynamic system prompt based on available tools
+        var systemPrompt = GenerateSystemPrompt(availableToolTypes);
+
         // Build the user message with original question and executed tasks
         var userMessage = $"User Request: {userRequest}";
 
@@ -242,12 +229,14 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
         }
 
         var chatHistory = new ChatHistory();
-        chatHistory.AddSystemMessage(_systemPrompt);
+        chatHistory.AddSystemMessage(systemPrompt);
         chatHistory.AddUserMessage(userMessage);
 
         // Configure OpenAI execution settings with JSON schema constraint
-        // Serialize schema to string and embed it into a "json_schema" response_format object
-        var schemaStr = _functionFactory.GenerateJsonSchemaForToolCall();
+        // Generate schema for the same set of available tools
+        var schemaStr = availableToolTypes != null
+            ? _functionFactory.GenerateJsonSchemaForToolCall(availableToolTypes)
+            : _functionFactory.GenerateJsonSchemaForToolCall();
         var chatResponseFormat = OpenAI.Chat.ChatResponseFormat.CreateJsonSchemaFormat(
             jsonSchemaFormatName: "next_step_schema",
             jsonSchema: BinaryData.FromString(schemaStr),

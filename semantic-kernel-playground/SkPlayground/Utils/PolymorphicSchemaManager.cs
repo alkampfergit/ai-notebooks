@@ -11,20 +11,35 @@ using System.Text;
 namespace SkPlayground.Utils;
 
 /// <summary>
-/// **Result object containing schema and documentation information**
+/// **Information about a specific tool available in the schema**
 ///
-/// This record provides a comprehensive result from schema generation including:
-/// - **JsonSchema**: The complete JSON schema string for OpenAI compatibility
-/// - **PropertyDescriptions**: Markdown-formatted documentation of all properties
-/// - **ToolDescription**: High-level description of the tool/container class
+/// Contains detailed information about an individual tool including its purpose,
+/// type identifier, and parameter descriptions.
+/// </summary>
+/// <param name="ToolName">Name of the tool (e.g., "SendEmailToolCall")</param>
+/// <param name="ToolType">Type discriminator used in JSON (e.g., "send_email")</param>
+/// <param name="ToolDescription">High-level description of what this tool does</param>
+/// <param name="ParameterDescriptions">Markdown-formatted descriptions of all tool parameters</param>
+public record ToolInformation(
+    string ToolName,
+    string ToolType,
+    string ToolDescription,
+    string ParameterDescriptions
+);
+
+/// <summary>
+/// **Comprehensive result from schema generation with structured tool information**
+///
+/// This record provides a well-organized result that separates the outer container
+/// object specification from the detailed information about available inner tools.
 /// </summary>
 /// <param name="JsonSchema">Complete JSON schema string compatible with OpenAI structured output</param>
-/// <param name="PropertyDescriptions">Markdown-formatted documentation of all properties and their descriptions</param>
-/// <param name="ToolDescription">High-level description of the tool/container class extracted from Description attribute</param>
+/// <param name="OuterObjectDescription">Description and specification of the container/outer object</param>
+/// <param name="AvailableTools">Detailed information about each available inner tool</param>
 public record SchemaGenerationResult(
     string JsonSchema,
-    string PropertyDescriptions,
-    string ToolDescription
+    string OuterObjectDescription,
+    ToolInformation[] AvailableTools
 );
 
 /// <summary>
@@ -563,60 +578,47 @@ public class PolymorphicSchemaManager<TContainer, TPolymorphicBase>
     /// **Internal method to generate comprehensive schema result**
     ///
     /// Generates the JSON schema and extracts documentation from Description attributes
-    /// to create property descriptions and tool description.
+    /// to create structured tool information and outer object description.
     /// </summary>
     /// <param name="typesToInclude">Types to include in the schema</param>
-    /// <returns>Complete schema generation result</returns>
+    /// <returns>Complete schema generation result with structured tool information</returns>
     private SchemaGenerationResult GenerateSchemaWithDocumentationInternal(IEnumerable<Type> typesToInclude)
     {
         // Generate the JSON schema using existing logic
         var jsonSchema = GenerateSchemaInternal(typesToInclude);
 
-        // Extract tool description from container class
-        var toolDescription = ExtractToolDescription();
+        // Generate outer object description (container class)
+        var outerObjectDescription = GenerateOuterObjectDescription();
 
-        // Generate property descriptions in markdown format
-        var propertyDescriptions = GeneratePropertyDescriptions(typesToInclude);
+        // Generate tool information for each available tool type
+        var availableTools = GenerateToolInformation(typesToInclude);
 
         return new SchemaGenerationResult(
             JsonSchema: jsonSchema,
-            PropertyDescriptions: propertyDescriptions,
-            ToolDescription: toolDescription
+            OuterObjectDescription: outerObjectDescription,
+            AvailableTools: availableTools
         );
     }
 
     /// <summary>
-    /// **Extracts tool description from container class Description attribute**
+    /// **Generates description for the outer object (container class)**
     ///
-    /// Looks for Description attribute on the container class (TContainer)
-    /// and returns its value, or a default message if not found.
+    /// Creates comprehensive documentation for the container object including
+    /// its purpose and property descriptions.
     /// </summary>
-    /// <returns>Tool description string</returns>
-    private string ExtractToolDescription()
+    /// <returns>Markdown-formatted outer object description</returns>
+    private string GenerateOuterObjectDescription()
     {
         var containerType = typeof(TContainer);
         var descriptionAttribute = containerType.GetCustomAttribute<DescriptionAttribute>();
+        var containerDescription = descriptionAttribute?.Description ?? $"Container object: {containerType.Name}";
 
-        return descriptionAttribute?.Description ?? $"Tool: {containerType.Name}";
-    }
-
-    /// <summary>
-    /// **Generates markdown-formatted property descriptions**
-    ///
-    /// Creates comprehensive documentation for all properties in the container
-    /// and polymorphic types, including their descriptions from Description attributes.
-    /// </summary>
-    /// <param name="typesToInclude">Polymorphic types to include in documentation</param>
-    /// <returns>Markdown-formatted property documentation</returns>
-    private string GeneratePropertyDescriptions(IEnumerable<Type> typesToInclude)
-    {
         var markdown = new StringBuilder();
-        markdown.AppendLine("# Property Descriptions");
+        markdown.AppendLine($"# {containerType.Name}");
         markdown.AppendLine();
-
-        // Document container properties
-        var containerType = typeof(TContainer);
-        markdown.AppendLine($"## {containerType.Name} Properties");
+        markdown.AppendLine(containerDescription);
+        markdown.AppendLine();
+        markdown.AppendLine("## Properties");
         markdown.AppendLine();
 
         var containerProperties = containerType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
@@ -626,22 +628,62 @@ public class PolymorphicSchemaManager<TContainer, TPolymorphicBase>
             markdown.AppendLine($"- **{prop.Name}**: {description}");
         }
 
+        return markdown.ToString();
+    }
+
+    /// <summary>
+    /// **Generates detailed information for each available tool**
+    ///
+    /// Creates ToolInformation objects for each tool type including tool name,
+    /// type discriminator, description, and parameter documentation.
+    /// </summary>
+    /// <param name="typesToInclude">Tool types to include in the information</param>
+    /// <returns>Array of ToolInformation objects</returns>
+    private ToolInformation[] GenerateToolInformation(IEnumerable<Type> typesToInclude)
+    {
+        var tools = new List<ToolInformation>();
+
+        foreach (var toolType in typesToInclude)
+        {
+            // Extract tool description from class Description attribute
+            var toolDescriptionAttr = toolType.GetCustomAttribute<DescriptionAttribute>();
+            var toolDescription = toolDescriptionAttr?.Description ?? $"Tool: {toolType.Name}";
+
+            // Generate type discriminator (snake_case from class name)
+            var toolTypeDiscriminator = GetDiscriminatorValue(toolType);
+
+            // Generate parameter descriptions
+            var parameterDescriptions = GenerateParameterDescriptions(toolType);
+
+            tools.Add(new ToolInformation(
+                ToolName: toolType.Name,
+                ToolType: toolTypeDiscriminator,
+                ToolDescription: toolDescription,
+                ParameterDescriptions: parameterDescriptions
+            ));
+        }
+
+        return tools.ToArray();
+    }
+
+    /// <summary>
+    /// **Generates markdown-formatted parameter descriptions for a specific tool**
+    ///
+    /// Creates documentation for all parameters of a specific tool type.
+    /// </summary>
+    /// <param name="toolType">The tool type to document</param>
+    /// <returns>Markdown-formatted parameter documentation</returns>
+    private string GenerateParameterDescriptions(Type toolType)
+    {
+        var markdown = new StringBuilder();
+        markdown.AppendLine($"## {toolType.Name} Parameters");
         markdown.AppendLine();
 
-        // Document polymorphic type properties
-        foreach (var type in typesToInclude)
+        var properties = toolType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        foreach (var prop in properties)
         {
-            markdown.AppendLine($"## {type.Name} Properties");
-            markdown.AppendLine();
-
-            var typeProperties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-            foreach (var prop in typeProperties)
-            {
-                var description = prop.GetCustomAttribute<DescriptionAttribute>()?.Description ?? "No description provided";
-                markdown.AppendLine($"- **{prop.Name}**: {description}");
-            }
-
-            markdown.AppendLine();
+            var description = prop.GetCustomAttribute<DescriptionAttribute>()?.Description ?? "No description provided";
+            markdown.AppendLine($"- **{prop.Name}**: {description}");
         }
 
         return markdown.ToString();

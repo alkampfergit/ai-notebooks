@@ -210,9 +210,9 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         Assert.That(result.TaskCompleted, Is.False, "TaskCompleted should be correctly deserialized");
 
         // **Assert**: Verify polymorphic property is correctly typed
-        Assert.That(result.ToolCall, Is.InstanceOf<SkPlayground.BusinessFunctions.SendEmailToolCall>(), "ToolCall should be deserialized as SendEmailToolCall");
+        Assert.That(result.NextStepToolToCall, Is.InstanceOf<SkPlayground.BusinessFunctions.SendEmailToolCall>(), "ToolCall should be deserialized as SendEmailToolCall");
 
-        var emailCall = result.ToolCall as SkPlayground.BusinessFunctions.SendEmailToolCall;
+        var emailCall = result.NextStepToolToCall as SkPlayground.BusinessFunctions.SendEmailToolCall;
         Assert.That(emailCall, Is.Not.Null, "Should be able to cast ToolCall to SendEmailToolCall");
         Assert.That(emailCall!.Subject, Is.EqualTo("Order Confirmation"), "Subject should be correctly deserialized");
         Assert.That(emailCall.Message, Is.EqualTo("Your order has been processed"), "Message should be correctly deserialized");
@@ -522,9 +522,9 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         // **Assert**: Verify deserialization succeeded
         Assert.That(nextStep, Is.Not.Null, "Should deserialize NextStep");
         Assert.That(nextStep!.CurrentState, Is.EqualTo("Retrieving customer information"));
-        Assert.That(nextStep.ToolCall, Is.TypeOf<SkPlayground.BusinessFunctions.GetCustomerDataToolCall>(), "ToolCall should be GetCustomerDataToolCall");
+        Assert.That(nextStep.NextStepToolToCall, Is.TypeOf<SkPlayground.BusinessFunctions.GetCustomerDataToolCall>(), "ToolCall should be GetCustomerDataToolCall");
 
-        var getCustomerCall = nextStep.ToolCall as SkPlayground.BusinessFunctions.GetCustomerDataToolCall;
+        var getCustomerCall = nextStep.NextStepToolToCall as SkPlayground.BusinessFunctions.GetCustomerDataToolCall;
         Assert.That(getCustomerCall, Is.Not.Null, "Should cast to GetCustomerDataToolCall");
         Assert.That(getCustomerCall!.Email, Is.EqualTo("customer@example.com"));
         Assert.That(getCustomerCall.GetAllCustomers, Is.False);
@@ -908,9 +908,9 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
             Assert.That(nextStep!.CurrentState, Is.Not.Null.And.Not.Empty, "CurrentState should be populated");
             Assert.That(nextStep.PlanRemainingStepsBrief, Is.Not.Null.And.Not.Empty, "PlanRemainingStepsBrief should be populated");
             Assert.That(nextStep.TaskCompleted, Is.False, "TaskCompleted should be false as requested");
-            Assert.That(nextStep.ToolCall, Is.InstanceOf<SkPlayground.BusinessFunctions.SendEmailToolCall>(), "ToolCall should be SendEmailToolCall");
+            Assert.That(nextStep.NextStepToolToCall, Is.InstanceOf<SkPlayground.BusinessFunctions.SendEmailToolCall>(), "ToolCall should be SendEmailToolCall");
 
-            var sendEmailCall = nextStep.ToolCall as SkPlayground.BusinessFunctions.SendEmailToolCall;
+            var sendEmailCall = nextStep.NextStepToolToCall as SkPlayground.BusinessFunctions.SendEmailToolCall;
             Assert.That(sendEmailCall, Is.Not.Null, "Should be able to cast ToolCall to SendEmailToolCall");
             Assert.That(sendEmailCall!.Subject, Is.Not.Null.And.Not.Empty, "Email subject should not be empty");
             Assert.That(sendEmailCall.Message, Is.Not.Null.And.Not.Empty, "Email message should not be empty");

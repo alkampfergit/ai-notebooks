@@ -161,10 +161,10 @@ public class NextStepManagerTests : SemanticKernelTestBase
         Assert.That(nextStep.CurrentState, Is.EqualTo("Ready to send email"));
         Assert.That(nextStep.TaskCompleted, Is.False);
         Assert.That(nextStep.PlanRemainingStepsBrief.Count, Is.EqualTo(2));
-        Assert.That(nextStep.ToolCall, Is.Not.Null, "ToolCall should not be null");
-        Assert.That(nextStep.ToolCall, Is.TypeOf<SendEmailToolCall>(), "ToolCall should be SendEmailToolCall");
+        Assert.That(nextStep.NextStepToolToCall, Is.Not.Null, "ToolCall should not be null");
+        Assert.That(nextStep.NextStepToolToCall, Is.TypeOf<SendEmailToolCall>(), "ToolCall should be SendEmailToolCall");
 
-        var sendEmailCall = nextStep.ToolCall as SendEmailToolCall;
+        var sendEmailCall = nextStep.NextStepToolToCall as SendEmailToolCall;
         Assert.That(sendEmailCall, Is.Not.Null, "Should cast to SendEmailToolCall");
         Assert.That(sendEmailCall.Subject, Is.EqualTo("Important Update"));
         Assert.That(sendEmailCall.Message, Is.EqualTo("Please review the latest changes"));
@@ -197,9 +197,9 @@ public class NextStepManagerTests : SemanticKernelTestBase
 
         Assert.That(nextStep, Is.Not.Null, "Should deserialize NextStep");
         Assert.That(nextStep.CurrentState, Is.EqualTo("Retrieving customer information"));
-        Assert.That(nextStep.ToolCall, Is.TypeOf<GetCustomerDataToolCall>(), "ToolCall should be GetCustomerDataToolCall");
+        Assert.That(nextStep.NextStepToolToCall, Is.TypeOf<GetCustomerDataToolCall>(), "ToolCall should be GetCustomerDataToolCall");
 
-        var getCustomerCall = nextStep.ToolCall as GetCustomerDataToolCall;
+        var getCustomerCall = nextStep.NextStepToolToCall as GetCustomerDataToolCall;
         Assert.That(getCustomerCall, Is.Not.Null, "Should cast to GetCustomerDataToolCall");
         Assert.That(getCustomerCall.Email, Is.EqualTo("customer@example.com"));
         Assert.That(getCustomerCall.GetAllCustomers, Is.False);
@@ -559,12 +559,12 @@ public class NextStepManagerTests : SemanticKernelTestBase
             var nextStep = manager.DeserializeFromJson(jsonResponse);
 
             Assert.That(nextStep, Is.Not.Null, "Should deserialize to NextStep object");
-            Assert.That(nextStep.ToolCall, Is.Not.Null, "ToolCall should not be null");
+            Assert.That(nextStep.NextStepToolToCall, Is.Not.Null, "ToolCall should not be null");
 
             // Verify polymorphic deserialization - should be a SendEmailToolCall
-            Assert.That(nextStep.ToolCall, Is.TypeOf<SendEmailToolCall>(), "ToolCall should deserialize as SendEmailToolCall type");
+            Assert.That(nextStep.NextStepToolToCall, Is.TypeOf<SendEmailToolCall>(), "ToolCall should deserialize as SendEmailToolCall type");
 
-            var sendEmailCall = nextStep.ToolCall as SendEmailToolCall;
+            var sendEmailCall = nextStep.NextStepToolToCall as SendEmailToolCall;
             Assert.That(sendEmailCall, Is.Not.Null, "Should be able to cast ToolCall to SendEmailToolCall");
             Assert.That(sendEmailCall.Subject, Is.Not.Null.And.Not.Empty, "Email subject should not be empty");
             Assert.That(sendEmailCall.Message, Is.Not.Null.And.Not.Empty, "Email message should not be empty");

@@ -147,12 +147,26 @@ public class BusinessFunctionFactory
     ///
     /// This method creates an OpenAI-compatible JSON schema definition that includes
     /// all configured ToolCall types with proper polymorphic support, discriminators,
-    /// and comprehensive documentation including tool descriptions and property descriptions.
+    /// and comprehensive documentation including outer object description and tool information.
     /// </summary>
-    /// <returns>SchemaGenerationResult containing JSON schema, property descriptions, and tool description</returns>
+    /// <returns>SchemaGenerationResult containing JSON schema, outer object description, and available tools</returns>
     public SchemaGenerationResult GenerateSchemaWithDocumentationForToolCall()
     {
         return _schemaManager.GenerateSchemaWithDocumentation();
+    }
+
+    /// <summary>
+    /// **Generates comprehensive schema result with documentation for specific tool types** using PolymorphicSchemaManager.
+    ///
+    /// This method creates an OpenAI-compatible JSON schema definition that includes
+    /// only the specified ToolCall types with proper polymorphic support, discriminators,
+    /// and comprehensive documentation including outer object description and tool information.
+    /// </summary>
+    /// <param name="includedToolTypes">The specific ToolCall types to include in the schema and documentation</param>
+    /// <returns>SchemaGenerationResult containing JSON schema, outer object description, and available tools</returns>
+    public SchemaGenerationResult GenerateSchemaWithDocumentationForToolCall(IEnumerable<Type> includedToolTypes)
+    {
+        return _schemaManager.GenerateSchemaWithDocumentation(includedToolTypes);
     }
 
     /// <summary>
@@ -169,6 +183,20 @@ public class BusinessFunctionFactory
     public string GenerateJsonSchemaForToolCall()
     {
         return _schemaManager.GenerateSchema();
+    }
+
+    /// <summary>
+    /// **Generates JSON schema for NextStep type with specific tool types** using PolymorphicSchemaManager.
+    ///
+    /// This method creates an OpenAI-compatible JSON schema definition that includes
+    /// only the specified ToolCall types with proper polymorphic support and discriminators.
+    /// Useful for scenarios where only a subset of tools should be available.
+    /// </summary>
+    /// <param name="includedToolTypes">The specific ToolCall types to include in the schema</param>
+    /// <returns>JSON schema string representing the NextStep structure with specified ToolCall types</returns>
+    public string GenerateJsonSchemaForToolCall(IEnumerable<Type> includedToolTypes)
+    {
+        return _schemaManager.GenerateSchema(includedToolTypes);
     }
 
     /// <summary>

@@ -1,8 +1,6 @@
+using Newtonsoft.Json;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
-using System.Text.Json.Serialization;
-using Newtonsoft.Json;
-using SkPlayground.BusinessFunctions;
 
 namespace SkPlayground.Models;
 
@@ -19,7 +17,7 @@ public class NextStep
     public bool TaskCompleted { get; set; } = false;
 
     [Description("Tool to call for next action")]
-    public required ToolCall ToolCall { get; set; }
+    public required ToolCall NextStepToolToCall { get; set; }
 }
 
 public abstract class ToolCall
