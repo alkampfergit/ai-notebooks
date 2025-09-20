@@ -83,9 +83,12 @@ Guidelines:
 - Be laconic. Especially in emails
 - No need to wait for payment confirmation before proceeding
 - Always check customer data before issuing invoices or making changes
+- Whene you determine that there is nothing to do anymore use the report_task_completion tool
 
 Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
     }
+
+    private record ToolExecutionResult(string ToolName, string Summary);
 
     /// <summary>
     /// Execute Schema-Guided Reasoning for the given user request.
@@ -94,13 +97,7 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
     /// </summary>
     public async Task<string> ReasonAndActAsync(string userRequest)
     {
-        var conversationHistory = new List<ChatMessageContent>();
-
-        // Add system prompt to conversation history
-        conversationHistory.Add(new(AuthorRole.System, _systemPrompt));
-
-        // Add user request to conversation history
-        conversationHistory.Add(new(AuthorRole.User, userRequest));
+        var executionTaskResult = new List<ToolExecutionResult>();
 
         // Limit reasoning steps to prevent infinite loops (matching Python original)
         for (int step = 1; step <= 20; step++)
@@ -110,7 +107,7 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
             try
             {
                 // Force LLM to generate structured JSON response conforming to NextStep schema
-                var nextStep = await GetNextStepFromLLM(conversationHistory);
+                var nextStep = await GetNextStepFromLLM(userRequest, executionTaskResult);
 
                 // Display the planned step
                 var currentPlan = nextStep.PlanRemainingStepsBrief?.FirstOrDefault() ?? "No plan specified";
@@ -124,10 +121,13 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
                 }
 
                 // Manually dispatch the tool function
-                var businessResult = await _functionFactory.DispatchToolFunction(nextStep);
+                var businessResult = await _functionFactory.DispatchToolFunction(nextStep.ToolCall);
 
-                // Use the summary for LLM conversation, not the full result object
+                // Add execution result to the list for next iteration
                 var resultSummary = businessResult.Summary;
+                var toolName = nextStep.ToolCall.GetType().Name.Replace("ToolCall", "");
+                executionTaskResult.Add(new ToolExecutionResult(toolName, resultSummary));
+           
 
                 // Use AnsiConsole.WriteLine instead of MarkupLine to avoid markup parsing issues
                 AnsiConsole.Write("[green]    ✓ [/]");
@@ -150,21 +150,31 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
     /// <summary>
     /// Get structured NextStep response from LLM using JSON schema constraint.
     /// This is the core of SGR - forcing the model to generate valid NextStep JSON.
-    /// Returns both the NextStep objects and the original assistant response.
+    /// Uses a single user message containing the original question and executed tasks.
     /// </summary>
-    private async Task<NextStep> GetNextStepFromLLM(List<ChatMessageContent> conversationHistory)
+    private async Task<NextStep> GetNextStepFromLLM(string userRequest, List<ToolExecutionResult> executedTasks)
     {
-        var chatHistory = new ChatHistory();
-        foreach (var message in conversationHistory)
+        // Build the user message with original question and executed tasks
+        var userMessage = $"User Request: {userRequest}";
+
+        if (executedTasks.Count > 0)
         {
-            chatHistory.Add(message);
+            userMessage += "\n\nExecuted Tasks:";
+            foreach (var task in executedTasks)
+            {
+                userMessage += $"\n- {task.ToolName}: {task.Summary}";
+            }
         }
+
+        var chatHistory = new ChatHistory();
+        chatHistory.AddSystemMessage(_systemPrompt);
+        chatHistory.AddUserMessage(userMessage);
 
         // Configure OpenAI execution settings with JSON schema constraint
         // Serialize schema to string and embed it into a "json_schema" response_format object
         var schemaStr = _functionFactory.GenerateJsonSchemaForToolCall();
         var chatResponseFormat = OpenAI.Chat.ChatResponseFormat.CreateJsonSchemaFormat(
-            jsonSchemaFormatName: "product_review",
+            jsonSchemaFormatName: "next_step_schema",
             jsonSchema: BinaryData.FromString(schemaStr),
             jsonSchemaIsStrict: true
         );

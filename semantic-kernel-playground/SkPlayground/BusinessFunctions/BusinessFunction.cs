@@ -44,19 +44,19 @@ public abstract class BusinessFunction
 public abstract class BusinessFunction<T> : BusinessFunction where T : class
 {
     /// <summary>
-    /// **Execute method that accepts a NextStep instance** and casts it to the specific type T.
-    /// This provides a way to execute the function with a strongly-typed NextStep parameter.
+    /// **Execute method that accepts a ToolCall instance** and casts it to the specific type T.
+    /// This provides a way to execute the function with a strongly-typed ToolCall parameter.
     /// </summary>
-    /// <param name="nextStep">The NextStep instance containing the parameters</param>
+    /// <param name="toolCall">The ToolCall instance containing the parameters</param>
     /// <param name="cancellationToken">Cancellation token to support cooperative cancellation</param>
     /// <returns>BusinessFunctionResult containing both result object and summary description</returns>
-    public override async Task<BusinessFunctionResult> ExecuteAsync(NextStep nextStep, CancellationToken cancellationToken = default)
+    public override async Task<BusinessFunctionResult> ExecuteAsync(ToolCall toolCall, CancellationToken cancellationToken = default)
     {
-        if (nextStep is not T typedParameters)
+        if (toolCall is not T typedParameters)
         {
-            throw new ArgumentException($"NextStep parameter must be of type {typeof(T).Name}", nameof(nextStep));
+            throw new ArgumentException($"ToolCall parameter must be of type {typeof(T).Name}", nameof(toolCall));
         }
-        
+
         return await ExecuteAsync(typedParameters, cancellationToken);
     }
 

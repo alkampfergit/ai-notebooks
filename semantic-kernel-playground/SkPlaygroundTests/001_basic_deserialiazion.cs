@@ -190,7 +190,7 @@ John Smith lives at 123 Main Street, Springfield, IL 62701. He is a software eng
 
         // Configure Azure OpenAI connection like in Program.cs
         kernelBuilder.AddAzureOpenAIChatCompletion(
-            deploymentName: "gpt4omini",
+            deploymentName: "gpt-4o-mini",
             apiKey: apiKey,
             endpoint: endpoint
         );

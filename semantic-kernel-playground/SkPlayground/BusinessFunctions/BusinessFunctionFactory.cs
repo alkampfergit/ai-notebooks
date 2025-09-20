@@ -153,13 +153,7 @@ public class BusinessFunctionFactory
     /// <returns>JSON schema string representing the NextStep structure with polymorphic ToolCall support</returns>
     public string GenerateJsonSchemaForToolCall()
     {
-        // **Use PolymorphicSchemaManager to generate complete schema with all ToolCall types**
-        // This automatically handles:
-        // - Polymorphic ToolCall property with anyOf constraint
-        // - Const discriminators for each derived type  
-        // - additionalProperties: false recursively
-        // - OpenAI compatibility requirements
-        return _schemaManager.GenerateSchema([typeof(SendEmailToolCall)]);
+        return _schemaManager.GenerateSchema();
     }
 
     /// <summary>

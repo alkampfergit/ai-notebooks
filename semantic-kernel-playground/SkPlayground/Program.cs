@@ -75,13 +75,20 @@ class Program
                 var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
 
                 var apiKey = Dotenv.Get("OPENAI_API_KEY");
+                
                 var endpoint = Dotenv.Get("AZURE_ENDPOINT");
                 
-                // Configure Azure OpenAI connection
-                kernelBuilder.AddAzureOpenAIChatCompletion(
-                    deploymentName: "gpt-4o-mini",
-                    apiKey: apiKey,
-                    endpoint: endpoint
+                //// Configure Azure OpenAI connection
+                //kernelBuilder.AddAzureOpenAIChatCompletion(
+                //    deploymentName: "gpt-4o-mini",
+                //    apiKey: apiKey,
+                //    endpoint: endpoint
+                //);
+
+                // use standard openai 
+                kernelBuilder.AddOpenAIChatCompletion(
+                    modelId: "gpt-4o-mini",
+                    apiKey: Dotenv.Get("OPENAI_API_KEY_NOT_AZURE")
                 );
 
                 kernel = kernelBuilder.Build();
