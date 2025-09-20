@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
@@ -7,6 +8,7 @@ using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using SkPlayground.Models;
 using SkPlayground.BusinessFunctions;
+using SkPlayground.Utils;
 using Spectre.Console;
 
 namespace SkPlayground.Services;
@@ -59,6 +61,9 @@ public class SchemaGuidedReasoner
         // Initialize the business function factory
         _functionFactory = new BusinessFunctionFactory(_databaseService);
 
+        // Generate comprehensive schema documentation
+        var schemaResult = _functionFactory.GenerateSchemaWithDocumentationForToolCall();
+
         // Initialize conversation history with system prompt for structured JSON responses
         _systemPrompt = $@"
 You are a business assistant helping Rinat Abdullin with customer interactions.
@@ -69,13 +74,14 @@ IMPORTANT: You must always respond with structured JSON that includes:
 3. Whether the task is completed
 4. The specific tool call to execute next (with proper type discriminator)
 
-Available function types:
-- send_email: Send emails to customers
-- issue_invoice: Create invoices for customers  
-- get_customer_data: Retrieve customer information
-- void_invoice: Cancel existing invoices
-- create_rule: Create business rules for customers
-- report_task_completion: Complete tasks with summary
+## Tool Description:
+{schemaResult.ToolDescription}
+
+## Available Functions:
+{GenerateFunctionSummary(schemaResult)}
+
+## Property Documentation:
+{schemaResult.PropertyDescriptions}
 
 Guidelines:
 - Clearly report when tasks are done using report_task_completion
@@ -83,12 +89,81 @@ Guidelines:
 - Be laconic. Especially in emails
 - No need to wait for payment confirmation before proceeding
 - Always check customer data before issuing invoices or making changes
-- Whene you determine that there is nothing to do anymore use the report_task_completion tool
+- When you determine that there is nothing to do anymore use the report_task_completion tool
 
 Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
     }
 
     private record ToolExecutionResult(string ToolName, string Summary);
+
+    /// <summary>
+    /// **Generates a summary of available functions from schema documentation**
+    ///
+    /// Extracts function information from the schema result to create a concise
+    /// summary of available business functions for the LLM system prompt.
+    /// </summary>
+    /// <param name="schemaResult">The comprehensive schema result with documentation</param>
+    /// <returns>Formatted function summary string</returns>
+    private static string GenerateFunctionSummary(SchemaGenerationResult schemaResult)
+    {
+        var summary = new StringBuilder();
+
+        // Extract function types from the schema by looking at the JSON definitions
+        var schemaNode = JsonNode.Parse(schemaResult.JsonSchema);
+        var definitions = schemaNode?["definitions"]?.AsObject();
+
+        if (definitions != null)
+        {
+            foreach (var definition in definitions)
+            {
+                var functionName = definition.Key;
+                var functionSchema = definition.Value?.AsObject();
+
+                // Get description from the schema if available
+                var description = functionSchema?["description"]?.ToString() ??
+                                 GetFunctionDescriptionFromName(functionName);
+
+                // Convert from PascalCase to readable format
+                var readableName = ConvertToReadableName(functionName);
+
+                summary.AppendLine($"- **{readableName}**: {description}");
+            }
+        }
+
+        return summary.ToString();
+    }
+
+    /// <summary>
+    /// **Converts PascalCase function names to readable format**
+    /// </summary>
+    private static string ConvertToReadableName(string functionName)
+    {
+        // Remove "ToolCall" suffix if present
+        var cleanName = functionName.EndsWith("ToolCall")
+            ? functionName[..^8]
+            : functionName;
+
+        // Convert PascalCase to space-separated words
+        return System.Text.RegularExpressions.Regex.Replace(cleanName,
+            "([a-z])([A-Z])", "$1 $2").ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// **Provides default descriptions for function names**
+    /// </summary>
+    private static string GetFunctionDescriptionFromName(string functionName)
+    {
+        return functionName.ToLowerInvariant() switch
+        {
+            var name when name.Contains("email") => "Send emails to customers",
+            var name when name.Contains("invoice") => "Create invoices for customers",
+            var name when name.Contains("customer") => "Retrieve customer information",
+            var name when name.Contains("void") => "Cancel existing invoices",
+            var name when name.Contains("rule") => "Create business rules",
+            var name when name.Contains("completion") => "Complete tasks with summary",
+            _ => "Business operation function"
+        };
+    }
 
     /// <summary>
     /// Execute Schema-Guided Reasoning for the given user request.

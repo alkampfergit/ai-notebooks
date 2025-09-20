@@ -143,12 +143,27 @@ public class BusinessFunctionFactory
     }
 
     /// <summary>
+    /// **Generates comprehensive schema result with documentation** using PolymorphicSchemaManager.
+    ///
+    /// This method creates an OpenAI-compatible JSON schema definition that includes
+    /// all configured ToolCall types with proper polymorphic support, discriminators,
+    /// and comprehensive documentation including tool descriptions and property descriptions.
+    /// </summary>
+    /// <returns>SchemaGenerationResult containing JSON schema, property descriptions, and tool description</returns>
+    public SchemaGenerationResult GenerateSchemaWithDocumentationForToolCall()
+    {
+        return _schemaManager.GenerateSchemaWithDocumentation();
+    }
+
+    /// <summary>
     /// **Generates JSON schema for NextStep type** using PolymorphicSchemaManager.
-    /// 
+    ///
     /// This method creates an OpenAI-compatible JSON schema definition that includes
     /// all configured ToolCall types with proper polymorphic support and discriminators.
     /// The schema is automatically configured with additionalProperties: false and proper
     /// const/enum discriminators for each ToolCall type.
+    ///
+    /// NOTE: For enhanced documentation capabilities, use GenerateSchemaWithDocumentationForToolCall() instead.
     /// </summary>
     /// <returns>JSON schema string representing the NextStep structure with polymorphic ToolCall support</returns>
     public string GenerateJsonSchemaForToolCall()

@@ -3,15 +3,34 @@ using NJsonSchema.Generation;
 using NJsonSchema.NewtonsoftJson.Generation;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
+using System.Text;
 
 namespace SkPlayground.Utils;
 
 /// <summary>
+/// **Result object containing schema and documentation information**
+///
+/// This record provides a comprehensive result from schema generation including:
+/// - **JsonSchema**: The complete JSON schema string for OpenAI compatibility
+/// - **PropertyDescriptions**: Markdown-formatted documentation of all properties
+/// - **ToolDescription**: High-level description of the tool/container class
+/// </summary>
+/// <param name="JsonSchema">Complete JSON schema string compatible with OpenAI structured output</param>
+/// <param name="PropertyDescriptions">Markdown-formatted documentation of all properties and their descriptions</param>
+/// <param name="ToolDescription">High-level description of the tool/container class extracted from Description attribute</param>
+public record SchemaGenerationResult(
+    string JsonSchema,
+    string PropertyDescriptions,
+    string ToolDescription
+);
+
+/// <summary>
 /// Generic manager for polymorphic schema generation and deserialization.
-/// Works with any container type that has a polymorphic property, allowing configuring 
-/// which derived types to include and providing methods for both OpenAI-compatible 
+/// Works with any container type that has a polymorphic property, allowing configuring
+/// which derived types to include and providing methods for both OpenAI-compatible
 /// schema generation and JSON deserialization with polymorphic support.
 /// </summary>
 /// <typeparam name="TContainer">The container type that holds the polymorphic property</typeparam>
@@ -487,6 +506,146 @@ public class PolymorphicSchemaManager<TContainer, TPolymorphicBase>
     /// Gets the polymorphic property information
     /// </summary>
     public PropertyInfo PolymorphicProperty => _polymorphicProperty;
+
+    /// <summary>
+    /// **Generates comprehensive schema result with documentation**
+    ///
+    /// Creates a complete schema generation result including the JSON schema,
+    /// property descriptions in markdown format, and tool description.
+    /// </summary>
+    /// <returns>SchemaGenerationResult containing schema, property docs, and tool description</returns>
+    public SchemaGenerationResult GenerateSchemaWithDocumentation()
+    {
+        if (_derivedPolymorphicTypes.Count == 0)
+        {
+            throw new InvalidOperationException($"No derived {typeof(TPolymorphicBase).Name} types have been added. Use AddDerivedType<T>() or AddDerivedTypes() first.");
+        }
+
+        return GenerateSchemaWithDocumentationInternal(_derivedPolymorphicTypes);
+    }
+
+    /// <summary>
+    /// **Generates comprehensive schema result with documentation for specific types**
+    ///
+    /// Creates a complete schema generation result including the JSON schema,
+    /// property descriptions in markdown format, and tool description for only
+    /// the specified derived types.
+    /// </summary>
+    /// <param name="includedTypes">The specific derived types to include in the schema</param>
+    /// <returns>SchemaGenerationResult containing schema, property docs, and tool description</returns>
+    public SchemaGenerationResult GenerateSchemaWithDocumentation(IEnumerable<Type> includedTypes)
+    {
+        if (_derivedPolymorphicTypes.Count == 0)
+        {
+            throw new InvalidOperationException($"No derived {typeof(TPolymorphicBase).Name} types have been added. Use AddDerivedType<T>() or AddDerivedTypes() first.");
+        }
+
+        var typesToInclude = includedTypes.ToList();
+
+        // Validate that all included types are configured in this manager
+        foreach (var type in typesToInclude)
+        {
+            if (!_derivedPolymorphicTypes.Contains(type))
+            {
+                throw new ArgumentException($"Type {type.Name} is not configured in this PolymorphicSchemaManager. Add it first using AddDerivedType<T>() or AddDerivedTypes().", nameof(includedTypes));
+            }
+        }
+
+        if (typesToInclude.Count == 0)
+        {
+            throw new ArgumentException("At least one type must be included in the schema.", nameof(includedTypes));
+        }
+
+        return GenerateSchemaWithDocumentationInternal(typesToInclude);
+    }
+
+    /// <summary>
+    /// **Internal method to generate comprehensive schema result**
+    ///
+    /// Generates the JSON schema and extracts documentation from Description attributes
+    /// to create property descriptions and tool description.
+    /// </summary>
+    /// <param name="typesToInclude">Types to include in the schema</param>
+    /// <returns>Complete schema generation result</returns>
+    private SchemaGenerationResult GenerateSchemaWithDocumentationInternal(IEnumerable<Type> typesToInclude)
+    {
+        // Generate the JSON schema using existing logic
+        var jsonSchema = GenerateSchemaInternal(typesToInclude);
+
+        // Extract tool description from container class
+        var toolDescription = ExtractToolDescription();
+
+        // Generate property descriptions in markdown format
+        var propertyDescriptions = GeneratePropertyDescriptions(typesToInclude);
+
+        return new SchemaGenerationResult(
+            JsonSchema: jsonSchema,
+            PropertyDescriptions: propertyDescriptions,
+            ToolDescription: toolDescription
+        );
+    }
+
+    /// <summary>
+    /// **Extracts tool description from container class Description attribute**
+    ///
+    /// Looks for Description attribute on the container class (TContainer)
+    /// and returns its value, or a default message if not found.
+    /// </summary>
+    /// <returns>Tool description string</returns>
+    private string ExtractToolDescription()
+    {
+        var containerType = typeof(TContainer);
+        var descriptionAttribute = containerType.GetCustomAttribute<DescriptionAttribute>();
+
+        return descriptionAttribute?.Description ?? $"Tool: {containerType.Name}";
+    }
+
+    /// <summary>
+    /// **Generates markdown-formatted property descriptions**
+    ///
+    /// Creates comprehensive documentation for all properties in the container
+    /// and polymorphic types, including their descriptions from Description attributes.
+    /// </summary>
+    /// <param name="typesToInclude">Polymorphic types to include in documentation</param>
+    /// <returns>Markdown-formatted property documentation</returns>
+    private string GeneratePropertyDescriptions(IEnumerable<Type> typesToInclude)
+    {
+        var markdown = new StringBuilder();
+        markdown.AppendLine("# Property Descriptions");
+        markdown.AppendLine();
+
+        // Document container properties
+        var containerType = typeof(TContainer);
+        markdown.AppendLine($"## {containerType.Name} Properties");
+        markdown.AppendLine();
+
+        var containerProperties = containerType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        foreach (var prop in containerProperties)
+        {
+            var description = prop.GetCustomAttribute<DescriptionAttribute>()?.Description ?? "No description provided";
+            markdown.AppendLine($"- **{prop.Name}**: {description}");
+        }
+
+        markdown.AppendLine();
+
+        // Document polymorphic type properties
+        foreach (var type in typesToInclude)
+        {
+            markdown.AppendLine($"## {type.Name} Properties");
+            markdown.AppendLine();
+
+            var typeProperties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+            foreach (var prop in typeProperties)
+            {
+                var description = prop.GetCustomAttribute<DescriptionAttribute>()?.Description ?? "No description provided";
+                markdown.AppendLine($"- **{prop.Name}**: {description}");
+            }
+
+            markdown.AppendLine();
+        }
+
+        return markdown.ToString();
+    }
 }
 
 /// <summary>
