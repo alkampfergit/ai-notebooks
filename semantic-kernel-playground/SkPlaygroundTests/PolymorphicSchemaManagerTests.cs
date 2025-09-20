@@ -1,13 +1,11 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using System.Linq;
-using SkPlayground.Utils;
-using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
+using OpenAI.Chat;
+using SkPlayground.Utils;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using ActualNextStep = SkPlayground.Models.NextStep;
 using ActualToolCall = SkPlayground.Models.ToolCall;
-using OpenAI.Chat;
 
 namespace SkPlaygroundTests;
 
@@ -102,7 +100,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         var schemaObject = schemaNode!.AsObject();
         var properties = schemaObject["properties"]?.AsObject();
         var toolCallProperty = properties!["ToolCall"]?.AsObject();
-        
+
         Assert.That(toolCallProperty, Is.Not.Null, "ToolCall property should be present in schema");
 
         // **Assert**: Verify that toolCall property contains anyOf for polymorphic types
@@ -115,7 +113,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         // **Assert**: Verify definitions section contains expected types
         Assert.That(schemaObject.ContainsKey("definitions"), Is.True, "Schema should contain 'definitions' section");
         var definitions = schemaObject["definitions"]?.AsObject();
-        
+
         Assert.That(definitions!.ContainsKey("SendEmailToolCall"), Is.True, "Definitions should contain SendEmailToolCall");
         Assert.That(definitions.ContainsKey("GetCustomerDataToolCall"), Is.True, "Definitions should contain GetCustomerDataToolCall");
         Assert.That(definitions.ContainsKey("IssueInvoiceToolCall"), Is.True, "Definitions should contain IssueInvoiceToolCall");
@@ -167,7 +165,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         var properties = schemaObject["properties"]?.AsObject();
         var toolCallProperty = properties!["ToolCall"]?.AsObject();
         var anyOfArray = toolCallProperty!["anyOf"]?.AsArray();
-        
+
         Assert.That(anyOfArray!.Count, Is.EqualTo(2), "anyOf array should contain exactly 2 types");
 
         // **Assert**: Verify definitions contains only specified types
@@ -210,10 +208,10 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         Assert.That(result, Is.Not.Null, "Deserialization should succeed");
         Assert.That(result!.CurrentState, Is.EqualTo("Processing email request"), "CurrentState should be correctly deserialized");
         Assert.That(result.TaskCompleted, Is.False, "TaskCompleted should be correctly deserialized");
-        
+
         // **Assert**: Verify polymorphic property is correctly typed
         Assert.That(result.ToolCall, Is.InstanceOf<SkPlayground.BusinessFunctions.SendEmailToolCall>(), "ToolCall should be deserialized as SendEmailToolCall");
-        
+
         var emailCall = result.ToolCall as SkPlayground.BusinessFunctions.SendEmailToolCall;
         Assert.That(emailCall, Is.Not.Null, "Should be able to cast ToolCall to SendEmailToolCall");
         Assert.That(emailCall!.Subject, Is.EqualTo("Order Confirmation"), "Subject should be correctly deserialized");
@@ -377,7 +375,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         var schema = _manager.GenerateSchema();
         var schemaObj = JsonDocument.Parse(schema);
         var root = schemaObj.RootElement;
-        
+
         // **Assert**: Verify schema contains definitions for derived types
         Assert.That(root.TryGetProperty("definitions", out var definitions), Is.True, "Schema should have 'definitions'");
         Assert.That(definitions.TryGetProperty("SendEmailToolCall", out var sendEmail), Is.True, "Schema should have 'SendEmailToolCall' definition");
@@ -387,10 +385,10 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         Assert.That(sendEmail.TryGetProperty("properties", out var sendEmailProps), Is.True, "SendEmailToolCall should have 'properties'");
         var sendEmailPropsObj = sendEmailProps.EnumerateObject().ToDictionary(p => p.Name, p => p.Value);
         Assert.That(sendEmailPropsObj.ContainsKey("type"), Is.True, "SendEmailToolCall should have 'type' property");
-        
+
         // Debug what properties we actually have
         Console.WriteLine($"Available properties in SendEmailToolCall: {string.Join(", ", sendEmailPropsObj.Keys)}");
-        
+
         // Check for both PascalCase and camelCase versions (to match NextStepManager behavior)
         Assert.That(sendEmailPropsObj.ContainsKey("Subject") || sendEmailPropsObj.ContainsKey("subject"), Is.True, "SendEmailToolCall should have 'Subject' or 'subject' property");
         Assert.That(sendEmailPropsObj.ContainsKey("Message") || sendEmailPropsObj.ContainsKey("message"), Is.True, "SendEmailToolCall should have 'Message' or 'message' property");
@@ -407,22 +405,22 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         // **Arrange**: Create manager with only SendEmail
         var manager = new PolymorphicSchemaManager<ActualNextStep, ActualToolCall>()
             .AddDerivedType<SkPlayground.BusinessFunctions.SendEmailToolCall>();
-        
+
         // **Act**: Generate schema
         var schemaJson = manager.GenerateSchema();
         var schemaObj = JsonDocument.Parse(schemaJson);
         var root = schemaObj.RootElement;
-        
+
         // **Assert**: Verify schema structure
         Assert.That(root.TryGetProperty("definitions", out var definitions), Is.True, "Schema should have 'definitions'");
         Assert.That(definitions.TryGetProperty("SendEmailToolCall", out _), Is.True, "Schema should have 'SendEmailToolCall' definition");
         Assert.That(definitions.TryGetProperty("GetCustomerDataToolCall", out _), Is.False, "Schema should NOT have 'GetCustomerDataToolCall' definition");
-        
+
         // **Assert**: Verify ToolCall property has anyOf with only SendEmail
         Assert.That(root.TryGetProperty("properties", out var properties), Is.True, "Schema should have 'properties'");
         Assert.That(properties.TryGetProperty("ToolCall", out var toolCallProp), Is.True, "Schema should have 'ToolCall' property");
         Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "toolCall property should have 'anyOf'");
-        
+
         var anyOfArray = anyOf.EnumerateArray().ToList();
         Assert.That(anyOfArray.Count, Is.EqualTo(1), "anyOf should have exactly one option (SendEmailToolCall)");
     }
@@ -438,7 +436,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         var schema = _manager.GenerateSchema();
         var schemaObj = JsonDocument.Parse(schema);
         var root = schemaObj.RootElement;
-        
+
         // **Assert**: Navigate to SendEmailToolCall definition
         Assert.That(root.TryGetProperty("definitions", out var definitions), Is.True, "Schema should have 'definitions'");
         Assert.That(definitions.TryGetProperty("SendEmailToolCall", out var sendEmail), Is.True, "Schema should have 'SendEmailToolCall' definition");
@@ -477,7 +475,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         var schema = _manager.GenerateSchema();
         var schemaObj = JsonDocument.Parse(schema);
         var root = schemaObj.RootElement;
-        
+
         // **Assert**: Navigate to ToolCall property
         Assert.That(root.TryGetProperty("properties", out var properties), Is.True, "Schema should have 'properties'");
         Assert.That(properties.TryGetProperty("ToolCall", out var toolCallProp), Is.True, "Schema should have 'ToolCall' property");
@@ -543,15 +541,15 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         var sendEmailOnlyManager = new PolymorphicSchemaManager<ActualNextStep, ActualToolCall>()
             .AddDerivedType<SkPlayground.BusinessFunctions.SendEmailToolCall>();
         var sendEmailSchema = sendEmailOnlyManager.GenerateSchema();
-        
+
         // **Arrange**: Create manager with only GetCustomerData support
         var getCustomerOnlyManager = new PolymorphicSchemaManager<ActualNextStep, ActualToolCall>()
             .AddDerivedType<SkPlayground.BusinessFunctions.GetCustomerDataToolCall>();
         var getCustomerSchema = getCustomerOnlyManager.GenerateSchema();
-        
+
         // **Assert**: Verify both schemas are different but valid
         Assert.That(sendEmailSchema, Is.Not.EqualTo(getCustomerSchema), "Different managers should produce different schemas");
-        
+
         // **Assert**: Both should be valid JSON
         Assert.DoesNotThrow(() => JsonDocument.Parse(sendEmailSchema), "SendEmail schema should be valid JSON");
         Assert.DoesNotThrow(() => JsonDocument.Parse(getCustomerSchema), "GetCustomer schema should be valid JSON");
@@ -580,7 +578,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         Assert.That(root.TryGetProperty("properties", out var properties), Is.True, "Schema should have 'properties'");
         Assert.That(properties.TryGetProperty("ToolCall", out var toolCallProp), Is.True, "Schema should have 'ToolCall' property");
         Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "ToolCall should have 'anyOf'");
-        
+
         var anyOfArray = anyOf.EnumerateArray().ToList();
         Assert.That(anyOfArray.Count, Is.EqualTo(2), "anyOf should have exactly 2 options");
     }
@@ -607,7 +605,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         Assert.That(root.TryGetProperty("properties", out var properties), Is.True, "Schema should have 'properties'");
         Assert.That(properties.TryGetProperty("ToolCall", out var toolCallProp), Is.True, "Schema should have 'ToolCall' property");
         Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "ToolCall should have 'anyOf'");
-        
+
         var anyOfArray = anyOf.EnumerateArray().ToList();
         Assert.That(anyOfArray.Count, Is.EqualTo(1), "anyOf should have exactly 1 option");
     }
@@ -622,10 +620,10 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         // **Act**: Generate schema with both types explicitly specified
         var bothTypes = new[] { typeof(SkPlayground.BusinessFunctions.SendEmailToolCall), typeof(SkPlayground.BusinessFunctions.GetCustomerDataToolCall) };
         var schemaJson = _manager.GenerateSchema(bothTypes);
-        
+
         // **Act**: Generate default schema for comparison
         var defaultSchemaJson = _manager.GenerateSchema();
-        
+
         // **Assert**: Should not be identical since default includes IssueInvoiceToolCall too
         Assert.That(schemaJson, Is.Not.EqualTo(defaultSchemaJson), "Explicit subset should not equal full default schema");
     }
@@ -643,8 +641,8 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
 
         // **Act & Assert**: Try to generate schema including unconfigured type
         var unconfiguredTypes = new[] { typeof(SkPlayground.BusinessFunctions.SendEmailToolCall), typeof(SkPlayground.BusinessFunctions.GetCustomerDataToolCall) };
-        
-        Assert.Throws<ArgumentException>(() => manager.GenerateSchema(unconfiguredTypes), 
+
+        Assert.Throws<ArgumentException>(() => manager.GenerateSchema(unconfiguredTypes),
             "Should throw when trying to include unconfigured type");
     }
 
@@ -656,7 +654,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
     public void GenerateSchema_WithEmptyTypesList_ThrowsException()
     {
         // **Act & Assert**: Try to generate schema with empty types list
-        Assert.Throws<ArgumentException>(() => _manager.GenerateSchema(new Type[0]), 
+        Assert.Throws<ArgumentException>(() => _manager.GenerateSchema(new Type[0]),
             "Should throw when types list is empty");
     }
 
@@ -740,7 +738,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         // **Act**: Different selection should produce different schema
         var bothTypes = new[] { typeof(SkPlayground.BusinessFunctions.SendEmailToolCall), typeof(SkPlayground.BusinessFunctions.GetCustomerDataToolCall) };
         var schema3 = _manager.GenerateSchema(bothTypes);
-        
+
         // **Assert**: Different type selections should produce different schemas
         Assert.That(schema1, Is.Not.EqualTo(schema3), "Different type selections should produce different schemas");
     }
@@ -771,7 +769,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
 
         Assert.That(schemaObj1.RootElement.TryGetProperty("definitions", out var defs1), Is.True);
         Assert.That(schemaObj2.RootElement.TryGetProperty("definitions", out var defs2), Is.True);
-        
+
         Assert.That(defs1.TryGetProperty("SendEmailToolCall", out _), Is.True, "Manager1 should have SendEmailToolCall definition");
         Assert.That(defs1.TryGetProperty("GetCustomerDataToolCall", out _), Is.True, "Manager1 should have GetCustomerDataToolCall definition");
         Assert.That(defs2.TryGetProperty("SendEmailToolCall", out _), Is.True, "Manager2 should have SendEmailToolCall definition");
@@ -789,23 +787,23 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         var schemaJson = _manager.GenerateSchema();
         var schemaObj = JsonDocument.Parse(schemaJson);
         var root = schemaObj.RootElement;
-        
+
         // **Assert**: Verify that definitions section exists
         Assert.That(root.TryGetProperty("definitions", out var definitions), Is.True, "Schema should have 'definitions' section");
-        
+
         // **Assert**: Verify that abstract ToolCall class is NOT included in definitions
-        Assert.That(definitions.TryGetProperty("ToolCall", out _), Is.False, 
+        Assert.That(definitions.TryGetProperty("ToolCall", out _), Is.False,
             "Schema should NOT contain abstract 'ToolCall' definition as it's unused and causes OpenAI rejection");
-        
+
         // **Assert**: Verify that only concrete derived types are included
         Assert.That(definitions.TryGetProperty("SendEmailToolCall", out _), Is.True, "Schema should contain 'SendEmailToolCall' definition");
         Assert.That(definitions.TryGetProperty("GetCustomerDataToolCall", out _), Is.True, "Schema should contain 'GetCustomerDataToolCall' definition");
         Assert.That(definitions.TryGetProperty("IssueInvoiceToolCall", out _), Is.True, "Schema should contain 'IssueInvoiceToolCall' definition");
-        
+
         // **Assert**: Verify the definitions count - should only have concrete types
         var definitionCount = definitions.EnumerateObject().Count();
         Assert.That(definitionCount, Is.EqualTo(3), "Schema should contain exactly 3 definitions, not including abstract ToolCall");
-        
+
         Console.WriteLine("✅ Regression test passed: Abstract ToolCall class correctly excluded from schema");
     }
 
@@ -818,12 +816,12 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
     {
         // **Arrange**: Create empty manager
         var manager = new PolymorphicSchemaManager<ActualNextStep, ActualToolCall>();
-        
+
         // **Act & Assert**: Should throw exception when no types are added
-        Assert.Throws<InvalidOperationException>(() => manager.GenerateSchema(), 
+        Assert.Throws<InvalidOperationException>(() => manager.GenerateSchema(),
             "Should throw exception when no types are added");
     }
-    
+
     /// <summary>
     /// **Test that verifies DeserializeFromJson throws exception when no types are added**
     /// Adapted from NextStepManagerTests.DeserializeFromJson_WithNoTypesAdded_ThrowsException
@@ -833,9 +831,9 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
     {
         // **Arrange**: Create empty manager
         var manager = new PolymorphicSchemaManager<ActualNextStep, ActualToolCall>();
-        
+
         // **Act & Assert**: Should throw exception when no types are added
-        Assert.Throws<InvalidOperationException>(() => manager.DeserializeFromJson("{}"), 
+        Assert.Throws<InvalidOperationException>(() => manager.DeserializeFromJson("{}"),
             "Should throw exception when no types are added");
     }
 
@@ -863,10 +861,10 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
             // **Arrange**: Generate schema and prepare LLM call
             var schemaJson = _manager.GenerateSchema();
             var completionService = GetCompletionService(apiKey, endpoint, schemaJson);
-            
+
             Console.WriteLine("Generated Schema:");
             Console.WriteLine(schemaJson);
-            
+
             // **Act**: Make LLM call with structured output
             var prompt = """
                 You need to process a customer order confirmation. The customer email is customer@example.com.
@@ -884,11 +882,11 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
             chatHistory.AddUserMessage(prompt);
 
 
-        var chatResponseFormat = ChatResponseFormat.CreateJsonSchemaFormat(
-            jsonSchemaFormatName: "next_step",
-            jsonSchema: BinaryData.FromString(schemaJson),
-            jsonSchemaIsStrict: true
-        );
+            var chatResponseFormat = ChatResponseFormat.CreateJsonSchemaFormat(
+                jsonSchemaFormatName: "next_step",
+                jsonSchema: BinaryData.FromString(schemaJson),
+                jsonSchemaIsStrict: true
+            );
             var executionSettings = new OpenAIPromptExecutionSettings
             {
                 ResponseFormat = chatResponseFormat,
@@ -906,7 +904,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
             // **Assert**: Deserialize and validate the response
             var nextStep = _manager.DeserializeFromJson(responseContent!);
             Assert.That(nextStep, Is.Not.Null, "Response should deserialize to NextStep");
-            
+
             Assert.That(nextStep!.CurrentState, Is.Not.Null.And.Not.Empty, "CurrentState should be populated");
             Assert.That(nextStep.PlanRemainingStepsBrief, Is.Not.Null.And.Not.Empty, "PlanRemainingStepsBrief should be populated");
             Assert.That(nextStep.TaskCompleted, Is.False, "TaskCompleted should be false as requested");
@@ -917,7 +915,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
             Assert.That(sendEmailCall!.Subject, Is.Not.Null.And.Not.Empty, "Email subject should not be empty");
             Assert.That(sendEmailCall.Message, Is.Not.Null.And.Not.Empty, "Email message should not be empty");
             Assert.That(sendEmailCall.RecipientEmail, Is.Not.Null.And.Not.Empty, "Recipient email should not be empty");
-            
+
             Assert.That(sendEmailCall.Subject.ToLower(), Contains.Substring("confirmation").Or.Contains("order"), "Should extract order confirmation subject");
             Assert.That(sendEmailCall.RecipientEmail.ToLower(), Contains.Substring("customer@example.com"), "Should extract recipient email");
 
