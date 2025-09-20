@@ -125,18 +125,20 @@ public class BusinessFunctionFactory
     /// invokes an Execute/ExecuteAsync method on the BusinessFunction (with or without a CancellationToken),
     /// awaits Task results when necessary and returns the resulting object (or null).
     /// </summary>
-    internal async Task<BusinessFunctionResult> DispatchToolFunction(NextStep nextStep, CancellationToken cancellationToken = default)
+    internal async Task<BusinessFunctionResult> DispatchToolFunction(
+        ToolCall toolCall, 
+        CancellationToken cancellationToken = default)
     {
-        if (nextStep is null) throw new ArgumentNullException(nameof(nextStep));
+        if (toolCall is null) throw new ArgumentNullException(nameof(toolCall));
 
         // Find the registered function whose parameter type matches the runtime type of nextStep
         var match = _functions.Values.FirstOrDefault(fi =>
-            fi.ParameterType != null && fi.ParameterType.IsInstanceOfType(nextStep));
+            fi.ParameterType != null && fi.ParameterType.IsInstanceOfType(toolCall));
 
         var businessFunction = match?.BusinessFunction;
         if (businessFunction == null) throw new InvalidOperationException("Business function not available for matched entry.");
 
-        var result = await businessFunction.ExecuteAsync(nextStep, cancellationToken);
+        var result = await businessFunction.ExecuteAsync(toolCall, cancellationToken);
         return result;
     }
 

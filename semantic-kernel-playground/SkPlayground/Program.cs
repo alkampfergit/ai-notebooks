@@ -79,7 +79,7 @@ class Program
                 
                 // Configure Azure OpenAI connection
                 kernelBuilder.AddAzureOpenAIChatCompletion(
-                    deploymentName: "gpt4omini",
+                    deploymentName: "gpt-4o-mini",
                     apiKey: apiKey,
                     endpoint: endpoint
                 );

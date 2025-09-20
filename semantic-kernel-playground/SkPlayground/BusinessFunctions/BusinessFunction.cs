@@ -23,7 +23,7 @@ public abstract class BusinessFunction
     /// <param name="nextStep">The NextStep instance containing the parameters</param>
     /// <param name="cancellationToken">Cancellation token to support cooperative cancellation</param>
     /// <returns>BusinessFunctionResult containing both result object and summary description</returns>
-    public abstract Task<BusinessFunctionResult> ExecuteAsync(NextStep nextStep, CancellationToken cancellationToken = default);
+    public abstract Task<BusinessFunctionResult> ExecuteAsync(ToolCall nextStep, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
