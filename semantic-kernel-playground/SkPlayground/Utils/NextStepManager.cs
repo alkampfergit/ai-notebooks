@@ -185,7 +185,7 @@ public class NextStepManager
         }
 
         // Ensure required properties are present
-        var required = new[] { "CurrentState", "PlanRemainingStepsBrief", "TaskCompleted", "ToolCall" };
+        var required = new[] { "CurrentState", "PlanRemainingStepsBrief", "TaskCompleted", "NextStepToolToCall" };
         foreach (var prop in required)
         {
             if (!schema.RequiredProperties.Contains(prop))
@@ -203,8 +203,8 @@ public class NextStepManager
                 var propSchema = prop switch
                 {
                     "CurrentState" => new JsonSchemaProperty { Type = JsonObjectType.String },
-                    "PlanRemainingStepsBrief" => new JsonSchemaProperty 
-                    { 
+                    "PlanRemainingStepsBrief" => new JsonSchemaProperty
+                    {
                         Type = JsonObjectType.Array,
                         Item = new JsonSchema { Type = JsonObjectType.String }
                     },

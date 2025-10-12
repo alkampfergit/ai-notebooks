@@ -96,15 +96,15 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         var schemaJson = _manager.GenerateSchema();
         var schemaNode = JsonNode.Parse(schemaJson);
 
-        // **Assert**: Navigate to the ToolCall property in the schema (PascalCase)
+        // **Assert**: Navigate to the NextStepToolToCall property in the schema (PascalCase)
         var schemaObject = schemaNode!.AsObject();
         var properties = schemaObject["properties"]?.AsObject();
-        var toolCallProperty = properties!["ToolCall"]?.AsObject();
+        var toolCallProperty = properties!["NextStepToolToCall"]?.AsObject();
 
-        Assert.That(toolCallProperty, Is.Not.Null, "ToolCall property should be present in schema");
+        Assert.That(toolCallProperty, Is.Not.Null, "NextStepToolToCall property should be present in schema");
 
-        // **Assert**: Verify that toolCall property contains anyOf for polymorphic types
-        Assert.That(toolCallProperty!.ContainsKey("anyOf"), Is.True, "toolCall property should contain 'anyOf' for polymorphic types");
+        // **Assert**: Verify that NextStepToolToCall property contains anyOf for polymorphic types
+        Assert.That(toolCallProperty!.ContainsKey("anyOf"), Is.True, "NextStepToolToCall property should contain 'anyOf' for polymorphic types");
 
         var anyOfArray = toolCallProperty["anyOf"]?.AsArray();
         Assert.That(anyOfArray, Is.Not.Null, "anyOf should be an array");
@@ -163,7 +163,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         // **Assert**: Verify anyOf contains only specified types
         var schemaObject = schemaNode!.AsObject();
         var properties = schemaObject["properties"]?.AsObject();
-        var toolCallProperty = properties!["ToolCall"]?.AsObject();
+        var toolCallProperty = properties!["NextStepToolToCall"]?.AsObject();
         var anyOfArray = toolCallProperty!["anyOf"]?.AsArray();
 
         Assert.That(anyOfArray!.Count, Is.EqualTo(2), "anyOf array should contain exactly 2 types");
@@ -191,7 +191,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
             "currentState": "Processing email request",
             "planRemainingStepsBrief": ["Send confirmation email", "Update customer record"],
             "taskCompleted": false,
-            "toolCall": {
+            "nextStepToolToCall": {
                 "type": "send_email_tool_call",
                 "subject": "Order Confirmation",
                 "message": "Your order has been processed",
@@ -236,7 +236,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
             "currentState": "Processing request",
             "planRemainingStepsBrief": ["Process request"],
             "taskCompleted": false,
-            "toolCall": {
+            "nextStepToolToCall": {
                 "type": "unknown_tool_call",
                 "someProperty": "value"
             }
@@ -416,10 +416,10 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         Assert.That(definitions.TryGetProperty("SendEmailToolCall", out _), Is.True, "Schema should have 'SendEmailToolCall' definition");
         Assert.That(definitions.TryGetProperty("GetCustomerDataToolCall", out _), Is.False, "Schema should NOT have 'GetCustomerDataToolCall' definition");
 
-        // **Assert**: Verify ToolCall property has anyOf with only SendEmail
+        // **Assert**: Verify NextStepToolToCall property has anyOf with only SendEmail
         Assert.That(root.TryGetProperty("properties", out var properties), Is.True, "Schema should have 'properties'");
-        Assert.That(properties.TryGetProperty("ToolCall", out var toolCallProp), Is.True, "Schema should have 'ToolCall' property");
-        Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "toolCall property should have 'anyOf'");
+        Assert.That(properties.TryGetProperty("NextStepToolToCall", out var toolCallProp), Is.True, "Schema should have 'NextStepToolToCall' property");
+        Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "NextStepToolToCall property should have 'anyOf'");
 
         var anyOfArray = anyOf.EnumerateArray().ToList();
         Assert.That(anyOfArray.Count, Is.EqualTo(1), "anyOf should have exactly one option (SendEmailToolCall)");
@@ -476,12 +476,12 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         var schemaObj = JsonDocument.Parse(schema);
         var root = schemaObj.RootElement;
 
-        // **Assert**: Navigate to ToolCall property
+        // **Assert**: Navigate to NextStepToolToCall property
         Assert.That(root.TryGetProperty("properties", out var properties), Is.True, "Schema should have 'properties'");
-        Assert.That(properties.TryGetProperty("ToolCall", out var toolCallProp), Is.True, "Schema should have 'ToolCall' property");
+        Assert.That(properties.TryGetProperty("NextStepToolToCall", out var toolCallProp), Is.True, "Schema should have 'NextStepToolToCall' property");
 
-        // **Assert**: Verify ToolCall property has anyOf with all configured types
-        Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "ToolCall property should have 'anyOf'");
+        // **Assert**: Verify NextStepToolToCall property has anyOf with all configured types
+        Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "NextStepToolToCall property should have 'anyOf'");
         var anyOfArray = anyOf.EnumerateArray().ToList();
         Assert.That(anyOfArray.Count, Is.EqualTo(3), "anyOf should have exactly three options (SendEmail, GetCustomerData, IssueInvoice)");
 
@@ -508,10 +508,9 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
             "currentState": "Retrieving customer information",
             "planRemainingStepsBrief": ["Get customer data", "Process results"],
             "taskCompleted": false,
-            "toolCall": {
+            "nextStepToolToCall": {
                 "type": "get_customer_data_tool_call",
-                "email": "customer@example.com",
-                "getAllCustomers": false
+                "email": "customer@example.com"
             }
         }
         """;
@@ -527,7 +526,6 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         var getCustomerCall = nextStep.NextStepToolToCall as SkPlayground.BusinessFunctions.GetCustomerDataToolCall;
         Assert.That(getCustomerCall, Is.Not.Null, "Should cast to GetCustomerDataToolCall");
         Assert.That(getCustomerCall!.Email, Is.EqualTo("customer@example.com"));
-        Assert.That(getCustomerCall.GetAllCustomers, Is.False);
     }
 
     /// <summary>
@@ -576,8 +574,8 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
 
         // **Assert**: Verify anyOf only has 2 references
         Assert.That(root.TryGetProperty("properties", out var properties), Is.True, "Schema should have 'properties'");
-        Assert.That(properties.TryGetProperty("ToolCall", out var toolCallProp), Is.True, "Schema should have 'ToolCall' property");
-        Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "ToolCall should have 'anyOf'");
+        Assert.That(properties.TryGetProperty("NextStepToolToCall", out var toolCallProp), Is.True, "Schema should have 'NextStepToolToCall' property");
+        Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "NextStepToolToCall should have 'anyOf'");
 
         var anyOfArray = anyOf.EnumerateArray().ToList();
         Assert.That(anyOfArray.Count, Is.EqualTo(2), "anyOf should have exactly 2 options");
@@ -603,8 +601,8 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
 
         // **Assert**: Verify anyOf has only 1 reference
         Assert.That(root.TryGetProperty("properties", out var properties), Is.True, "Schema should have 'properties'");
-        Assert.That(properties.TryGetProperty("ToolCall", out var toolCallProp), Is.True, "Schema should have 'ToolCall' property");
-        Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "ToolCall should have 'anyOf'");
+        Assert.That(properties.TryGetProperty("NextStepToolToCall", out var toolCallProp), Is.True, "Schema should have 'NextStepToolToCall' property");
+        Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "NextStepToolToCall should have 'anyOf'");
 
         var anyOfArray = anyOf.EnumerateArray().ToList();
         Assert.That(anyOfArray.Count, Is.EqualTo(1), "anyOf should have exactly 1 option");
@@ -675,7 +673,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
             "currentState": "Test",
             "planRemainingStepsBrief": ["Step 1"],
             "taskCompleted": false,
-            "toolCall": {
+            "nextStepToolToCall": {
                 "type": "send_email_tool_call",
                 "subject": "Test",
                 "message": "Test Message",
@@ -690,10 +688,9 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
             "currentState": "Test",
             "planRemainingStepsBrief": ["Step 1"],
             "taskCompleted": false,
-            "toolCall": {
+            "nextStepToolToCall": {
                 "type": "get_customer_data_tool_call",
-                "email": "customer@example.com",
-                "getAllCustomers": false
+                "email": "customer@example.com"
             }
         }
         """;

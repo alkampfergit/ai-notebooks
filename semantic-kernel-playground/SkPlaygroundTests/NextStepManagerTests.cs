@@ -66,10 +66,10 @@ public class NextStepManagerTests : SemanticKernelTestBase
         Assert.That(definitions.TryGetProperty("SendEmailToolCall", out _), Is.True, "Schema should have 'SendEmailToolCall' definition");
         Assert.That(definitions.TryGetProperty("GetCustomerDataToolCall", out _), Is.False, "Schema should NOT have 'GetCustomerDataToolCall' definition");
         
-        // Verify ToolCall property has anyOf with only SendEmail
+        // Verify NextStepToolToCall property has anyOf with only SendEmail
         Assert.That(root.TryGetProperty("properties", out var properties), Is.True, "Schema should have 'properties'");
-        Assert.That(properties.TryGetProperty("ToolCall", out var toolCallProp), Is.True, "Schema should have 'ToolCall' property");
-        Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "ToolCall property should have 'anyOf'");
+        Assert.That(properties.TryGetProperty("NextStepToolToCall", out var toolCallProp), Is.True, "Schema should have 'NextStepToolToCall' property");
+        Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "NextStepToolToCall property should have 'anyOf'");
         
         var anyOfArray = anyOf.EnumerateArray().ToList();
         Assert.That(anyOfArray.Count, Is.EqualTo(1), "anyOf should have exactly one option (SendEmailToolCall)");
@@ -116,10 +116,10 @@ public class NextStepManagerTests : SemanticKernelTestBase
         var root = schemaObj.RootElement;
         
         Assert.That(root.TryGetProperty("properties", out var properties), Is.True, "Schema should have 'properties'");
-        Assert.That(properties.TryGetProperty("ToolCall", out var toolCallProp), Is.True, "Schema should have 'ToolCall' property");
+        Assert.That(properties.TryGetProperty("NextStepToolToCall", out var toolCallProp), Is.True, "Schema should have 'NextStepToolToCall' property");
 
-        // Verify ToolCall property has anyOf with SendEmail and GetCustomerData
-        Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "ToolCall property should have 'anyOf'");
+        // Verify NextStepToolToCall property has anyOf with SendEmail and GetCustomerData
+        Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "NextStepToolToCall property should have 'anyOf'");
         var anyOfArray = anyOf.EnumerateArray().ToList();
         Assert.That(anyOfArray.Count, Is.EqualTo(6), "anyOf should have exactly six options (all ToolCall types)");
 
@@ -141,7 +141,7 @@ public class NextStepManagerTests : SemanticKernelTestBase
             "CurrentState": "Ready to send email",
             "PlanRemainingStepsBrief": ["Send email", "Confirm delivery"],
             "TaskCompleted": false,
-            "ToolCall": {
+            "NextStepToolToCall": {
                 "type": "send_email_tool_call",
                 "Subject": "Important Update",
                 "Message": "Please review the latest changes",
@@ -181,10 +181,9 @@ public class NextStepManagerTests : SemanticKernelTestBase
             "CurrentState": "Retrieving customer information",
             "PlanRemainingStepsBrief": ["Get customer data", "Process results"],
             "TaskCompleted": false,
-            "ToolCall": {
+            "NextStepToolToCall": {
                 "type": "get_customer_data_tool_call",
-                "Email": "customer@example.com",
-                "GetAllCustomers": false
+                "Email": "customer@example.com"
             }
         }
         """;
@@ -202,7 +201,6 @@ public class NextStepManagerTests : SemanticKernelTestBase
         var getCustomerCall = nextStep.NextStepToolToCall as GetCustomerDataToolCall;
         Assert.That(getCustomerCall, Is.Not.Null, "Should cast to GetCustomerDataToolCall");
         Assert.That(getCustomerCall.Email, Is.EqualTo("customer@example.com"));
-        Assert.That(getCustomerCall.GetAllCustomers, Is.False);
     }
 
     [Test]
@@ -247,8 +245,8 @@ public class NextStepManagerTests : SemanticKernelTestBase
 
         // Verify anyOf only has 2 references
         Assert.That(root.TryGetProperty("properties", out var properties), Is.True, "Schema should have 'properties'");
-        Assert.That(properties.TryGetProperty("ToolCall", out var toolCallProp), Is.True, "Schema should have 'ToolCall' property");
-        Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "ToolCall should have 'anyOf'");
+        Assert.That(properties.TryGetProperty("NextStepToolToCall", out var toolCallProp), Is.True, "Schema should have 'NextStepToolToCall' property");
+        Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "NextStepToolToCall should have 'anyOf'");
         
         var anyOfArray = anyOf.EnumerateArray().ToList();
         Assert.That(anyOfArray.Count, Is.EqualTo(2), "anyOf should have exactly 2 options");
@@ -275,8 +273,8 @@ public class NextStepManagerTests : SemanticKernelTestBase
 
         // Verify anyOf has only 1 reference
         Assert.That(root.TryGetProperty("properties", out var properties), Is.True, "Schema should have 'properties'");
-        Assert.That(properties.TryGetProperty("ToolCall", out var toolCallProp), Is.True, "Schema should have 'ToolCall' property");
-        Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "ToolCall should have 'anyOf'");
+        Assert.That(properties.TryGetProperty("NextStepToolToCall", out var toolCallProp), Is.True, "Schema should have 'NextStepToolToCall' property");
+        Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "NextStepToolToCall should have 'anyOf'");
         
         var anyOfArray = anyOf.EnumerateArray().ToList();
         Assert.That(anyOfArray.Count, Is.EqualTo(1), "anyOf should have exactly 1 option");
@@ -343,7 +341,7 @@ public class NextStepManagerTests : SemanticKernelTestBase
             "CurrentState": "Test",
             "PlanRemainingStepsBrief": ["Step 1"],
             "TaskCompleted": false,
-            "ToolCall": {
+            "NextStepToolToCall": {
                 "type": "send_email_tool_call",
                 "Subject": "Test",
                 "Message": "Test Message",
@@ -358,10 +356,9 @@ public class NextStepManagerTests : SemanticKernelTestBase
             "CurrentState": "Test",
             "PlanRemainingStepsBrief": ["Step 1"],
             "TaskCompleted": false,
-            "ToolCall": {
+            "NextStepToolToCall": {
                 "type": "get_customer_data_tool_call",
-                "Email": "customer@example.com",
-                "GetAllCustomers": false
+                "Email": "customer@example.com"
             }
         }
         """;

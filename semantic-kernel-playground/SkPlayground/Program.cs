@@ -78,18 +78,18 @@ class Program
                 
                 var endpoint = Dotenv.Get("AZURE_ENDPOINT");
                 
-                //// Configure Azure OpenAI connection
-                //kernelBuilder.AddAzureOpenAIChatCompletion(
-                //    deploymentName: "gpt-4o-mini",
-                //    apiKey: apiKey,
-                //    endpoint: endpoint
-                //);
-
-                // use standard openai 
-                kernelBuilder.AddOpenAIChatCompletion(
-                    modelId: "gpt-4o-mini",
-                    apiKey: Dotenv.Get("OPENAI_API_KEY_NOT_AZURE")
+                // Configure Azure OpenAI connection
+                kernelBuilder.AddAzureOpenAIChatCompletion(
+                   deploymentName: "gpt-5-nano",
+                   apiKey: apiKey,
+                   endpoint: endpoint
                 );
+
+                // // use standard openai 
+                // kernelBuilder.AddOpenAIChatCompletion(
+                //     modelId: "gpt-4o-mini",
+                //     apiKey: Dotenv.Get("OPENAI_API_KEY_NOT_AZURE")
+                // );
 
                 kernel = kernelBuilder.Build();
 
