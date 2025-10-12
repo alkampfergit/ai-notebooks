@@ -265,7 +265,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
     {
         // **Act & Assert**: Verify polymorphic property was identified
         Assert.That(_manager.PolymorphicProperty, Is.Not.Null, "Polymorphic property should be identified");
-        Assert.That(_manager.PolymorphicProperty.Name, Is.EqualTo("ToolCall"), "Property name should be 'ToolCall'");
+        Assert.That(_manager.PolymorphicProperty.Name, Is.EqualTo("NextStepToolToCall"), "Property name should be 'ToolCall'");
         Assert.That(_manager.PolymorphicProperty.PropertyType, Is.EqualTo(typeof(ActualToolCall)), "Property type should be ToolCall");
     }
 
@@ -843,6 +843,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
     /// - Verifying the response deserializes correctly to the expected polymorphic type
     /// </summary>
     [Test]
+    [Category("LLMIntegration")]
     public async Task GenerateSchema_RealLLMCall_PolymorphicDeserialization()
     {
         // Skip test if no API key is available
@@ -887,8 +888,6 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
             var executionSettings = new OpenAIPromptExecutionSettings
             {
                 ResponseFormat = chatResponseFormat,
-                Temperature = 0.0f,
-                MaxTokens = 1000
             };
 
             var skResponse = await completionService.GetChatMessageContentAsync(chatHistory, executionSettings);

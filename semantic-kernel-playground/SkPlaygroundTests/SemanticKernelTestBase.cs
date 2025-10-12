@@ -48,7 +48,7 @@ public abstract class SemanticKernelTestBase
 
         // Configure Azure OpenAI connection like in Program.cs
         kernelBuilder.AddAzureOpenAIChatCompletion(
-            deploymentName: "gpt-4o-mini",
+            deploymentName: "gpt-5-nano",
             apiKey: apiKey,
             endpoint: endpoint
         );

@@ -70,6 +70,7 @@ public class BasicSchemaTests : SemanticKernelTestBase
     }
 
     [Test]
+    [Category("LLMIntegration")]
     public async Task GenerateJsonSchema_RealLLMCall_ReformatPersonData()
     {
         // Skip test if no API key is available

@@ -501,6 +501,7 @@ public class NextStepManagerTests : SemanticKernelTestBase
     /// This test mimics the GenerateJsonSchema_RealLLMCall_PolymorphicCatOwner test for NextStep domain
     /// </summary>
     [Test]
+    [Category("LLMIntegration")]
     public async Task GenerateNextStepSchema_RealLLMCall_PolymorphicSendEmailToolCall()
     {
         // Skip test if no API key is available

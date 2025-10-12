@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
+using Newtonsoft.Json;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
@@ -52,7 +53,7 @@ public class SchemaGuidedReasoner
         {
             WriteIndented = true,
             PropertyNameCaseInsensitive = true,
-            TypeInfoResolver = JsonSerializer.IsReflectionEnabledByDefault
+            TypeInfoResolver = System.Text.Json.JsonSerializer.IsReflectionEnabledByDefault
                 ? new DefaultJsonTypeInfoResolver()
                 : JsonTypeInfoResolver.Combine()
         };
@@ -162,18 +163,62 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
 
             try
             {
-                // Force LLM to generate structured JSON response conforming to NextStep schema
-                var nextStep = await GetNextStepFromLLM(userRequest, executionTaskResult);
+                // Make the LLM call explicit for this cycle
+                AnsiConsole.MarkupLine($"[grey](LLM call #{step})[/]");
 
-                // Display the planned step
+                // Force LLM to generate structured JSON response conforming to NextStep schema
+                var (nextStep, assistantRaw) = await GetNextStepFromLLM(userRequest, executionTaskResult);
+
+                // Show the raw assistant response (JSON) to aid debugging and transparency
+                AnsiConsole.MarkupLine("[grey]Assistant raw response:[/]");
+                AnsiConsole.WriteLine(Markup.Escape(string.IsNullOrWhiteSpace(assistantRaw)
+                    ? "(empty response)"
+                    : assistantRaw));
+
+                // Display the full planned steps list returned by the LLM for this cycle
+                if (nextStep.PlanRemainingStepsBrief != null && nextStep.PlanRemainingStepsBrief.Count > 0)
+                {
+                    AnsiConsole.MarkupLine("[cyan]  Planned remaining steps:[/]");
+                    for (int i = 0; i < nextStep.PlanRemainingStepsBrief.Count; i++)
+                    {
+                        var stepText = nextStep.PlanRemainingStepsBrief[i] ?? string.Empty;
+                        AnsiConsole.MarkupLine($"[cyan]    {i + 1}. {Markup.Escape(stepText)}[/]");
+                    }
+                }
+                else
+                {
+                    AnsiConsole.MarkupLine("[cyan]  Planned remaining steps:[/] [dim]None[/]");
+                }
+
+                // Display the single next action concisely as before
                 var currentPlan = nextStep.PlanRemainingStepsBrief?.FirstOrDefault() ?? "No plan specified";
-                AnsiConsole.MarkupLine($"[cyan]  → {currentPlan}[/]");
+                AnsiConsole.MarkupLine($"[cyan]  → Next action: {Markup.Escape(currentPlan)}[/]");
+
+                // Show which tool was selected and its parameters
+                var toolName = nextStep.NextStepToolToCall?.GetType().Name.Replace("ToolCall", "") ?? "unknown";
+                AnsiConsole.MarkupLine($"[green]  Selected tool:[/] {Markup.Escape(toolName)}");
+                try
+                {
+                    var toolParamsJson = JsonConvert.SerializeObject(nextStep.NextStepToolToCall, Formatting.Indented);
+                    AnsiConsole.WriteLine(Markup.Escape(toolParamsJson));
+                }
+                catch (Exception)
+                {
+                    // Fallback to type name if serialization fails
+                    AnsiConsole.MarkupLine($"[grey]  (Could not serialize tool parameters; type: {toolName})[/]");
+                }
 
                 // Check if task is completed
                 if (nextStep.NextStepToolToCall is ReportTaskCompletionToolCall completionParameter)
                 {
-                    AnsiConsole.MarkupLine($"[blue]Task completed: {completionParameter.Summary}[/]");
+                    AnsiConsole.MarkupLine($"[blue]Task completed: {Markup.Escape(completionParameter.Summary)}[/]");
                     return completionParameter.Summary;
+                }
+
+                // Ensure a tool was provided and dispatch it
+                if (nextStep.NextStepToolToCall == null)
+                {
+                    throw new InvalidOperationException("LLM did not provide a NextStepToolToCall in the NextStep response.");
                 }
 
                 // Manually dispatch the tool function
@@ -181,13 +226,11 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
 
                 // Add execution result to the list for next iteration
                 var resultSummary = businessResult.Summary;
-                var toolName = nextStep.NextStepToolToCall.GetType().Name.Replace("ToolCall", "");
                 executionTaskResult.Add(new ToolExecutionResult(toolName, resultSummary));
-           
 
                 // Use AnsiConsole.WriteLine instead of MarkupLine to avoid markup parsing issues
                 AnsiConsole.Write("[green]    ✓ [/]");
-                AnsiConsole.WriteLine(resultSummary);
+                AnsiConsole.WriteLine(Markup.Escape(resultSummary));
             }
             catch (Exception ex)
             {
@@ -208,7 +251,7 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
     /// This is the core of SGR - forcing the model to generate valid NextStep JSON.
     /// Uses a single user message containing the original question and executed tasks.
     /// </summary>
-    private async Task<NextStep> GetNextStepFromLLM(string userRequest, List<ToolExecutionResult> executedTasks)
+    private async Task<(NextStep NextStep, string AssistantRaw)> GetNextStepFromLLM(string userRequest, List<ToolExecutionResult> executedTasks)
     {
         // Determine which tools should be available for this request
         var availableToolTypes = DetermineAvailableTools(userRequest, executedTasks);
@@ -253,6 +296,12 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
         var openAIResponse = (OpenAIChatMessageContent)response;
         var jsonContent = openAIResponse.Content ?? string.Empty;
 
-        return _functionFactory.DeserializeNextStep(jsonContent);
+        var nextStep = _functionFactory.DeserializeNextStep(jsonContent);
+        if (nextStep == null)
+        {
+            throw new InvalidOperationException("Failed to deserialize NextStep from LLM response:\n" + jsonContent);
+        }
+
+        return (nextStep, jsonContent);
     }
 }
