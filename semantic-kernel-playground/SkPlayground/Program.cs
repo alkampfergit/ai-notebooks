@@ -31,19 +31,26 @@ class Program
             new Rule("[bold blue]Schema-Guided Reasoning with C# and Semantic Kernel[/]")
                 .RuleStyle("grey"));
 
+        // Ask user about verbose output preference
+        var verboseOutput = AnsiConsole.Confirm(
+            "[yellow]Enable verbose output?[/] [grey](Shows detailed JSON responses and debug information)[/]",
+            defaultValue: false);
+
+        AnsiConsole.WriteLine();
+
         // Initialize the semantic kernel and reasoner
-        await InitializeKernel();
+        await InitializeKernel(verboseOutput);
 
         // Main application loop
         while (true)
         {
             var selectedExample = ShowExampleMenu();
-            
+
             if (selectedExample == "exit")
                 break;
-                
+
             await ExecuteExample(selectedExample);
-            
+
             // Wait for user to press a key before continuing
             AnsiConsole.Write(new Rule("[dim]Press any key to continue...[/]").RuleStyle("grey"));
             Console.ReadKey(true);
@@ -60,7 +67,8 @@ class Program
     /// Initialize the Semantic Kernel with Azure OpenAI configuration
     /// Sets up logging, HTTP client, and creates the reasoning components
     /// </summary>
-    private static async Task InitializeKernel()
+    /// <param name="verboseOutput">Whether to enable verbose output in the reasoner</param>
+    private static async Task InitializeKernel(bool verboseOutput)
     {
         AnsiConsole.Status()
             .Start("[yellow]Initializing Semantic Kernel...[/]", ctx =>
@@ -75,9 +83,9 @@ class Program
                 var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
 
                 var apiKey = Dotenv.Get("OPENAI_API_KEY");
-                
+
                 var endpoint = Dotenv.Get("AZURE_ENDPOINT");
-                
+
                 // Configure Azure OpenAI connection
                 kernelBuilder.AddAzureOpenAIChatCompletion(
                    deploymentName: "gpt-5-nano",
@@ -85,7 +93,7 @@ class Program
                    endpoint: endpoint
                 );
 
-                // // use standard openai 
+                // // use standard openai
                 // kernelBuilder.AddOpenAIChatCompletion(
                 //     modelId: "gpt-4o-mini",
                 //     apiKey: Dotenv.Get("OPENAI_API_KEY_NOT_AZURE")
@@ -103,10 +111,14 @@ class Program
                 };
 
                 var databaseService = new DatabaseService();
-                reasoner = new SchemaGuidedReasoner(kernel, databaseService);
+                reasoner = new SchemaGuidedReasoner(kernel, databaseService)
+                {
+                    VerboseOutput = verboseOutput
+                };
             });
 
-        AnsiConsole.MarkupLine("[green]✓[/] Schema-guided reasoner initialized successfully!");
+        var outputMode = verboseOutput ? "verbose" : "concise";
+        AnsiConsole.MarkupLine($"[green]✓[/] Schema-guided reasoner initialized successfully! [grey]({outputMode} output)[/]");
         AnsiConsole.WriteLine();
     }
 
@@ -124,8 +136,7 @@ class Program
                 .AddChoices([
                     "Original Python Tasks (SGR Demo)",
                     "Simple Email Task",
-                    "Database Query",
-                    "Complex Invoice Task", 
+                    "Complex Invoice Task",
                     "Customer Support Workflow",
                     "Exit"
                 ]));
@@ -145,9 +156,6 @@ class Program
                 break;
             case "simple_email_task":
                 await RunSimpleEmailExample();
-                break;
-            case "database_query":
-                await RunDatabaseQueryExample();
                 break;
             case "complex_invoice_task":
                 await RunComplexInvoiceExample();
@@ -264,42 +272,13 @@ class Program
     }
 
     /// <summary>
-    /// Example 2: Demonstrate database querying capabilities
-    /// Shows how the AI can interact with simulated database operations
-    /// </summary>
-    private static async Task RunDatabaseQueryExample()
-    {
-        AnsiConsole.Write(
-            new Panel("[bold cyan]🧪 Test 2: Database Query[/]")
-                .Border(BoxBorder.Rounded)
-                .BorderColor(Color.Aqua));
-
-        var prompt = "Query the customers database to see all available customers";
-        
-        AnsiConsole.MarkupLine($"[dim]Prompt:[/] {prompt}");
-        AnsiConsole.WriteLine();
-
-        var result = await AnsiConsole.Status()
-            .StartAsync("[cyan]Querying database...[/]", async ctx =>
-            {
-                return await reasoner!.ReasonAndActAsync(prompt);
-            });
-
-        AnsiConsole.Write(
-            new Panel($"[green]Result:[/] {Markup.Escape(result)}")
-                .Header("Database Query Complete")
-                .Border(BoxBorder.Rounded)
-                .BorderColor(Color.Green));
-    }
-
-    /// <summary>
-    /// Example 3: Demonstrate complex invoice generation
+    /// Example 2: Demonstrate complex invoice generation
     /// Shows multi-step reasoning for financial operations with discounts
     /// </summary>
     private static async Task RunComplexInvoiceExample()
     {
         AnsiConsole.Write(
-            new Panel("[bold magenta]🧪 Test 3: Complex Invoice Task[/]")
+            new Panel("[bold magenta]🧪 Test 2: Complex Invoice Task[/]")
                 .Border(BoxBorder.Rounded)
                 .BorderColor(Color.BlueViolet));
 
@@ -322,13 +301,13 @@ class Program
     }
 
     /// <summary>
-    /// Example 4: Demonstrate complex multi-step customer support workflow
+    /// Example 3: Demonstrate complex multi-step customer support workflow
     /// Shows advanced reasoning with multiple conditional steps and business logic
     /// </summary>
     private static async Task RunCustomerSupportWorkflowExample()
     {
         AnsiConsole.Write(
-            new Panel("[bold orange1]🧪 Test 4: Customer Support Workflow[/]")
+            new Panel("[bold orange1]🧪 Test 3: Customer Support Workflow[/]")
                 .Border(BoxBorder.Rounded)
                 .BorderColor(Color.Orange1));
 

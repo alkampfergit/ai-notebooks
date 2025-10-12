@@ -29,8 +29,8 @@ public readonly record struct NextStepResult(NextStep NextStep, string FunctionN
 public readonly record struct LLMReasoningResponse(NextStepResult[] NextStepResults, ChatMessageContent AssistantResponse);
 
 /// <summary>
-/// Implements Schema-Guided Reasoning (SGR) pattern where the LLM is forced to generate 
-/// a JSON object conforming to the NextStep schema on every turn, enabling deliberate 
+/// Implements Schema-Guided Reasoning (SGR) pattern where the LLM is forced to generate
+/// a JSON object conforming to the NextStep schema on every turn, enabling deliberate
 /// step-by-step reasoning with manual tool dispatch.
 /// </summary>
 public class SchemaGuidedReasoner
@@ -39,6 +39,13 @@ public class SchemaGuidedReasoner
     private readonly JsonSerializerOptions _jsonOptions;
     private readonly DatabaseService _databaseService;
     private readonly BusinessFunctionFactory _functionFactory;
+
+    /// <summary>
+    /// Controls whether to display detailed debug output during reasoning.
+    /// When false, only shows essential information (step number, selected tool, results).
+    /// When true, shows raw JSON responses, detailed plans, and tool parameters.
+    /// </summary>
+    public bool VerboseOutput { get; set; } = true;
 
     /// <summary>
     /// Initialize the Schema-Guided Reasoner with the kernel and database service
@@ -159,23 +166,32 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
         // Limit reasoning steps to prevent infinite loops (matching Python original)
         for (int step = 1; step <= 20; step++)
         {
-            AnsiConsole.Write($"[yellow]Planning step_{step}...[/] ");
+            if (VerboseOutput)
+            {
+                AnsiConsole.Write($"[yellow]Planning step_{step}...[/] ");
+            }
 
             try
             {
-                // Make the LLM call explicit for this cycle
-                AnsiConsole.MarkupLine($"[grey](LLM call #{step})[/]");
+                if (VerboseOutput)
+                {
+                    // Make the LLM call explicit for this cycle
+                    AnsiConsole.MarkupLine($"[grey](LLM call #{step})[/]");
+                }
 
                 // Force LLM to generate structured JSON response conforming to NextStep schema
                 var (nextStep, assistantRaw) = await GetNextStepFromLLM(userRequest, executionTaskResult);
 
-                // Show the raw assistant response (JSON) to aid debugging and transparency
-                AnsiConsole.MarkupLine("[grey]Assistant raw response:[/]");
-                AnsiConsole.WriteLine(Markup.Escape(string.IsNullOrWhiteSpace(assistantRaw)
-                    ? "(empty response)"
-                    : assistantRaw));
+                if (VerboseOutput)
+                {
+                    // Show the raw assistant response (JSON) to aid debugging and transparency
+                    AnsiConsole.MarkupLine("[grey]Assistant raw response:[/]");
+                    AnsiConsole.WriteLine(Markup.Escape(string.IsNullOrWhiteSpace(assistantRaw)
+                        ? "(empty response)"
+                        : assistantRaw));
+                }
 
-                // Display the full planned steps list returned by the LLM for this cycle
+                // Always display the planned steps list - this is valuable information even in concise mode
                 if (nextStep.PlanRemainingStepsBrief != null && nextStep.PlanRemainingStepsBrief.Count > 0)
                 {
                     AnsiConsole.MarkupLine("[cyan]  Planned remaining steps:[/]");
@@ -190,28 +206,44 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
                     AnsiConsole.MarkupLine("[cyan]  Planned remaining steps:[/] [dim]None[/]");
                 }
 
-                // Display the single next action concisely as before
+                // Display the single next action - always show this
                 var currentPlan = nextStep.PlanRemainingStepsBrief?.FirstOrDefault() ?? "No plan specified";
-                AnsiConsole.MarkupLine($"[cyan]  → Next action: {Markup.Escape(currentPlan)}[/]");
-
-                // Show which tool was selected and its parameters
                 var toolName = nextStep.NextStepToolToCall?.GetType().Name.Replace("ToolCall", "") ?? "unknown";
-                AnsiConsole.MarkupLine($"[green]  Selected tool:[/] {Markup.Escape(toolName)}");
-                try
+
+                if (VerboseOutput)
                 {
-                    var toolParamsJson = JsonConvert.SerializeObject(nextStep.NextStepToolToCall, Formatting.Indented);
-                    AnsiConsole.WriteLine(Markup.Escape(toolParamsJson));
+                    AnsiConsole.MarkupLine($"[cyan]  → Next action: {Markup.Escape(currentPlan)}[/]");
+                    AnsiConsole.MarkupLine($"[green]  Selected tool:[/] {Markup.Escape(toolName)}");
+
+                    // Show tool parameters in verbose mode
+                    try
+                    {
+                        var toolParamsJson = JsonConvert.SerializeObject(nextStep.NextStepToolToCall, Formatting.Indented);
+                        AnsiConsole.WriteLine(Markup.Escape(toolParamsJson));
+                    }
+                    catch (Exception)
+                    {
+                        // Fallback to type name if serialization fails
+                        AnsiConsole.MarkupLine($"[grey]  (Could not serialize tool parameters; type: {toolName})[/]");
+                    }
                 }
-                catch (Exception)
+                else
                 {
-                    // Fallback to type name if serialization fails
-                    AnsiConsole.MarkupLine($"[grey]  (Could not serialize tool parameters; type: {toolName})[/]");
+                    // Concise output: show step, tool, and action
+                    AnsiConsole.MarkupLine($"[yellow]Step {step}:[/] [green]{Markup.Escape(toolName)}[/] - {Markup.Escape(currentPlan)}");
                 }
 
                 // Check if task is completed
                 if (nextStep.NextStepToolToCall is ReportTaskCompletionToolCall completionParameter)
                 {
-                    AnsiConsole.MarkupLine($"[blue]Task completed: {Markup.Escape(completionParameter.Summary)}[/]");
+                    if (VerboseOutput)
+                    {
+                        AnsiConsole.MarkupLine($"[blue]Task completed: {Markup.Escape(completionParameter.Summary)}[/]");
+                    }
+                    else
+                    {
+                        AnsiConsole.MarkupLine($"[green]✓ Completed:[/] {Markup.Escape(completionParameter.Summary)}");
+                    }
                     return completionParameter.Summary;
                 }
 
@@ -228,9 +260,16 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
                 var resultSummary = businessResult.Summary;
                 executionTaskResult.Add(new ToolExecutionResult(toolName, resultSummary));
 
-                // Use AnsiConsole.WriteLine instead of MarkupLine to avoid markup parsing issues
-                AnsiConsole.Write("[green]    ✓ [/]");
-                AnsiConsole.WriteLine(Markup.Escape(resultSummary));
+                // Show result
+                if (VerboseOutput)
+                {
+                    AnsiConsole.Write("[green]    ✓ [/]");
+                    AnsiConsole.WriteLine(Markup.Escape(resultSummary));
+                }
+                else
+                {
+                    AnsiConsole.MarkupLine($"  [grey]→[/] {Markup.Escape(resultSummary)}");
+                }
             }
             catch (Exception ex)
             {
