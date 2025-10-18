@@ -1,16 +1,14 @@
-using System.ComponentModel;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using System.Text.Json.Serialization.Metadata;
-using Newtonsoft.Json;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
-using SkPlayground.Models;
+using Newtonsoft.Json;
 using SkPlayground.BusinessFunctions;
+using SkPlayground.Models;
 using SkPlayground.Utils;
 using Spectre.Console;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 
 namespace SkPlayground.Services;
 
@@ -22,7 +20,7 @@ namespace SkPlayground.Services;
 public readonly record struct NextStepResult(NextStep NextStep, string FunctionName);
 
 /// <summary>
-/// Represents the complete LLM response including both parsed results and the original assistant message
+/// Represents the complete LLM response including both parsed results and the original assistant message.
 /// </summary>
 /// <param name="NextStepResults">Array of parsed NextStep results</param>
 /// <param name="AssistantResponse">The original assistant message containing structured JSON response</param>
@@ -37,112 +35,99 @@ public class SchemaGuidedReasoner
 {
     private readonly IChatCompletionService _chatService;
     private readonly JsonSerializerOptions _jsonOptions;
-    private readonly DatabaseService _databaseService;
     private readonly BusinessFunctionFactory _functionFactory;
+    private readonly SchemaGuidedReasonerOptions _options;
 
     /// <summary>
     /// Controls whether to display detailed debug output during reasoning.
-    /// When false, only shows essential information (step number, selected tool, results).
-    /// When true, shows raw JSON responses, detailed plans, and tool parameters.
+    /// When false, only essential information is shown.
     /// </summary>
     public bool VerboseOutput { get; set; } = true;
-
-    /// <summary>
-    /// Initialize the Schema-Guided Reasoner with the kernel and database service
-    /// </summary>
-    public SchemaGuidedReasoner(Kernel kernel, DatabaseService databaseService)
-    {
-        _chatService = kernel.GetRequiredService<IChatCompletionService>();
-        _databaseService = databaseService;
-
-        // Configure JSON serialization options for NextStep schema parsing
-        _jsonOptions = new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            PropertyNameCaseInsensitive = true,
-            TypeInfoResolver = System.Text.Json.JsonSerializer.IsReflectionEnabledByDefault
-                ? new DefaultJsonTypeInfoResolver()
-                : JsonTypeInfoResolver.Combine()
-        };
-
-        // Initialize the business function factory
-        _functionFactory = new BusinessFunctionFactory(_databaseService);
-    }
 
     private record ToolExecutionResult(string ToolName, string Summary);
 
     /// <summary>
-    /// **Generates dynamic system prompt based on available tools**
-    ///
-    /// Creates a context-aware system prompt that includes only the tools
-    /// that should be available for the current reasoning step.
+    /// Initializes the reasoner with a chat service, business function factory, and optional configuration.
     /// </summary>
-    /// <param name="availableToolTypes">Types of tools that should be available for this request. If null, uses all tools.</param>
-    /// <returns>Complete system prompt with tool documentation</returns>
+    public SchemaGuidedReasoner(
+        IChatCompletionService chatService,
+        BusinessFunctionFactory businessFunctionFactory,
+        SchemaGuidedReasonerOptions? options = null)
+    {
+        _chatService = chatService ?? throw new ArgumentNullException(nameof(chatService));
+        _functionFactory = businessFunctionFactory ?? throw new ArgumentNullException(nameof(businessFunctionFactory));
+
+        _options = options ?? SchemaGuidedReasonerOptions.CreateDefault();
+        _jsonOptions = _options.JsonSerializerOptions ?? SchemaGuidedReasonerOptions.CreateDefaultJsonOptions();
+    }
+
+    /// <summary>
+    /// Convenience constructor that accepts a kernel and extracts the chat completion service.
+    /// </summary>
+    public SchemaGuidedReasoner(
+        Kernel kernel,
+        BusinessFunctionFactory businessFunctionFactory,
+        SchemaGuidedReasonerOptions? options = null)
+        : this(
+            kernel?.GetRequiredService<IChatCompletionService>() ?? throw new ArgumentNullException(nameof(kernel)),
+            businessFunctionFactory,
+            options)
+    {
+    }
+
+    /// <summary>
+    /// Legacy constructor retained for backwards compatibility. Prefer SchemaGuidedReasonerFactory.
+    /// </summary>
+    [Obsolete("Use SchemaGuidedReasonerFactory.CreateDefault to instantiate.")]
+    public SchemaGuidedReasoner(
+        Kernel kernel,
+        DatabaseService databaseService)
+        : this(
+            kernel,
+            SchemaGuidedReasonerFactory.CreateDefaultBusinessFunctionFactory(databaseService),
+            SchemaGuidedReasonerFactory.CreateDefaultOptions(databaseService))
+    {
+    }
+
+    /// <summary>
+    /// Generates dynamic system prompt based on available tools using the configured prompt builder.
+    /// </summary>
     private string GenerateSystemPrompt(IEnumerable<Type>? availableToolTypes = null)
     {
-        // Generate comprehensive schema documentation for available tools
         var schemaResult = availableToolTypes != null
             ? _functionFactory.GenerateSchemaWithDocumentationForToolCall(availableToolTypes)
             : _functionFactory.GenerateSchemaWithDocumentationForToolCall();
 
-        return $@"
-You are a business assistant helping Rinat Abdullin with customer interactions.
+        var context = new SchemaGuidedReasonerPromptContext(
+            schemaResult,
+            _functionFactory,
+            _options.CustomContext);
 
-IMPORTANT: You must always respond with structured JSON that includes:
-1. Current state analysis
-2. List of remaining steps briefly described and include corresponding tool if applicable
-3. Whether the task is completed
-4. The specific tool call to execute next
-5. The tool call to execute next is that one that logically follows from the current state and remaining steps
-
-## Available Tools:
-{GenerateToolsSummary(schemaResult.AvailableTools)}
-
-Guidelines:
-- Clearly report when tasks are done using report_task_completion
-- Always send customers emails after issuing invoices (with invoice attached)
-- Be laconic. Especially in emails
-- No need to wait for payment confirmation before proceeding
-- Always check customer data before issuing invoices or making changes
-- When you determine that there is nothing to do anymore use the report_task_completion tool
-
-Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
+        return _options.SystemPromptBuilder(context, availableToolTypes);
     }
 
     /// <summary>
-    /// **Determines which tools should be available for a given request context**
-    ///
-    /// This method can be extended in the future to implement sophisticated
-    /// tool selection logic based on request context, user permissions,
-    /// workflow state, or other business rules.
+    /// Determines which tools should be available using the optional selector in options.
     /// </summary>
-    /// <param name="userRequest">The user's request</param>
-    /// <param name="executedTasks">Previously executed tasks in this session</param>
-    /// <returns>Collection of tool types that should be available, or null for all tools</returns>
     private IEnumerable<Type>? DetermineAvailableTools(string userRequest, List<ToolExecutionResult> executedTasks)
     {
-        // Future implementation could include sophisticated logic such as:
-        // - Role-based tool access control
-        // - Context-aware tool filtering
-        // - Workflow state-based tool availability
-        // - Security-based tool restrictions
-        // - Dynamic tool loading based on request analysis
+        if (_options.ToolTypeSelector is null)
+        {
+            return null;
+        }
 
-        // For now, return null to indicate all tools should be available
-        // This maintains current behavior while enabling future customization
-        return null;
+        var history = executedTasks
+            .Select(t => new SchemaGuidedReasonerToolHistory(t.ToolName, t.Summary))
+            .ToList()
+            .AsReadOnly();
+
+        return _options.ToolTypeSelector(userRequest, history);
     }
 
     /// <summary>
-    /// **Generates a summary of available tools from tool information array**
-    ///
-    /// Creates a concise summary of available business tools for the LLM system prompt
-    /// using the structured ToolInformation objects.
+    /// Generates a summary of available tools from tool information array.
     /// </summary>
-    /// <param name="availableTools">Array of ToolInformation objects with tool details</param>
-    /// <returns>Formatted tools summary string</returns>
-    private static string GenerateToolsSummary(ToolInformation[] availableTools)
+    internal static string GenerateToolsSummary(ToolInformation[] availableTools)
     {
         var summary = new StringBuilder();
 
@@ -206,43 +191,31 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
                     AnsiConsole.MarkupLine("[cyan]  Planned remaining steps:[/] [dim]None[/]");
                 }
 
-                // Display the single next action - always show this
+                // Display the NextStep information - always show this
                 var currentPlan = nextStep.PlanRemainingStepsBrief?.FirstOrDefault() ?? "No plan specified";
                 var toolName = nextStep.NextStepToolToCall?.GetType().Name.Replace("ToolCall", "") ?? "unknown";
 
-                if (VerboseOutput)
-                {
-                    AnsiConsole.MarkupLine($"[cyan]  → Next action: {Markup.Escape(currentPlan)}[/]");
-                    AnsiConsole.MarkupLine($"[green]  Selected tool:[/] {Markup.Escape(toolName)}");
+                // **Show the NextStep tool call details - always visible even in non-verbose mode**
+                AnsiConsole.MarkupLine($"[cyan]  Next Step:[/] [yellow]{Markup.Escape(toolName)}[/] - {Markup.Escape(currentPlan)}");
 
-                    // Show tool parameters in verbose mode
-                    try
-                    {
-                        var toolParamsJson = JsonConvert.SerializeObject(nextStep.NextStepToolToCall, Formatting.Indented);
-                        AnsiConsole.WriteLine(Markup.Escape(toolParamsJson));
-                    }
-                    catch (Exception)
-                    {
-                        // Fallback to type name if serialization fails
-                        AnsiConsole.MarkupLine($"[grey]  (Could not serialize tool parameters; type: {toolName})[/]");
-                    }
-                }
-                else
+                // Show NextStep serialized output - always visible
+                try
                 {
-                    // Concise output: show step, tool, and action
-                    AnsiConsole.MarkupLine($"[yellow]Step {step}:[/] [green]{Markup.Escape(toolName)}[/] - {Markup.Escape(currentPlan)}");
+                    var nextStepJson = JsonConvert.SerializeObject(nextStep.NextStepToolToCall, Formatting.Indented);
+                    AnsiConsole.MarkupLine("[dim]  Tool parameters:[/]");
+                    AnsiConsole.WriteLine(Markup.Escape(nextStepJson));
+                }
+                catch (Exception)
+                {
+                    // Fallback to type name if serialization fails
+                    AnsiConsole.MarkupLine($"[dim]    (Unable to serialize NextStep for {Markup.Escape(toolName)})[/]");
                 }
 
-                // Check if task is completed
                 if (nextStep.NextStepToolToCall is ReportTaskCompletionToolCall completionParameter)
                 {
                     if (VerboseOutput)
                     {
                         AnsiConsole.MarkupLine($"[blue]Task completed: {Markup.Escape(completionParameter.Summary)}[/]");
-                    }
-                    else
-                    {
-                        AnsiConsole.MarkupLine($"[green]✓ Completed:[/] {Markup.Escape(completionParameter.Summary)}");
                     }
                     return completionParameter.Summary;
                 }
@@ -343,4 +316,178 @@ Products: {_databaseService.GetProductCatalogAsJson(_jsonOptions)}";
 
         return (nextStep, jsonContent);
     }
+}
+
+/// <summary>
+/// Configuration options for SchemaGuidedReasoner.
+/// </summary>
+public sealed class SchemaGuidedReasonerOptions
+{
+    /// <summary>
+    /// Delegate that builds the system prompt given the current schema documentation and optional tool subset.
+    /// </summary>
+    public Func<SchemaGuidedReasonerPromptContext, IEnumerable<Type>?, string> SystemPromptBuilder { get; init; } = (context, _) =>
+    {
+        var toolsSummary = SchemaGuidedReasoner.GenerateToolsSummary(context.Schema.AvailableTools);
+        return $@"You are an AI assistant. Always respond with structured JSON that matches the provided schema.
+
+## Available Tools:
+{toolsSummary}";
+    };
+
+    /// <summary>
+    /// Optional delegate that can restrict available tools based on the user request and execution history.
+    /// </summary>
+    public Func<string, IReadOnlyList<SchemaGuidedReasonerToolHistory>, IEnumerable<Type>?>? ToolTypeSelector { get; init; }
+
+    /// <summary>
+    /// JSON options used for serializing/deserializing tool payloads.
+    /// </summary>
+    public JsonSerializerOptions? JsonSerializerOptions { get; init; }
+
+    /// <summary>
+    /// Arbitrary custom context passed to the SystemPromptBuilder.
+    /// </summary>
+    public object? CustomContext { get; init; }
+
+    /// <summary>
+    /// Creates an options instance with minimal defaults.
+    /// </summary>
+    public static SchemaGuidedReasonerOptions CreateDefault() => new()
+    {
+        JsonSerializerOptions = CreateDefaultJsonOptions()
+    };
+
+    internal static JsonSerializerOptions CreateDefaultJsonOptions() => new()
+    {
+        WriteIndented = true,
+        PropertyNameCaseInsensitive = true,
+        TypeInfoResolver = System.Text.Json.JsonSerializer.IsReflectionEnabledByDefault
+            ? new DefaultJsonTypeInfoResolver()
+            : JsonTypeInfoResolver.Combine()
+    };
+}
+
+/// <summary>
+/// Prompt builder context containing schema documentation, factory metadata, and custom scenario context.
+/// </summary>
+/// <param name="Schema">Schema documentation for currently available tools.</param>
+/// <param name="FunctionFactory">Factory responsible for dispatching tool calls.</param>
+/// <param name="CustomContext">Additional scenario-specific context.</param>
+public readonly record struct SchemaGuidedReasonerPromptContext(
+    SchemaGenerationResult Schema,
+    BusinessFunctionFactory FunctionFactory,
+    object? CustomContext);
+
+/// <summary>
+/// Represents a previously executed tool invocation for custom tool selection logic.
+/// </summary>
+/// <param name="ToolName">Name of the tool that was executed.</param>
+/// <param name="Summary">Short summary returned by the tool.</param>
+public readonly record struct SchemaGuidedReasonerToolHistory(string ToolName, string Summary);
+
+/// <summary>
+/// Factory class encapsulating default configuration for SchemaGuidedReasoner.
+/// </summary>
+public static class SchemaGuidedReasonerFactory
+{
+    /// <summary>
+    /// Creates a fully configured SchemaGuidedReasoner using the playground defaults.
+    /// </summary>
+    public static SchemaGuidedReasoner CreateDefault(
+        Kernel kernel,
+        DatabaseService databaseService,
+        SqlServerService? sqlServerService = null)
+    {
+        if (kernel is null) throw new ArgumentNullException(nameof(kernel));
+        if (databaseService is null) throw new ArgumentNullException(nameof(databaseService));
+
+        var businessFunctionFactory = CreateDefaultBusinessFunctionFactory(databaseService, sqlServerService);
+        var options = CreateDefaultOptions(databaseService);
+        return new SchemaGuidedReasoner(kernel, businessFunctionFactory, options);
+    }
+
+    /// <summary>
+    /// Builds the default BusinessFunctionFactory used by the playground scenario.
+    /// </summary>
+    internal static BusinessFunctionFactory CreateDefaultBusinessFunctionFactory(
+        DatabaseService databaseService,
+        SqlServerService? sqlServerService = null)
+    {
+        if (databaseService is null) throw new ArgumentNullException(nameof(databaseService));
+
+        sqlServerService ??= new SqlServerService();
+        var toolList = new Type[]
+        {
+            typeof(ReportTaskCompletionToolCall),
+            typeof(SendEmailToolCall),
+            typeof(IssueInvoiceToolCall),
+            typeof(GetCustomerDataToolCall),
+            typeof(VoidInvoiceToolCall),
+            typeof(CreateRuleToolCall),
+        };
+        return new BusinessFunctionFactory(databaseService, sqlServerService, toolList);
+    }
+
+    /// <summary>
+    /// Builds default reasoner options capturing the existing business assistant persona.
+    /// </summary>
+    internal static SchemaGuidedReasonerOptions CreateDefaultOptions(DatabaseService databaseService)
+    {
+        if (databaseService is null) throw new ArgumentNullException(nameof(databaseService));
+
+        var jsonOptions = SchemaGuidedReasonerOptions.CreateDefaultJsonOptions();
+
+        var metadata = new DefaultPromptMetadata(
+            Persona: "You are a business assistant helping Rinat Abdullin with customer interactions.",
+            Guidelines: new[]
+            {
+                "Clearly report when tasks are done using report_task_completion",
+                "Always send customers emails after issuing invoices (with invoice attached)",
+                "Be laconic. Especially in emails",
+                "No need to wait for payment confirmation before proceeding",
+                "Always check customer data before issuing invoices or making changes",
+                "When you determine that there is nothing to do anymore use the report_task_completion tool",
+                "Try to send the email as last step after all other tasks are done"
+            },
+            ProductCatalogJson: databaseService.GetProductCatalogAsJson(jsonOptions));
+
+        return new SchemaGuidedReasonerOptions
+        {
+            JsonSerializerOptions = jsonOptions,
+            CustomContext = metadata,
+            SystemPromptBuilder = (context, _) => BuildDefaultPrompt(context, metadata)
+        };
+    }
+
+    private static string BuildDefaultPrompt(
+        SchemaGuidedReasonerPromptContext context,
+        DefaultPromptMetadata metadata)
+    {
+        var toolsSummary = SchemaGuidedReasoner.GenerateToolsSummary(context.Schema.AvailableTools);
+        var guidelines = string.Join(Environment.NewLine, metadata.Guidelines.Select(g => $"- {g}"));
+
+        return $@"
+{metadata.Persona}
+
+IMPORTANT: You must always respond with structured JSON that includes:
+1. Current state analysis
+2. List of remaining steps briefly described and include corresponding tool if applicable
+3. Whether the task is completed
+4. The specific tool call to execute next
+5. The tool call to execute next is that one that logically follows from the current state and remaining steps
+
+## Available Tools:
+{toolsSummary}
+
+Guidelines:
+{guidelines}
+
+Products: {metadata.ProductCatalogJson}";
+    }
+
+    private sealed record DefaultPromptMetadata(
+        string Persona,
+        IReadOnlyList<string> Guidelines,
+        string ProductCatalogJson);
 }

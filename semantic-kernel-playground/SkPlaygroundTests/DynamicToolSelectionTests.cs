@@ -33,7 +33,15 @@ public class DynamicToolSelectionTests : SemanticKernelTestBase
     public void Setup()
     {
         _databaseService = new DatabaseService();
-        _factory = new BusinessFunctionFactory(_databaseService);
+        _factory = new BusinessFunctionFactory(_databaseService, new SqlServerService(), new Type[]
+         {
+            typeof(ReportTaskCompletionToolCall),
+            typeof(SendEmailToolCall),
+            typeof(IssueInvoiceToolCall),
+            typeof(GetCustomerDataToolCall),
+            typeof(VoidInvoiceToolCall),
+            typeof(CreateRuleToolCall),
+        });
     }
 
     /// <summary>

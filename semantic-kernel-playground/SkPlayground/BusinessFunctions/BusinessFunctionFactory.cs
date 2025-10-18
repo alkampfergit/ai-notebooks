@@ -36,87 +36,193 @@ public class FunctionInformations
 
 /// <summary>
 /// **Factory for creating and managing business function instances with JSON schemas**
-/// 
+///
 /// This factory provides a centralized way to:
-/// - Create instances of all business functions with proper dependencies
+/// - Create instances of business functions with proper dependencies
 /// - Generate JSON schemas for function parameters using PolymorphicSchemaManager
 /// - Maintain consistency between parameter types and function implementations
 /// - Store function information in a dictionary for easy access by name
 /// - Enable dependency injection and configuration management
 /// - Support structured LLM responses with JSON schema validation and polymorphic deserialization
+/// - Support dynamic composition by allowing caller to specify which functions to include
 /// </summary>
 public class BusinessFunctionFactory
 {
     private readonly Dictionary<string, FunctionInformations> _functions;
-
     private readonly PolymorphicSchemaManager<NextStep, ToolCall> _schemaManager;
+    private readonly DatabaseService _databaseService;
+    private readonly SqlServerService _sqlServerService;
 
     /// <summary>
-    /// **Constructor that initializes all business functions with polymorphic schema support**.
-    /// 
-    /// Creates all function instances with proper dependencies and configures the PolymorphicSchemaManager
-    /// for NextStep/ToolCall polymorphic handling and JSON schema generation.
+    /// **Constructor that initializes business functions with polymorphic schema support**.
+    ///
+    /// Creates function instances based on the provided ToolCall types with proper dependencies
+    /// and configures the PolymorphicSchemaManager for NextStep/ToolCall polymorphic handling
+    /// and JSON schema generation.
     /// </summary>
-    /// <param name="jsonOptions">JSON serialization options for parameter handling</param>
     /// <param name="databaseService">Database service instance for all functions</param>
-    public BusinessFunctionFactory(DatabaseService databaseService)
+    /// <param name="sqlServerService">SQL Server service instance for SQL-related functions</param>
+    /// <param name="toolCallTypes">Array of ToolCall types to include in the factory. If null or empty, includes all available types.</param>
+    public BusinessFunctionFactory(
+        DatabaseService databaseService,
+        SqlServerService sqlServerService,
+        Type[] toolCallTypes)
     {
-        // **Initialize PolymorphicSchemaManager with all ToolCall derived types**
-        _schemaManager = new PolymorphicSchemaManager<NextStep, ToolCall>("type")
-            .AddDerivedTypes(
-                typeof(ReportTaskCompletionToolCall),
-                typeof(SendEmailToolCall), 
-                typeof(IssueInvoiceToolCall),
-                typeof(GetCustomerDataToolCall),
-                typeof(VoidInvoiceToolCall),
-                typeof(CreateRuleToolCall)
-            );
-            
-        _functions = CreateAllFunctions(databaseService);
+        _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
+        _sqlServerService = sqlServerService ?? throw new ArgumentNullException(nameof(sqlServerService));
+        if (toolCallTypes?.Any() != true)
+        {
+            throw new ArgumentException("At least one ToolCall type must be provided", nameof(toolCallTypes));
+        }
+        
+        // **Initialize PolymorphicSchemaManager with specified ToolCall derived types**
+        _schemaManager = new PolymorphicSchemaManager<NextStep, ToolCall>("type").AddDerivedTypes(toolCallTypes);
+
+        _functions = new Dictionary<string, FunctionInformations>();
+
+        // **Create function instances for the specified types**
+        AddFunctionTypes(toolCallTypes);
     }
 
     /// <summary>
-    /// **Creates all business function instances** with shared dependencies and JSON schemas.
-    /// 
-    /// This method instantiates all concrete business functions with:
-    /// - Shared JSON serialization options for consistency
-    /// - Database service for data operations
-    /// - JSON schemas managed by PolymorphicSchemaManager
-    /// - Proper dependency injection pattern
+    /// **Adds business functions for the specified ToolCall types**.
+    ///
+    /// This method dynamically creates BusinessFunction instances and their schemas
+    /// based on the provided ToolCall types. It uses a mapping convention where:
+    /// - ToolCall type name ends with "ToolCall" (e.g., SendEmailToolCall)
+    /// - BusinessFunction type name ends with "Function" (e.g., SendEmailFunction)
+    /// - Function name in dictionary is camelCase without suffix (e.g., "sendEmail")
     /// </summary>
-    /// <param name="jsonOptions">JSON serialization options for parameter handling</param>
-    /// <param name="databaseService">Database service instance for all functions</param>
-    /// <returns>Dictionary mapping function names to function information with JSON schemas</returns>
-    private Dictionary<string, FunctionInformations> CreateAllFunctions(
-        DatabaseService databaseService)
+    /// <param name="toolCallTypes">The ToolCall types to add to the factory</param>
+    public void AddFunctionTypes(params Type[] toolCallTypes)
     {
-        // **Create business function instances**
-        var reportTaskCompletionFunc = new ReportTaskCompletionFunction();
-        var sendEmailFunc = new SendEmailFunction(databaseService);
-        var issueInvoiceFunc = new IssueInvoiceFunction(databaseService);
-        var getCustomerDataFunc = new GetCustomerDataFunction(databaseService);
-        var voidInvoiceFunc = new VoidInvoiceFunction(databaseService);
-        var createRuleFunc = new CreateRuleFunction(databaseService);
-
-        // **Generate individual schemas for each ToolCall type using PolymorphicSchemaManager**
-        // This allows getting schema for specific tool call types when needed
-        var reportTaskCompletionSchema = JsonNode.Parse(_schemaManager.GenerateSchema(new[] { typeof(ReportTaskCompletionToolCall) }));
-        var sendEmailSchema = JsonNode.Parse(_schemaManager.GenerateSchema(new[] { typeof(SendEmailToolCall) }));
-        var issueInvoiceSchema = JsonNode.Parse(_schemaManager.GenerateSchema(new[] { typeof(IssueInvoiceToolCall) }));
-        var getCustomerDataSchema = JsonNode.Parse(_schemaManager.GenerateSchema(new[] { typeof(GetCustomerDataToolCall) }));
-        var voidInvoiceSchema = JsonNode.Parse(_schemaManager.GenerateSchema(new[] { typeof(VoidInvoiceToolCall) }));
-        var createRuleSchema = JsonNode.Parse(_schemaManager.GenerateSchema(new[] { typeof(CreateRuleToolCall) }));
-
-        // **Return dictionary with function information including JSON schemas**
-        return new Dictionary<string, FunctionInformations>
+        foreach (var toolCallType in toolCallTypes)
         {
-            ["reportTaskCompletion"] = new FunctionInformations(reportTaskCompletionFunc, typeof(ReportTaskCompletionToolCall), reportTaskCompletionSchema),
-            ["sendEmail"] = new FunctionInformations(sendEmailFunc, typeof(SendEmailToolCall), sendEmailSchema),
-            ["issueInvoice"] = new FunctionInformations(issueInvoiceFunc, typeof(IssueInvoiceToolCall), issueInvoiceSchema),
-            ["getCustomerData"] = new FunctionInformations(getCustomerDataFunc, typeof(GetCustomerDataToolCall), getCustomerDataSchema),
-            ["voidInvoice"] = new FunctionInformations(voidInvoiceFunc, typeof(VoidInvoiceToolCall), voidInvoiceSchema),
-            ["createRule"] = new FunctionInformations(createRuleFunc, typeof(CreateRuleToolCall), createRuleSchema)
-        };
+            // **Validate that the type is a ToolCall**
+            if (!typeof(ToolCall).IsAssignableFrom(toolCallType))
+            {
+                throw new ArgumentException($"Type {toolCallType.Name} must derive from ToolCall", nameof(toolCallTypes));
+            }
+
+            // **Derive the function name and BusinessFunction type name**
+            // Example: SendEmailToolCall -> sendEmail, SendEmailFunction
+            var functionName = GetFunctionName(toolCallType);
+            var businessFunctionType = GetBusinessFunctionType(toolCallType);
+
+            // **Create the BusinessFunction instance with appropriate dependencies**
+            var businessFunction = CreateBusinessFunctionInstance(businessFunctionType);
+
+            // **Generate JSON schema for this specific ToolCall type**
+            var jsonSchema = JsonNode.Parse(_schemaManager.GenerateSchema(new[] { toolCallType }))!;
+
+            // **Add to the functions dictionary**
+            _functions[functionName] = new FunctionInformations(businessFunction, toolCallType, jsonSchema);
+
+            // **Add the type to the schema manager if not already present**
+            _schemaManager.AddDerivedTypes(toolCallType);
+        }
+    }
+
+    /// <summary>
+    /// **Derives the function name from a ToolCall type**.
+    ///
+    /// Converts "SendEmailToolCall" to "sendEmail" by:
+    /// 1. Removing the "ToolCall" suffix
+    /// 2. Converting to camelCase
+    /// </summary>
+    /// <param name="toolCallType">The ToolCall type</param>
+    /// <returns>The function name in camelCase</returns>
+    private static string GetFunctionName(Type toolCallType)
+    {
+        var name = toolCallType.Name;
+        if (name.EndsWith("ToolCall"))
+        {
+            name = name.Substring(0, name.Length - "ToolCall".Length);
+        }
+
+        // Convert to camelCase (first letter lowercase)
+        return char.ToLowerInvariant(name[0]) + name.Substring(1);
+    }
+
+    /// <summary>
+    /// **Derives the BusinessFunction type from a ToolCall type**.
+    ///
+    /// Converts "SendEmailToolCall" to SendEmailFunction type by:
+    /// 1. Removing the "ToolCall" suffix
+    /// 2. Appending "Function" suffix
+    /// 3. Looking up the type in the same namespace
+    /// </summary>
+    /// <param name="toolCallType">The ToolCall type</param>
+    /// <returns>The corresponding BusinessFunction type</returns>
+    private static Type GetBusinessFunctionType(Type toolCallType)
+    {
+        var baseName = toolCallType.Name;
+        if (baseName.EndsWith("ToolCall"))
+        {
+            baseName = baseName.Substring(0, baseName.Length - "ToolCall".Length);
+        }
+
+        var functionTypeName = $"{toolCallType.Namespace}.{baseName}Function";
+        var functionType = toolCallType.Assembly.GetType(functionTypeName);
+
+        if (functionType == null)
+        {
+            throw new InvalidOperationException(
+                $"Could not find BusinessFunction type '{functionTypeName}' for ToolCall type '{toolCallType.Name}'");
+        }
+
+        return functionType;
+    }
+
+    /// <summary>
+    /// **Creates a BusinessFunction instance with proper dependency injection**.
+    ///
+    /// This method uses reflection to create instances of BusinessFunction types,
+    /// analyzing their constructor parameters and providing the appropriate dependencies
+    /// (DatabaseService, SqlServerService, or no dependencies).
+    /// </summary>
+    /// <param name="businessFunctionType">The BusinessFunction type to instantiate</param>
+    /// <returns>An instance of the BusinessFunction</returns>
+    private BusinessFunction CreateBusinessFunctionInstance(Type businessFunctionType)
+    {
+        // **Find the constructor and determine required dependencies**
+        var constructors = businessFunctionType.GetConstructors();
+        if (constructors.Length == 0)
+        {
+            throw new InvalidOperationException($"Type {businessFunctionType.Name} has no public constructors");
+        }
+
+        var constructor = constructors[0];
+        var parameters = constructor.GetParameters();
+
+        // **Build the constructor arguments based on parameter types**
+        var args = new object?[parameters.Length];
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            var paramType = parameters[i].ParameterType;
+            if (paramType == typeof(DatabaseService))
+            {
+                args[i] = _databaseService;
+            }
+            else if (paramType == typeof(SqlServerService))
+            {
+                args[i] = _sqlServerService;
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    $"Unknown dependency type {paramType.Name} for {businessFunctionType.Name}");
+            }
+        }
+
+        // **Create and return the instance**
+        var instance = constructor.Invoke(args);
+        if (instance is not BusinessFunction businessFunction)
+        {
+            throw new InvalidOperationException($"Type {businessFunctionType.Name} is not a BusinessFunction");
+        }
+
+        return businessFunction;
     }
 
     /// <summary>

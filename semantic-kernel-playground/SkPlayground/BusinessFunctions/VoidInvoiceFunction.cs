@@ -55,7 +55,6 @@ public class VoidInvoiceFunction : BusinessFunction<VoidInvoiceToolCall>
         await Task.Delay(60, cancellationToken);
         
         var summary = $"❌ Invoice {parameters.InvoiceId} voided: {parameters.Reason}";
-        Console.WriteLine(summary);
         
         return new BusinessFunctionResult(invoice, summary);
     }

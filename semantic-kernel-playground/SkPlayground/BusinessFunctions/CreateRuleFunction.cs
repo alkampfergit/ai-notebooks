@@ -56,7 +56,6 @@ public class CreateRuleFunction : BusinessFunction<CreateRuleToolCall>
         await Task.Delay(50, cancellationToken);
         
         var summary = $"📝 Rule created for {parameters.Email}: {parameters.Rule}";
-        Console.WriteLine(summary);
         
         return new BusinessFunctionResult(rule, summary);
     }

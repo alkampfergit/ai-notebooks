@@ -136,7 +136,6 @@ class Program
                 .AddChoices([
                     "Original Python Tasks (SGR Demo)",
                     "Simple Email Task",
-                    "Complex Invoice Task",
                     "Customer Support Workflow",
                     "Exit"
                 ]));
@@ -156,9 +155,6 @@ class Program
                 break;
             case "simple_email_task":
                 await RunSimpleEmailExample();
-                break;
-            case "complex_invoice_task":
-                await RunComplexInvoiceExample();
                 break;
             case "customer_support_workflow":
                 await RunCustomerSupportWorkflowExample();
@@ -272,35 +268,6 @@ class Program
     }
 
     /// <summary>
-    /// Example 2: Demonstrate complex invoice generation
-    /// Shows multi-step reasoning for financial operations with discounts
-    /// </summary>
-    private static async Task RunComplexInvoiceExample()
-    {
-        AnsiConsole.Write(
-            new Panel("[bold magenta]🧪 Test 2: Complex Invoice Task[/]")
-                .Border(BoxBorder.Rounded)
-                .BorderColor(Color.BlueViolet));
-
-        var prompt = "Issue an invoice to jane@example.com for LAPTOP001 and MOUSE001 with 15% discount";
-        
-        AnsiConsole.MarkupLine($"[dim]Prompt:[/] {prompt}");
-        AnsiConsole.WriteLine();
-
-        var result = await AnsiConsole.Status()
-            .StartAsync("[magenta]Generating invoice...[/]", async ctx =>
-            {
-                return await reasoner!.ReasonAndActAsync(prompt);
-            });
-
-        AnsiConsole.Write(
-            new Panel($"[green]Result:[/] {Markup.Escape(result)}")
-                .Header("Invoice Generation Complete")
-                .Border(BoxBorder.Rounded)
-                .BorderColor(Color.Green));
-    }
-
-    /// <summary>
     /// Example 3: Demonstrate complex multi-step customer support workflow
     /// Shows advanced reasoning with multiple conditional steps and business logic
     /// </summary>
@@ -312,11 +279,9 @@ class Program
                 .BorderColor(Color.Orange1));
 
         var supportRequest = """
-        A customer john@example.com contacted us saying they want to purchase a gaming laptop 
-        but they're a loyal customer and should get a discount. Please:
+        A customer john.smith@example.com contacted us saying they want to purchase a gaming laptop and it is entiled to a discount
         1. Check if they're in our customer database
-        2. Send them information about our gaming laptop
-        3. Issue them an invoice with appropriate discount (20% for existing customers, 10% for new ones)
+        2. Send them information about our gaming laptop using 20% discount if existing customers, 10% if it is a new ones)
         """;
 
         AnsiConsole.MarkupLine("[dim]Support Request:[/]");

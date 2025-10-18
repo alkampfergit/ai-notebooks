@@ -18,6 +18,7 @@ public class DatabaseService
     private readonly Dictionary<string, Invoice> _invoices;
     private readonly List<Email> _emails;
     private readonly Dictionary<string, Product> _products;
+    private readonly Dictionary<string, Customer> _customers;
     
     /// <summary>
     /// **Rules collection** - provides access to customer-specific business rules.
@@ -40,10 +41,16 @@ public class DatabaseService
     public Dictionary<string, Product> Products => _products;
 
     /// <summary>
+    /// **Customers collection** - provides access to customer data indexed by email.
+    /// </summary>
+    public Dictionary<string, Customer> Customers => _customers;
+
+    /// <summary>
     /// **Constructor that initializes the database** with default product catalog and empty collections.
     /// 
     /// The database structure matches the Python original with:
     /// - Products: Pre-populated catalog with course offerings
+    /// - Customers: Pre-populated customer data
     /// - Rules: Customer-specific business rules (empty initially)
     /// - Invoices: Generated invoice records (empty initially) 
     /// - Emails: Sent email communications (empty initially)
@@ -57,7 +64,55 @@ public class DatabaseService
         {
             ["SKU-205"] = new() { Sku = "SKU-205", Name = "AGI 101 Course Personal", Price = 258 },
             ["SKU-210"] = new() { Sku = "SKU-210", Name = "AGI 101 Course Team (5 seats)", Price = 1290 },
-            ["SKU-220"] = new() { Sku = "SKU-220", Name = "Building AGI - online exercises", Price = 315 }
+            ["SKU-220"] = new() { Sku = "SKU-220", Name = "Building AGI - online exercises", Price = 315 },
+
+            // Gaming laptops
+            ["SKU-305"] = new()
+            {
+                Sku = "SKU-305",
+                Name = "GamerPro X15 - Gaming Laptop",
+                Price = 1499,
+                Description = "High-performance gaming laptop with dedicated RTX GPU and 240Hz display",
+                Category = "Gaming",
+                IsActive = true
+            },
+            ["SKU-310"] = new()
+            {
+                Sku = "SKU-310",
+                Name = "GamerLite 14 - Portable Gaming",
+                Price = 999,
+                Description = "Lightweight gaming laptop with high-refresh IPS display and long battery life",
+                Category = "Gaming",
+                IsActive = true
+            },
+
+            // Rugged laptops
+            ["SKU-405"] = new()
+            {
+                Sku = "SKU-405",
+                Name = "RuggedMax 14 - Rugged Laptop",
+                Price = 1799,
+                Description = "MIL-STD certified rugged laptop designed for field and industrial use",
+                Category = "Rugged",
+                IsActive = true
+            },
+            ["SKU-410"] = new()
+            {
+                Sku = "SKU-410",
+                Name = "FieldTough 12 - Ultra Rugged",
+                Price = 2099,
+                Description = "Ultra-rugged convertible laptop engineered for extreme environments",
+                Category = "Rugged",
+                IsActive = true
+            }
+        };
+        _customers = new Dictionary<string, Customer>
+        {
+            ["john.smith@example.com"] = new() { Email = "john.smith@example.com", Name = "John", Surname = "Smith" },
+            ["sarah.johnson@example.com"] = new() { Email = "sarah.johnson@example.com", Name = "Sarah", Surname = "Johnson" },
+            ["michael.williams@example.com"] = new() { Email = "michael.williams@example.com", Name = "Michael", Surname = "Williams" },
+            ["emma.brown@example.com"] = new() { Email = "emma.brown@example.com", Name = "Emma", Surname = "Brown" },
+            ["david.jones@example.com"] = new() { Email = "david.jones@example.com", Name = "David", Surname = "Jones" }
         };
     }
 
@@ -108,5 +163,14 @@ public class DatabaseService
     public Dictionary<string, Product> GetProducts()
     {
         return _products;
+    }
+
+    /// <summary>
+    /// **Gets the customers collection** for customer data.
+    /// </summary>
+    /// <returns>Dictionary of customer records indexed by email</returns>
+    public Dictionary<string, Customer> GetCustomers()
+    {
+        return _customers;
     }
 }

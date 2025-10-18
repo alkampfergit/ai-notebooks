@@ -2,7 +2,6 @@ using SkPlayground.Models;
 using SkPlayground.Services;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
-using System.Text.Json;
 
 namespace SkPlayground.BusinessFunctions;
 
@@ -45,29 +44,41 @@ public class GetCustomerDataFunction : BusinessFunction<GetCustomerDataToolCall>
         var rules = _databaseService.GetRules();
         var invoices = _databaseService.GetInvoices();
         var emails = _databaseService.GetEmails();
+        var customers = _databaseService.GetCustomers();
 
-        // Filter data for specific customer email
+        // First check if the customer exists in the catalog
+        if (!customers.TryGetValue(parameters.Email, out var customer))
+        {
+            const string noCustomerSummaryTemplate = "No customer found with email {0}.";
+            var nocustomerSummary = string.Format(noCustomerSummaryTemplate, parameters.Email);
+
+            var missingCustomerData = new Dictionary<string, object?>
+            {
+                ["customer"] = null,
+                ["rules"] = new List<Rule>(),
+                ["invoices"] = new Dictionary<string, Invoice>(),
+                ["emails"] = new List<Email>(),
+                ["summary"] = nocustomerSummary
+            };
+
+            await Task.Delay(50, cancellationToken);
+            return new BusinessFunctionResult(missingCustomerData, nocustomerSummary);
+        }
+
+        // Filter data for existing customer
         rules = rules.Where(r => r.Email == parameters.Email).ToList();
         invoices = invoices.Where(i => i.Value.Email == parameters.Email).ToDictionary(i => i.Key, i => i.Value);
         emails = emails.Where(e => e.To == parameters.Email).ToList();
 
-        var rulesCount = rules.Count();
-        var invoicesCount = invoices.Count();
-        var emailsCount = emails.Count();
+        var rulesCount = rules.Count;
+        var invoicesCount = invoices.Count;
+        var emailsCount = emails.Count;
 
-        // Create summary of the data retrieval operation
-        string summary;
-        if (emailsCount == 0)
-        {
-            summary = $"No customer found with email {parameters.Email}.";
-        }
-        else
-        {
-            summary = $"Found customer with email {parameters.Email}: {rulesCount} rules, {invoicesCount} invoices, {emailsCount} emails.";
-        }
+        var summary = $"Found customer {customer.Name} {customer.Surname} ({customer.Email}): {rulesCount} rules, {invoicesCount} invoices, {emailsCount} emails.";
 
         var customerData = new Dictionary<string, object>
         {
+            ["customer"] = customer,
             ["rules"] = rules,
             ["invoices"] = invoices,
             ["emails"] = emails,
@@ -76,8 +87,6 @@ public class GetCustomerDataFunction : BusinessFunction<GetCustomerDataToolCall>
 
         // Simulate async data retrieval
         await Task.Delay(75, cancellationToken);
-
-        Console.WriteLine(summary);
 
         return new BusinessFunctionResult(customerData, summary);
     }

@@ -54,7 +54,6 @@ public class SendEmailFunction : BusinessFunction<SendEmailToolCall>
         await Task.Delay(100, cancellationToken);
         
         var summary = $"📧 Email sent to {parameters.RecipientEmail}: '{parameters.Subject}'";
-        Console.WriteLine(summary);
         
         return new BusinessFunctionResult(email, summary);
     }

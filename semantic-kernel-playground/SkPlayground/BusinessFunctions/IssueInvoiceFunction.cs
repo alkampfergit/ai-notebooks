@@ -89,7 +89,6 @@ public class IssueInvoiceFunction : BusinessFunction<IssueInvoiceToolCall>
         await Task.Delay(120, cancellationToken);
         
         var summary = $"💰 Invoice {invoiceId} issued to {parameters.Email}: ${total - discount:F2} (${total:F2} - ${discount:F2} discount)";
-        Console.WriteLine(summary);
         
         return new BusinessFunctionResult(invoice, summary);
     }
