@@ -6,6 +6,10 @@ The code is for a course, so I need extensive comment, comments will be made wit
 
 The purpose is to quickly experiment then move all the code in a .dib file, a C# polyglot notebook.
 
+## Important Notes
+
+- The whole new API response are experimental, you need to put the #pragma warning disable OPENAI001 at the beginning of each file using the new API to avoid warnings.
+
 ## General Rules
 
 - Always verify that the code compiles before considering a task completed.

@@ -12,12 +12,14 @@ using SkPlayground.BusinessFunctions;
 
 /// <summary>
 /// Main program class for the Schema-Guided Reasoning playground
-/// Demonstrates various AI reasoning scenarios using Semantic Kernel
+/// Demonstrates various AI reasoning scenarios using Semantic Kernel or Response API
 /// </summary>
 class Program
 {
     private static Kernel? kernel;
     private static SchemaGuidedReasoner? reasoner;
+    private static ResponseApiSchemaGuidedReasoner? responseApiReasoner;
+    private static bool useResponseApi = false;
 
     static async Task Main(string[] args)
     {
@@ -31,6 +33,17 @@ class Program
             new Rule("[bold blue]Schema-Guided Reasoning with C# and Semantic Kernel[/]")
                 .RuleStyle("grey"));
 
+        // Ask user which reasoner to use
+        var reasonerChoice = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title("[yellow]Which reasoner would you like to use?[/]")
+                .AddChoices([
+                    "Semantic Kernel (Standard)",
+                    "Direct OpenAI API (Lower Overhead)"
+                ]));
+
+        useResponseApi = reasonerChoice.Contains("Direct OpenAI API");
+
         // Ask user about verbose output preference
         var verboseOutput = AnsiConsole.Confirm(
             "[yellow]Enable verbose output?[/] [grey](Shows detailed JSON responses and debug information)[/]",
@@ -39,7 +52,7 @@ class Program
         AnsiConsole.WriteLine();
 
         // Initialize the semantic kernel and reasoner
-        await InitializeKernel(verboseOutput);
+        await InitializeReasoner(verboseOutput);
 
         // Main application loop
         while (true)
@@ -64,62 +77,90 @@ class Program
     }
 
     /// <summary>
-    /// Initialize the Semantic Kernel with Azure OpenAI configuration
-    /// Sets up logging, HTTP client, and creates the reasoning components
+    /// Initialize the chosen reasoner (Semantic Kernel or Response API)
+    /// Sets up the appropriate configuration and creates the reasoning components
     /// </summary>
     /// <param name="verboseOutput">Whether to enable verbose output in the reasoner</param>
-    private static async Task InitializeKernel(bool verboseOutput)
+    private static async Task InitializeReasoner(bool verboseOutput)
     {
-        AnsiConsole.Status()
-            .Start("[yellow]Initializing Semantic Kernel...[/]", ctx =>
-            {
-                // Setup kernel with Azure OpenAI configuration
-                var kernelBuilder = Kernel.CreateBuilder();
-                kernelBuilder.Services.AddLogging(l => l
-                    .SetMinimumLevel(LogLevel.Warning)
-                    .AddConsole()
-                );
+        var apiKey = Dotenv.Get("OPENAI_API_KEY");
+        var endpoint = Dotenv.Get("AZURE_ENDPOINT");
+        var deploymentId = "gpt-5-nano";
 
-                var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
-
-                var apiKey = Dotenv.Get("OPENAI_API_KEY");
-
-                var endpoint = Dotenv.Get("AZURE_ENDPOINT");
-
-                // Configure Azure OpenAI connection
-                kernelBuilder.AddAzureOpenAIChatCompletion(
-                   deploymentName: "gpt-5-nano",
-                   apiKey: apiKey,
-                   endpoint: endpoint
-                );
-
-                // // use standard openai
-                // kernelBuilder.AddOpenAIChatCompletion(
-                //     modelId: "gpt-4o-mini",
-                //     apiKey: Dotenv.Get("OPENAI_API_KEY_NOT_AZURE")
-                // );
-
-                kernel = kernelBuilder.Build();
-
-                // Custom JsonConverter options for proper serialization
-                var jsonOptions = new JsonSerializerOptions
+        if (useResponseApi)
+        {
+            // **Initialize Direct OpenAI API Reasoner**
+            AnsiConsole.Status()
+                .Start("[yellow]Initializing Direct OpenAI API Reasoner...[/]", ctx =>
                 {
-                    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-                    WriteIndented = true,
-                    PropertyNameCaseInsensitive = true,
-                    Converters = { new JsonStringEnumConverter() }
-                };
+                    var databaseService = new DatabaseService();
+                    var businessFunctionFactory = SchemaGuidedReasonerFactory.CreateDefaultBusinessFunctionFactory(databaseService);
+                    var options = SchemaGuidedReasonerFactory.CreateDefaultOptions(databaseService);
 
-                var databaseService = new DatabaseService();
-                reasoner = new SchemaGuidedReasoner(kernel, databaseService)
+                    try
+                    {
+                        responseApiReasoner = new ResponseApiSchemaGuidedReasoner(
+                            azureEndpoint: endpoint,
+                            azureApiKey: apiKey,
+                            deploymentId: deploymentId,
+                            businessFunctionFactory: businessFunctionFactory,
+                            options: options)
+                        {
+                            VerboseOutput = verboseOutput,
+                            ReasoningEffortLevel = ResponseReasoningEffortLevel.Low
+                        };
+
+                        ctx.Status("[green]Direct OpenAI API reasoner ready![/]");
+                    }
+                    catch (Exception ex)
+                    {
+                        ctx.Status($"[red]Error: {ex.Message}[/]");
+                        throw;
+                    }
+                });
+
+            var outputMode = verboseOutput ? "verbose" : "concise";
+            AnsiConsole.MarkupLine($"[green]✓[/] Direct OpenAI API reasoner initialized successfully! [grey]({outputMode} output)[/]");
+            AnsiConsole.MarkupLine($"[yellow]ℹ[/]  [grey]Using direct OpenAI Chat API - bypassing Semantic Kernel for lower overhead[/]");
+            AnsiConsole.WriteLine();
+        }
+        else
+        {
+            // **Initialize Semantic Kernel Reasoner (Standard)**
+            AnsiConsole.Status()
+                .Start("[yellow]Initializing Semantic Kernel...[/]", ctx =>
                 {
-                    VerboseOutput = verboseOutput
-                };
-            });
+                    // Setup kernel with Azure OpenAI configuration
+                    var kernelBuilder = Kernel.CreateBuilder();
+                    kernelBuilder.Services.AddLogging(l => l
+                        .SetMinimumLevel(LogLevel.Warning)
+                        .AddConsole()
+                    );
 
-        var outputMode = verboseOutput ? "verbose" : "concise";
-        AnsiConsole.MarkupLine($"[green]✓[/] Schema-guided reasoner initialized successfully! [grey]({outputMode} output)[/]");
-        AnsiConsole.WriteLine();
+                    var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+
+                    // Configure Azure OpenAI connection
+                    kernelBuilder.AddAzureOpenAIChatCompletion(
+                       deploymentName: deploymentId,
+                       apiKey: apiKey,
+                       endpoint: endpoint
+                    );
+
+                    kernel = kernelBuilder.Build();
+
+                    var databaseService = new DatabaseService();
+                    reasoner = new SchemaGuidedReasoner(kernel, databaseService)
+                    {
+                        VerboseOutput = verboseOutput
+                    };
+                });
+
+            var outputMode = verboseOutput ? "verbose" : "concise";
+            AnsiConsole.MarkupLine($"[green]✓[/] Semantic Kernel reasoner initialized successfully! [grey]({outputMode} output)[/]");
+            AnsiConsole.WriteLine();
+        }
+
+        await Task.CompletedTask;
     }
 
     /// <summary>
@@ -168,13 +209,29 @@ class Program
     }
 
     /// <summary>
+    /// Execute a task using the selected reasoner (SK or Response API)
+    /// </summary>
+    private static async Task<string> ExecuteReasoningTask(string task)
+    {
+        if (useResponseApi)
+        {
+            return await responseApiReasoner!.ReasonAndActAsync(task);
+        }
+        else
+        {
+            return await reasoner!.ReasonAndActAsync(task);
+        }
+    }
+
+    /// <summary>
     /// Example 0: Run the original Python tasks to demonstrate Schema-Guided Reasoning
     /// This matches the TASKS array from the Python original for direct comparison
     /// </summary>
     private static async Task RunOriginalPythonTasksExample()
     {
+        var reasonerType = useResponseApi ? "Direct OpenAI API" : "Semantic Kernel";
         AnsiConsole.Write(
-            new Panel("[bold red]🚀 Original Python Tasks - Schema-Guided Reasoning Demo[/]")
+            new Panel($"[bold red]🚀 Original Python Tasks - Schema-Guided Reasoning Demo[/]\n[dim]Using: {reasonerType}[/]")
                 .Border(BoxBorder.Rounded)
                 .BorderColor(Color.Red));
 
@@ -194,7 +251,7 @@ class Program
             AnsiConsole.Write(
                 new Rule($"[bold blue]Task {index}[/]")
                     .RuleStyle("blue"));
-            
+
             AnsiConsole.MarkupLine($"[dim]Task:[/] {task}");
             AnsiConsole.WriteLine();
 
@@ -203,7 +260,7 @@ class Program
                 var result = await AnsiConsole.Status()
                     .StartAsync($"[yellow]Executing task {index} with SGR...[/]", async ctx =>
                     {
-                        return await reasoner!.ReasonAndActAsync(task);
+                        return await ExecuteReasoningTask(task);
                     });
 
                 AnsiConsole.Write(
@@ -244,20 +301,21 @@ class Program
     /// </summary>
     private static async Task RunSimpleEmailExample()
     {
+        var reasonerType = useResponseApi ? "Direct OpenAI API" : "Semantic Kernel";
         AnsiConsole.Write(
-            new Panel("[bold yellow]🧪 Test 1: Simple Email Task[/]")
+            new Panel($"[bold yellow]🧪 Test 1: Simple Email Task[/]\n[dim]Using: {reasonerType}[/]")
                 .Border(BoxBorder.Rounded)
                 .BorderColor(Color.Yellow));
 
         var prompt = "Send an email to john@example.com with subject 'Welcome' and body 'Thank you for joining us!'";
-        
+
         AnsiConsole.MarkupLine($"[dim]Prompt:[/] {prompt}");
         AnsiConsole.WriteLine();
 
         var result = await AnsiConsole.Status()
             .StartAsync("[yellow]Processing email task...[/]", async ctx =>
             {
-                return await reasoner!.ReasonAndActAsync(prompt);
+                return await ExecuteReasoningTask(prompt);
             });
 
         AnsiConsole.Write(
@@ -265,6 +323,17 @@ class Program
                 .Header("Email Task Complete")
                 .Border(BoxBorder.Rounded)
                 .BorderColor(Color.Green));
+
+        // Display token usage stats if using Response API
+        if (useResponseApi && responseApiReasoner != null)
+        {
+            AnsiConsole.WriteLine();
+            AnsiConsole.Write(
+                new Panel($"[aqua]{responseApiReasoner.CurrentSessionStats}[/]")
+                    .Header("Token Usage Statistics")
+                    .Border(BoxBorder.Rounded)
+                    .BorderColor(Color.Aqua));
+        }
     }
 
     /// <summary>
@@ -273,8 +342,9 @@ class Program
     /// </summary>
     private static async Task RunCustomerSupportWorkflowExample()
     {
+        var reasonerType = useResponseApi ? "Direct OpenAI API" : "Semantic Kernel";
         AnsiConsole.Write(
-            new Panel("[bold orange1]🧪 Test 3: Customer Support Workflow[/]")
+            new Panel($"[bold orange1]🧪 Test 3: Customer Support Workflow[/]\n[dim]Using: {reasonerType}[/]")
                 .Border(BoxBorder.Rounded)
                 .BorderColor(Color.Orange1));
 
@@ -293,7 +363,7 @@ class Program
         var result = await AnsiConsole.Status()
             .StartAsync("[orange1]Processing support workflow...[/]", async ctx =>
             {
-                return await reasoner!.ReasonAndActAsync(supportRequest);
+                return await ExecuteReasoningTask(supportRequest);
             });
 
         AnsiConsole.Write(
@@ -301,6 +371,17 @@ class Program
                 .Header("Customer Support Workflow Complete")
                 .Border(BoxBorder.Rounded)
                 .BorderColor(Color.Green));
+
+        // Display token usage stats if using Response API
+        if (useResponseApi && responseApiReasoner != null)
+        {
+            AnsiConsole.WriteLine();
+            AnsiConsole.Write(
+                new Panel($"[aqua]{responseApiReasoner.CurrentSessionStats}[/]")
+                    .Header("Token Usage Statistics")
+                    .Border(BoxBorder.Rounded)
+                    .BorderColor(Color.Aqua));
+        }
 
         // Show conversation log for this complex example
         AnsiConsole.WriteLine();
@@ -310,15 +391,26 @@ class Program
 
         // Display key benefits
         AnsiConsole.WriteLine();
-        AnsiConsole.Write(
-            new Panel("""
+        var benefits = useResponseApi
+            ? """
+            [bold green]Direct OpenAI API Benefits:[/]
+            • [yellow]Lower Overhead:[/] Bypasses Semantic Kernel abstraction layer
+            • [yellow]Token Tracking:[/] Detailed per-step and cumulative token statistics
+            • [yellow]Direct Control:[/] Full access to OpenAI Chat Completion options
+            • [yellow]Same Pattern:[/] Compatible interface with SchemaGuidedReasoner
+            • [yellow]Performance:[/] Potentially faster without SK middleware
+            """
+            : """
             [bold green]Key Benefits Demonstrated:[/]
             • [yellow]Structured Thinking:[/] LLM breaks down complex tasks into steps
             • [yellow]Type Safety:[/] Strongly typed schemas prevent malformed tool calls
             • [yellow]Predictable Behavior:[/] Consistent reasoning patterns
             • [yellow]Easy Debugging:[/] Clear conversation logs
             • [yellow]Extensible:[/] Easy to add new tools and reasoning patterns
-            """)
+            """;
+
+        AnsiConsole.Write(
+            new Panel(benefits)
                 .Header("Schema-Guided Reasoning Benefits")
                 .Border(BoxBorder.Rounded)
                 .BorderColor(Color.Green));

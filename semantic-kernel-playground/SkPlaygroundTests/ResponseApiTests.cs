@@ -135,6 +135,7 @@ public class ResponseApiTests : SemanticKernelTestBase
             var result = await responseClient.CreateResponseAsync(inputItems, options);
             OpenAIResponse response = result;
 
+            var conversationId = response.Id;
             Console.WriteLine($"✅ Response received - ID: {response.Id}");
             Console.WriteLine($"   Model: {response.Model}");
 
