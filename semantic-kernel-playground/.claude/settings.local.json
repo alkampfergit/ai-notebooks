@@ -11,7 +11,9 @@
       "Bash(dotnet test:*)",
       "Bash(dotnet script:*)",
       "Bash(find:*)",
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(git checkout SkPlaygroundTests/NextStepManagerTests.cs)",
+      "Bash(dotnet list SkPlaygroundTests/SkPlaygroundTests.csproj package)"
     ],
     "deny": [],
     "ask": []
