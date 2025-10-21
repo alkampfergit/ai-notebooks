@@ -1,13 +1,11 @@
 using Azure;
 using Azure.AI.OpenAI;
-using Azure.Core;
 using Newtonsoft.Json;
+using OpenAI.Responses;
 using SkPlayground.BusinessFunctions;
 using SkPlayground.Models;
-using SkPlayground.Utils;
 using Spectre.Console;
 using System.Text;
-using OpenAI.Chat;
 
 namespace SkPlayground.Services;
 
@@ -198,44 +196,63 @@ public class ResponseApiSchemaGuidedReasoner
                 var systemPrompt = GenerateSystemPrompt(availableToolTypes);
                 var userMessage = BuildUserMessage(userRequest, executionTaskResult);
 
-                // **Build chat messages**
-                var messages = new List<ChatMessage>
-                {
-                    new SystemChatMessage(systemPrompt),
-                    new UserChatMessage(userMessage)
-                };
-
                 // **Configure chat options with schema constraint**
                 var schemaStr = availableToolTypes != null
                     ? _functionFactory.GenerateJsonSchemaForToolCall(availableToolTypes)
                     : _functionFactory.GenerateJsonSchemaForToolCall();
 
-                var chatOptions = new ChatCompletionOptions
-                {
-                    ResponseFormat = ChatResponseFormat.CreateJsonSchemaFormat(
-                        jsonSchemaFormatName: "next_step_schema",
-                        jsonSchema: BinaryData.FromString(schemaStr),
-                        jsonSchemaIsStrict: true
-                    )
+                // **Build chat messages** This is with a direct API call using the standard api.
+                //var messages = new List<ChatMessage>
+                //{
+                //    new SystemChatMessage(systemPrompt),
+                //    new UserChatMessage(userMessage)
+                //};
+
+                //var chatOptions = new ChatCompletionOptions
+                //{
+                //    ResponseFormat = ChatResponseFormat.CreateJsonSchemaFormat(
+                //        jsonSchemaFormatName: "next_step_schema",
+                //        jsonSchema: BinaryData.FromString(schemaStr),
+                //        jsonSchemaIsStrict: true
+                //    )
+                //};
+
+                //if (VerboseOutput)
+                //{
+                //    AnsiConsole.MarkupLine($"[grey]Calling OpenAI with {messages.Count} messages[/]");
+                //}
+
+                //// **Make the direct OpenAI API call**
+                //var chatClient = client.GetChatClient(_deploymentId);
+                //var completion = await chatClient.CompleteChatAsync(messages, chatOptions);
+
+                // use the new response api.
+                var inputItems = new List<ResponseItem> {
+                    ResponseItem.CreateSystemMessageItem(systemPrompt) ,
+                    ResponseItem.CreateUserMessageItem(userMessage)
                 };
 
-                if (VerboseOutput)
+                var options = new ResponseCreationOptions
                 {
-                    AnsiConsole.MarkupLine($"[grey]Calling OpenAI with {messages.Count} messages[/]");
-                }
+                    PreviousResponseId = null, //do not use conversation id for now
+                    ReasoningOptions = new ResponseReasoningOptions()
+                    {
+                        ReasoningEffortLevel = this.ReasoningEffortLevel
+                    }
+                };
 
-                // **Make the direct OpenAI API call**
-                var chatClient = client.GetChatClient(_deploymentId);
-                var completion = await chatClient.CompleteChatAsync(messages, chatOptions);
+                OpenAIResponse response = await responseClient.CreateResponseAsync(inputItems, options);
 
-                // **Track token usage**
-                if (completion.Value.Usage != null)
+                // conversationId = response.Id;
+
+                // **Track token usage it is different for the classic API **
+                if (response.Usage != null)
                 {
                     var usage = new TokenUsage
                     {
-                        InputTokenCount = completion.Value.Usage.InputTokenCount,
-                        OutputTokenCount = completion.Value.Usage.OutputTokenCount,
-                        TotalTokenCount = completion.Value.Usage.TotalTokenCount
+                        InputTokenCount = response.Usage.InputTokenCount,
+                        OutputTokenCount = response.Usage.OutputTokenCount,
+                        TotalTokenCount = response.Usage.TotalTokenCount
                     };
                     CurrentSessionStats.AddUsage(usage);
 
@@ -245,8 +262,14 @@ public class ResponseApiSchemaGuidedReasoner
                     }
                 }
 
+                var responseMessage = response.OutputItems.OfType<MessageResponseItem>().FirstOrDefault();
+                if (responseMessage == null)
+                {
+                    throw new InvalidOperationException("OpenAI Response did not contain a message item.");
+                }
+
                 // **Extract the assistant's response**
-                var assistantRaw = completion.Value.Content[0].Text;
+                var assistantRaw = String.Join("\n", responseMessage.Content.Select(c => c.Text));
 
                 if (string.IsNullOrEmpty(assistantRaw))
                 {
@@ -424,30 +447,6 @@ public class ResponseApiSchemaGuidedReasoner
             "This reasoner requires OpenAI SDK with Response API support. " +
             "Please use the standard SchemaGuidedReasoner until the Response API is stable.");
     }
-}
-
-/// <summary>
-/// **Reasoning effort levels for the Response API**
-///
-/// These levels control how much computational effort the model spends on reasoning.
-/// Higher levels produce more thorough reasoning but take longer and cost more tokens.
-/// </summary>
-public enum ResponseReasoningEffortLevel
-{
-    /// <summary>
-    /// **Low effort**: Faster responses with minimal reasoning overhead
-    /// </summary>
-    Low = 0,
-
-    /// <summary>
-    /// **Medium effort**: Balanced between speed and reasoning quality
-    /// </summary>
-    Medium = 1,
-
-    /// <summary>
-    /// **High effort**: Most thorough reasoning, slower and more expensive
-    /// </summary>
-    High = 2
 }
 
 /// <summary>

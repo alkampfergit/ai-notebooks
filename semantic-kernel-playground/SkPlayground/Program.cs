@@ -11,6 +11,7 @@ using Spectre.Console;
 using SkPlayground.BusinessFunctions;
 using SkPlayground.SqlScenario.SqlServer.SqlUtils;
 using Microsoft.Extensions.Logging.Abstractions;
+using OpenAI.Responses;
 
 /// <summary>
 /// Main program class for the Schema-Guided Reasoning playground
@@ -116,7 +117,9 @@ class Program
                             options: options)
                         {
                             VerboseOutput = verboseOutput,
+#pragma warning disable OPENAI001
                             ReasoningEffortLevel = ResponseReasoningEffortLevel.Low
+#pragma warning restore OPENAI001
                         };
 
                         ctx.Status("[green]Direct OpenAI API reasoner ready![/]");
@@ -242,6 +245,9 @@ class Program
     /// </summary>
     private static async Task RunOriginalPythonTasksExample()
     {
+        // **Initialize a fresh StateManager instance for this scenario execution**
+        StateManager.Start();
+
         var reasonerType = useResponseApi ? "Direct OpenAI API" : "Semantic Kernel";
         AnsiConsole.Write(
             new Panel($"[bold red]🚀 Original Python Tasks - Schema-Guided Reasoning Demo[/]\n[dim]Using: {reasonerType}[/]")
@@ -314,6 +320,9 @@ class Program
     /// </summary>
     private static async Task RunSimpleEmailExample()
     {
+        // **Initialize a fresh StateManager instance for this scenario execution**
+        StateManager.Start();
+
         var reasonerType = useResponseApi ? "Direct OpenAI API" : "Semantic Kernel";
         AnsiConsole.Write(
             new Panel($"[bold yellow]🧪 Test 1: Simple Email Task[/]\n[dim]Using: {reasonerType}[/]")
@@ -355,6 +364,9 @@ class Program
     /// </summary>
     private static async Task RunCustomerSupportWorkflowExample()
     {
+        // **Initialize a fresh StateManager instance for this scenario execution**
+        StateManager.Start();
+
         var reasonerType = useResponseApi ? "Direct OpenAI API" : "Semantic Kernel";
         AnsiConsole.Write(
             new Panel($"[bold orange1]🧪 Test 3: Customer Support Workflow[/]\n[dim]Using: {reasonerType}[/]")
@@ -436,6 +448,9 @@ class Program
     /// </summary>
     private static async Task RunSqlExcelExportExample()
     {
+        // **Initialize a fresh StateManager instance for this scenario execution**
+        StateManager.Start();
+
         var reasonerType = useResponseApi ? "Direct OpenAI API" : "Semantic Kernel";
         AnsiConsole.Write(
             new Panel($"[bold aqua]🧪 Test 4: SQL Database + Excel Export[/]\n[dim]Using: {reasonerType}[/]")
@@ -513,7 +528,9 @@ Guidelines:
                 options: sqlOptions)
             {
                 VerboseOutput = responseApiReasoner!.VerboseOutput,
+#pragma warning disable OPENAI001
                 ReasoningEffortLevel = ResponseReasoningEffortLevel.Low
+#pragma warning restore OPENAI001
             };
 
             result = await AnsiConsole.Status()

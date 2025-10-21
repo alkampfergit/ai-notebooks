@@ -26,8 +26,8 @@ public sealed class GetSqlDatabaseListFunction : BusinessFunction<GetSqlDatabase
             .ConfigureAwait(false);
 
         var summary = databaseList.Count == 0
-            ? "No databases were returned by the SQL Server instance."
-            : $"Retrieved {databaseList.Count} databases: {string.Join(", ", databaseList.Take(5))}{(databaseList.Count > 5 ? ", ..." : string.Empty)}";
+            ? "The current instance contains no database" 
+            : $"Server database list: {string.Join(", ", databaseList)}";
 
         return new BusinessFunctionResult(new
         {
