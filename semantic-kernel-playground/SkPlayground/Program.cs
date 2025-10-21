@@ -9,6 +9,8 @@ using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Spectre.Console;
 using SkPlayground.BusinessFunctions;
+using SkPlayground.SqlScenario.SqlServer.SqlUtils;
+using Microsoft.Extensions.Logging.Abstractions;
 
 /// <summary>
 /// Main program class for the Schema-Guided Reasoning playground
@@ -23,6 +25,13 @@ class Program
 
     static async Task Main(string[] args)
     {
+        System.Data.Common.DbProviderFactories.RegisterFactory(
+            "Microsoft.Data.SqlClient",
+            Microsoft.Data.SqlClient.SqlClientFactory.Instance);
+        // DataAccess.SetConnectionString(
+        //     "Server=localhost\\SQLEXPRESS;Database=master;Trusted_Connection=True;TrustServerCertificate=True;",
+        //     "Microsoft.Data.SqlClient",
+        //    NullLogger.Instance);
         // Display application header with styling
         AnsiConsole.Write(
             new FigletText("SK Playground")
@@ -178,6 +187,7 @@ class Program
                     "Original Python Tasks (SGR Demo)",
                     "Simple Email Task",
                     "Customer Support Workflow",
+                    "SQL Database + Excel Export",
                     "Exit"
                 ]));
 
@@ -199,6 +209,9 @@ class Program
                 break;
             case "customer_support_workflow":
                 await RunCustomerSupportWorkflowExample();
+                break;
+            case "sql_database_+_excel_export":
+                await RunSqlExcelExportExample();
                 break;
             case "exit":
                 return;
@@ -278,7 +291,7 @@ class Program
                         .BorderColor(Color.Red));
             }
         }
-        
+
         AnsiConsole.WriteLine();
         AnsiConsole.Write(
             new Panel("""
@@ -412,6 +425,147 @@ class Program
         AnsiConsole.Write(
             new Panel(benefits)
                 .Header("Schema-Guided Reasoning Benefits")
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.Green));
+    }
+
+    /// <summary>
+    /// Example 4: Demonstrate SQL database query with Excel export
+    /// Creates a specialized reasoner with only SQL and Excel functions
+    /// Shows how to use schema-guided reasoning for data extraction and export workflows
+    /// </summary>
+    private static async Task RunSqlExcelExportExample()
+    {
+        var reasonerType = useResponseApi ? "Direct OpenAI API" : "Semantic Kernel";
+        AnsiConsole.Write(
+            new Panel($"[bold aqua]🧪 Test 4: SQL Database + Excel Export[/]\n[dim]Using: {reasonerType}[/]")
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.Aqua));
+
+        AnsiConsole.MarkupLine("[yellow]Creating specialized reasoner with SQL and Excel functions only...[/]");
+        AnsiConsole.WriteLine();
+
+        // **Create a specialized reasoner that contains only SQL and Excel export functions**
+        // This demonstrates how to compose custom reasoners for specific workflows
+        var apiKey = Dotenv.Get("OPENAI_API_KEY");
+        var endpoint = Dotenv.Get("AZURE_ENDPOINT");
+        var deploymentId = "gpt-5-nano";
+        var databaseService = new DatabaseService();
+        var sqlServerService = new SqlServerService();
+
+        // **Define the specific tool types for SQL workflow**
+        var sqlToolTypes = new Type[]
+        {
+            typeof(ReportTaskCompletionToolCall),
+            typeof(GetSqlDatabaseListToolCall),
+            typeof(GetSqlDatabaseSchemaToolCall),
+            typeof(ExecuteSqlQueryToolCall),
+            typeof(ExportSqlQueryResultToolCall)
+        };
+
+        // **Create a specialized BusinessFunctionFactory with only SQL-related functions**
+        var sqlFunctionFactory = new BusinessFunctionFactory(databaseService, sqlServerService, sqlToolTypes);
+
+        // **Create custom options for SQL workflow**
+        var sqlOptions = new SchemaGuidedReasonerOptions
+        {
+            JsonSerializerOptions = SchemaGuidedReasonerOptions.CreateDefaultJsonOptions(),
+            SystemPromptBuilder = (context, _) =>
+            {
+                var toolsSummary = SchemaGuidedReasoner.GenerateToolsSummary(context.Schema.AvailableTools);
+                return $@"You are a SQL data analyst assistant.
+
+IMPORTANT: You must always respond with structured JSON that includes:
+1. Current state analysis
+2. List of remaining steps briefly described and include corresponding tool if applicable
+3. Whether the task is completed
+4. The specific tool call to execute next
+
+## Available Tools:
+{toolsSummary}
+
+Guidelines:
+- Always explore available databases first using get_sql_database_list
+- Get the schema of the target database before writing queries
+- Write efficient SQL queries that answer the user's question
+- After executing a query, export the results to Excel using export_sql_query_result
+- Use report_task_completion when all steps are done";
+            }
+        };
+
+        var userRequest = "Please give me a summary of all the orders grouped by year and customer code in the database northwind exported in excel";
+
+        AnsiConsole.MarkupLine("[dim]User Request:[/]");
+        AnsiConsole.Write(
+            new Panel(userRequest)
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.Grey));
+
+        string result;
+        if (useResponseApi)
+        {
+            // **Create specialized Response API reasoner**
+            var sqlReasoner = new ResponseApiSchemaGuidedReasoner(
+                azureEndpoint: endpoint,
+                azureApiKey: apiKey,
+                deploymentId: deploymentId,
+                businessFunctionFactory: sqlFunctionFactory,
+                options: sqlOptions)
+            {
+                VerboseOutput = responseApiReasoner!.VerboseOutput,
+                ReasoningEffortLevel = ResponseReasoningEffortLevel.Low
+            };
+
+            result = await AnsiConsole.Status()
+                .StartAsync("[aqua]Processing SQL + Excel workflow...[/]", async ctx =>
+                {
+                    return await sqlReasoner.ReasonAndActAsync(userRequest);
+                });
+
+            // Display token usage stats
+            AnsiConsole.WriteLine();
+            AnsiConsole.Write(
+                new Panel($"[aqua]{sqlReasoner.CurrentSessionStats}[/]")
+                    .Header("Token Usage Statistics")
+                    .Border(BoxBorder.Rounded)
+                    .BorderColor(Color.Aqua));
+        }
+        else
+        {
+            // **Create specialized Semantic Kernel reasoner**
+            var sqlReasoner = new SchemaGuidedReasoner(
+                kernel!,
+                sqlFunctionFactory,
+                sqlOptions)
+            {
+                VerboseOutput = reasoner!.VerboseOutput
+            };
+
+            result = await AnsiConsole.Status()
+                .StartAsync("[aqua]Processing SQL + Excel workflow...[/]", async ctx =>
+                {
+                    return await sqlReasoner.ReasonAndActAsync(userRequest);
+                });
+        }
+
+        AnsiConsole.Write(
+            new Panel($"[green]Final Result:[/] {Markup.Escape(result)}")
+                .Header("SQL + Excel Workflow Complete")
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.Green));
+
+        // Show benefits of specialized reasoners
+        AnsiConsole.WriteLine();
+        AnsiConsole.Write(
+            new Panel("""
+            [bold green]Specialized Reasoner Benefits:[/]
+            • [yellow]Focused Context:[/] Only SQL and Excel tools available, reducing complexity
+            • [yellow]Custom Prompts:[/] Tailored system prompt for SQL workflow
+            • [yellow]Type Safety:[/] Strongly typed SQL and Excel function calls
+            • [yellow]Composability:[/] Easy to create domain-specific reasoners
+            • [yellow]Multi-step Workflow:[/] Automatic orchestration of database discovery, querying, and export
+            """)
+                .Header("Specialized SQL Reasoner")
                 .Border(BoxBorder.Rounded)
                 .BorderColor(Color.Green));
     }

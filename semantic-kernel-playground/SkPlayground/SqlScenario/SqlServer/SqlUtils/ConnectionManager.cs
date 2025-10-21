@@ -1,7 +1,7 @@
 ﻿using Microsoft.Data.SqlClient;
 using System.Configuration;
 
-namespace SemanticKernel.Orchestration.SampleAgents.SqlServer.SqlUtils;
+namespace SkPlayground.SqlScenario.SqlServer.SqlUtils;
 
 public static class ConnectionManager
 {

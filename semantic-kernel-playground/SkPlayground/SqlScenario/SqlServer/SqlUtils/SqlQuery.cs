@@ -7,7 +7,7 @@ using System.Text;
 
 #nullable disable
 
-namespace SemanticKernel.Orchestration.SampleAgents.SqlServer.SqlUtils;
+namespace SkPlayground.SqlScenario.SqlServer.SqlUtils;
 
 public class SqlQuery
 {

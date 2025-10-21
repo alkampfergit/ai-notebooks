@@ -1,4 +1,4 @@
-﻿namespace SemanticKernel.Orchestration.SampleAgents.SqlServer.SqlUtils;
+﻿namespace SkPlayground.SqlScenario.SqlServer.SqlUtils;
 
 #nullable disable
 
