@@ -6,12 +6,13 @@ namespace SkPlayground.BusinessFunctions;
 /// <summary>
 /// **Non-generic base class for all business functions** that provides a unified interface
 /// for executing business operations with JSON parameter handling.
-/// 
+///
 /// This abstract class enables:
 /// - **Polymorphic execution** through common base type
 /// - **Dynamic dispatch** without knowing specific parameter types
 /// - **Framework integration** for dependency injection and factory patterns
 /// - **Consistent interface** across all business functions
+/// - **Availability checking** to determine if a function should be exposed to the LLM
 /// </summary>
 public abstract class BusinessFunction
 {
@@ -24,6 +25,39 @@ public abstract class BusinessFunction
     /// <param name="cancellationToken">Cancellation token to support cooperative cancellation</param>
     /// <returns>BusinessFunctionResult containing both result object and summary description</returns>
     public abstract Task<BusinessFunctionResult> ExecuteAsync(ToolCall nextStep, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// **Virtual method to determine if this business function is currently available for execution.**
+    ///
+    /// This method enables dynamic function availability based on runtime conditions such as:
+    /// - **State-based availability**: Function is only available after certain prerequisites are met
+    /// - **Context-dependent availability**: Function requires specific data to be present in state manager
+    /// - **Conditional logic**: Function may only be relevant in certain scenarios
+    /// - **Progressive disclosure**: Functions become available as the conversation progresses
+    ///
+    /// **Default Behavior:** Returns `true`, meaning the function is always available.
+    ///
+    /// **Override Example:**
+    /// ```csharp
+    /// public override bool IsAvailable()
+    /// {
+    ///     // Only available if database list has been retrieved
+    ///     return StateManager.ContainsMemoryKey("database_list");
+    /// }
+    /// ```
+    ///
+    /// **Usage in Schema Generation:**
+    /// The `BusinessFunctionFactory` calls this method when generating JSON schemas
+    /// to determine which functions should be included in the LLM tool list.
+    /// </summary>
+    /// <returns>
+    /// `true` if the function should be included in the schema and made available to the LLM;
+    /// `false` if the function should be excluded from the current schema generation.
+    /// </returns>
+    public virtual bool IsAvailable()
+    {
+        return true;
+    }
 }
 
 /// <summary>

@@ -272,16 +272,43 @@ public class BusinessFunctionFactory
     }
 
     /// <summary>
+    /// **Gets the parameter types (ToolCall types) for all currently available business functions.**
+    ///
+    /// This method filters the registered functions by calling `IsAvailable()` on each business function
+    /// and returns only the parameter types for functions that return `true`.
+    ///
+    /// **Use Cases:**
+    /// - Dynamic schema generation based on runtime state
+    /// - Progressive function disclosure as conversation evolves
+    /// - Context-aware tool availability
+    /// </summary>
+    /// <returns>Collection of ToolCall types for available functions</returns>
+    private IEnumerable<Type> GetAvailableFunctionTypes()
+    {
+        return _functions.Values
+            .Where(fi => fi.BusinessFunction.IsAvailable())
+            .Select(fi => fi.ParameterType)
+            .Where(t => t != null)
+            .Cast<Type>();
+    }
+
+    /// <summary>
     /// **Generates comprehensive schema result with documentation** using PolymorphicSchemaManager.
     ///
     /// This method creates an OpenAI-compatible JSON schema definition that includes
-    /// all configured ToolCall types with proper polymorphic support, discriminators,
-    /// and comprehensive documentation including outer object description and tool information.
+    /// **only the currently available** ToolCall types (filtered by `IsAvailable()`) with proper
+    /// polymorphic support, discriminators, and comprehensive documentation including outer object
+    /// description and tool information.
+    ///
+    /// **Dynamic Availability:**
+    /// Functions are included only if their `IsAvailable()` method returns `true`, enabling
+    /// context-aware and state-dependent tool exposure to the LLM.
     /// </summary>
     /// <returns>SchemaGenerationResult containing JSON schema, outer object description, and available tools</returns>
     public SchemaGenerationResult GenerateSchemaWithDocumentationForToolCall()
     {
-        return _schemaManager.GenerateSchemaWithDocumentation();
+        var availableTypes = GetAvailableFunctionTypes();
+        return _schemaManager.GenerateSchemaWithDocumentation(availableTypes);
     }
 
     /// <summary>
@@ -302,16 +329,21 @@ public class BusinessFunctionFactory
     /// **Generates JSON schema for NextStep type** using PolymorphicSchemaManager.
     ///
     /// This method creates an OpenAI-compatible JSON schema definition that includes
-    /// all configured ToolCall types with proper polymorphic support and discriminators.
-    /// The schema is automatically configured with additionalProperties: false and proper
-    /// const/enum discriminators for each ToolCall type.
+    /// **only the currently available** ToolCall types (filtered by `IsAvailable()`) with proper
+    /// polymorphic support and discriminators. The schema is automatically configured with
+    /// additionalProperties: false and proper const/enum discriminators for each ToolCall type.
+    ///
+    /// **Dynamic Availability:**
+    /// Functions are included only if their `IsAvailable()` method returns `true`, enabling
+    /// context-aware and state-dependent tool exposure to the LLM.
     ///
     /// NOTE: For enhanced documentation capabilities, use GenerateSchemaWithDocumentationForToolCall() instead.
     /// </summary>
     /// <returns>JSON schema string representing the NextStep structure with polymorphic ToolCall support</returns>
     public string GenerateJsonSchemaForToolCall()
     {
-        return _schemaManager.GenerateSchema();
+        var availableTypes = GetAvailableFunctionTypes();
+        return _schemaManager.GenerateSchema(availableTypes);
     }
 
     /// <summary>
