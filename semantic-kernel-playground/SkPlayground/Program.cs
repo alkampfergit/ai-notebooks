@@ -489,7 +489,7 @@ class Program
         var sqlToolTypes = new Type[]
         {
             typeof(ReportTaskCompletionToolCall),
-            typeof(GetDatabaseNamesFromServer),
+            typeof(GetDatabaseNamesFromServerToolCall),
             typeof(GetSqlDatabaseSchemaToolCall),
             typeof(ExecuteSqlQueryToolCall),
             typeof(ExportSqlQueryResultToolCall)

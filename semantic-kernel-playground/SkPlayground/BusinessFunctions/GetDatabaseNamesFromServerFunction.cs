@@ -14,26 +14,32 @@ namespace SkPlayground.BusinessFunctions;
 /// using the key "database_list" for caching purposes. If a database list is already present in the
 /// state manager, a warning is logged before overwriting it.
 /// </remarks>
-public sealed class GetSqlDatabaseListFunction : BusinessFunction<GetSqlDatabaseListToolCall>
+public sealed class GetDatabaseNamesFromServerFunction : BusinessFunction<GetDatabaseNamesFromServerToolCall>
 {
     private readonly SqlServerService _sqlServerService;
-    private readonly ILogger<GetSqlDatabaseListFunction> _logger;
+    private readonly ILogger<GetDatabaseNamesFromServerFunction> _logger;
 
     /// <summary>
     /// State manager key used to store and retrieve the database list in conversation state.
     /// </summary>
     private const string DatabaseListStateKey = "database_list";
 
-    public GetSqlDatabaseListFunction(
+    public GetDatabaseNamesFromServerFunction(
         SqlServerService sqlServerService,
-        ILogger<GetSqlDatabaseListFunction> logger)
+        ILogger<GetDatabaseNamesFromServerFunction> logger)
     {
         _sqlServerService = sqlServerService;
         _logger = logger;
     }
 
+    public override bool IsAvailable()
+    {
+        // This function is available if we do not have already in the state the list of databases
+        return !StateManager.ContainsMemoryKey(DatabaseListStateKey);
+    }
+
     protected override async Task<BusinessFunctionResult> ExecuteAsync(
-        GetDatabaseNamesFromServer parameters,
+        GetDatabaseNamesFromServerToolCall parameters,
         CancellationToken cancellationToken = default)
     {
         // Check if database list already exists in state manager
@@ -73,7 +79,7 @@ public sealed class GetSqlDatabaseListFunction : BusinessFunction<GetSqlDatabase
 /// Parameters required to retrieve the list of SQL Server databases.
 /// </summary>
 [Description("Retrieve the list of database names from the SQL Server instance")]
-public sealed class GetDatabaseNamesFromServer : ToolCall
+public sealed class GetDatabaseNamesFromServerToolCall : ToolCall
 {
-    public override string Type => nameof(GetDatabaseNamesFromServer);
+    public override string Type => "GetDatabaseNamesFromServer";
 }

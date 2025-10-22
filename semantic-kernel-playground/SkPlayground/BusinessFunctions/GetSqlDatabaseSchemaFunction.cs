@@ -78,7 +78,8 @@ public sealed class GetSqlDatabaseSchemaFunction : BusinessFunction<GetSqlDataba
 
         var summary = schema.Tables.Count == 0
             ? $"Database {parameters.DatabaseName} does not contain any tables."
-            : $"Retrieved schema for {parameters.DatabaseName} with {schema.Tables.Count} tables.";
+            : $"Retrieved schema for {parameters.DatabaseName} with {schema.Tables.Count} tables. \n " +
+            $"All tables names are: {string.Join("\n", schema.Tables.Select(t => t.SchemaName + "." + t.TableName))}";
 
         return new BusinessFunctionResult(schema, summary);
     }
