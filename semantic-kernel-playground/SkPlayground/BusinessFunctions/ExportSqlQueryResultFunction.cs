@@ -43,5 +43,5 @@ public sealed class ExportSqlQueryResultToolCall : ToolCall
     [Description("Optional target file path or directory where the Excel file should be saved")]
     public string? TargetPath { get; set; }
 
-    public override string Type => "ExportSqlQueryResultToolCall";
+    public override string Type => "ExportSqlQueryResult";
 }

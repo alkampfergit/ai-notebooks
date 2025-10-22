@@ -5,15 +5,15 @@ using System.ComponentModel.DataAnnotations;
 namespace SkPlayground.Models;
 
 [Description("Next step to execute with summary")]
-public class NextStepDescription
+public class NextStep
 {
-    [Description("What to execute next to move on in the workflow")]
-    public required ToolCall NextStep { get; set; }
+    [Description("Function with parameter to move to next step")]
+    public required ToolCall Function { get; set; }
 
     [Description("Current status of the workflow")]
     public required string CurrentState { get; set; }
 
-    [Description("Brief list of next step planned with corresponding tool name")]
+    [Description("Brief list of next step planned")]
     public required List<string> PlanRemainingStepsBrief { get; set; }
 
     [Description("Indicates if the task is completed")]

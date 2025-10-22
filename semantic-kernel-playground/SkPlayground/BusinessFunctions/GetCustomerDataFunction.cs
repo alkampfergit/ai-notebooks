@@ -112,5 +112,5 @@ public class GetCustomerDataToolCall : ToolCall
     /// <summary>
     /// Type discriminator for polymorphic deserialization
     /// </summary>
-    public override string Type => "get_customer_data_tool_call";
+    public override string Type => "GetCustomerData";
 }

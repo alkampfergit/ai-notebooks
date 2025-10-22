@@ -143,5 +143,5 @@ public sealed class DescribeSqlSchemaToolCall : ToolCall
     [Description("When true, includes the full schema text instead of only the filtered portion")]
     public bool IncludeFullSchema { get; set; } = true;
 
-    public override string Type => "describe_sql_schema_tool_call";
+    public override string Type => "DescribeSqlSchema";
 }

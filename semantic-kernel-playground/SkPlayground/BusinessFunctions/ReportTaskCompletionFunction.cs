@@ -61,5 +61,5 @@ public class ReportTaskCompletionToolCall : ToolCall
     /// <summary>
     /// Type discriminator for polymorphic deserialization
     /// </summary>
-    public override string Type => "report_task_completion_tool_call";
+    public override string Type => "ReportTaskCompletion";
 }

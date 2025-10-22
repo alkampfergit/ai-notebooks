@@ -18,7 +18,7 @@ namespace SkPlayground.Services;
 /// </summary>
 /// <param name="NextStep">The deserialized NextStep object containing the reasoning parameters and tool call</param>
 /// <param name="FunctionName">The name of the function that the LLM chose to call (derived from ToolCall discriminator)</param>
-public readonly record struct NextStepResult(NextStepDescription NextStep, string FunctionName);
+public readonly record struct NextStepResult(NextStep NextStep, string FunctionName);
 
 /// <summary>
 /// Represents the complete LLM response including both parsed results and the original assistant message.
@@ -194,7 +194,7 @@ public class SchemaGuidedReasoner
 
                 // Display the NextStep information - always show this
                 var currentPlan = nextStep.PlanRemainingStepsBrief?.FirstOrDefault() ?? "No plan specified";
-                var toolName = nextStep.NextStep?.GetType().Name.Replace("ToolCall", "") ?? "unknown";
+                var toolName = nextStep.Function?.GetType().Name.Replace("ToolCall", "") ?? "unknown";
 
                 // **Show the NextStep tool call details - always visible even in non-verbose mode**
                 AnsiConsole.MarkupLine($"[cyan]  Next Step:[/] [yellow]{Markup.Escape(toolName)}[/] - {Markup.Escape(currentPlan)}");
@@ -202,7 +202,7 @@ public class SchemaGuidedReasoner
                 // Show NextStep serialized output - always visible
                 try
                 {
-                    var nextStepJson = JsonConvert.SerializeObject(nextStep.NextStep, Formatting.Indented);
+                    var nextStepJson = JsonConvert.SerializeObject(nextStep.Function, Formatting.Indented);
                     AnsiConsole.MarkupLine("[dim]  Tool parameters:[/]");
                     AnsiConsole.WriteLine(Markup.Escape(nextStepJson));
                 }
@@ -212,7 +212,7 @@ public class SchemaGuidedReasoner
                     AnsiConsole.MarkupLine($"[dim]    (Unable to serialize NextStep for {Markup.Escape(toolName)})[/]");
                 }
 
-                if (nextStep.NextStep is ReportTaskCompletionToolCall completionParameter)
+                if (nextStep.Function is ReportTaskCompletionToolCall completionParameter)
                 {
                     if (VerboseOutput)
                     {
@@ -222,13 +222,13 @@ public class SchemaGuidedReasoner
                 }
 
                 // Ensure a tool was provided and dispatch it
-                if (nextStep.NextStep == null)
+                if (nextStep.Function == null)
                 {
                     throw new InvalidOperationException("LLM did not provide a NextStepToolToCall in the NextStep response.");
                 }
 
                 // Manually dispatch the tool function
-                var businessResult = await _functionFactory.DispatchToolFunction(nextStep.NextStep);
+                var businessResult = await _functionFactory.DispatchToolFunction(nextStep.Function);
 
                 // Add execution result to the list for next iteration
                 var resultSummary = businessResult.Summary;
@@ -264,7 +264,7 @@ public class SchemaGuidedReasoner
     /// This is the core of SGR - forcing the model to generate valid NextStep JSON.
     /// Uses a single user message containing the original question and executed tasks.
     /// </summary>
-    private async Task<(NextStepDescription NextStep, string AssistantRaw)> GetNextStepFromLLM(string userRequest, List<ToolExecutionResult> executedTasks)
+    private async Task<(NextStep NextStep, string AssistantRaw)> GetNextStepFromLLM(string userRequest, List<ToolExecutionResult> executedTasks)
     {
         // Determine which tools should be available for this request
         var availableToolTypes = DetermineAvailableTools(userRequest, executedTasks);

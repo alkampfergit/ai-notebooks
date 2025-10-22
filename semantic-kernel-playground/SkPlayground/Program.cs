@@ -95,7 +95,7 @@ class Program
     {
         var apiKey = Dotenv.Get("OPENAI_API_KEY");
         var endpoint = Dotenv.Get("AZURE_ENDPOINT");
-        var deploymentId = "gpt-5-nano";
+        var deploymentId = "gpt-5-mini";
 
         // **Always create a Semantic Kernel instance**
         // This is required even for Response API mode because BusinessFunctionFactory needs it
@@ -514,15 +514,10 @@ IMPORTANT: You must always respond with structured JSON that includes:
 3. Whether the task is completed
 4. NextStep based on list of remaining steps and current state analysis
 
-IMPORTANT: You can call the tool for database list only one time.
-
+Please check carefully the status of the system to determin function already called to plan for next function to call.
 ## Available Tools:
 {toolsSummary}
-
-Guidelines:
-- Do not repeat call to retrieve database list or specific database schema if you have already done so
-- Get the schema of the target database before writing queries
-- User can specify query in natural language or it can give you T-Sql use the correspoind tool";
+";
             }
         };
 
@@ -545,7 +540,7 @@ Guidelines:
             {
                 VerboseOutput = responseApiReasoner!.VerboseOutput,
 #pragma warning disable OPENAI001
-                ReasoningEffortLevel = ResponseReasoningEffortLevel.Low
+                ReasoningEffortLevel = ResponseReasoningEffortLevel.Low 
 #pragma warning restore OPENAI001
             };
 

@@ -47,7 +47,7 @@ public class ResponseApiSchemaGuidedReasoner
     /// </summary>
     public ResponseReasoningEffortLevel ReasoningEffortLevel { get; set; } = ResponseReasoningEffortLevel.Medium;
 
-    private record ToolExecutionResult(string ToolName, string Summary);
+    private record ToolExecutionResult(string ToolName, string Parameters, string Summary);
 
     /// <summary>
     /// Tracks cumulative token usage across all reasoning steps
@@ -175,7 +175,6 @@ public class ResponseApiSchemaGuidedReasoner
 
         var responseClient = client.GetOpenAIResponseClient(_deploymentId);
 
-        // Limit reasoning steps to prevent infinite loops (matching Python original)
         for (int step = 1; step <= 20; step++)
         {
             if (VerboseOutput)
@@ -194,7 +193,6 @@ public class ResponseApiSchemaGuidedReasoner
                 // **Build the chat completion request using direct OpenAI client**
                 var availableToolTypes = DetermineAvailableTools(userRequest, executionTaskResult);
                 var systemPrompt = GenerateSystemPrompt(availableToolTypes);
-                var userMessage = BuildUserMessage(userRequest, executionTaskResult);
 
                 // **Configure chat options with schema constraint**
                 var schemaStr = availableToolTypes != null
@@ -229,8 +227,22 @@ public class ResponseApiSchemaGuidedReasoner
                 // use the new response api.
                 var inputItems = new List<ResponseItem> {
                     ResponseItem.CreateSystemMessageItem(systemPrompt) ,
-                    ResponseItem.CreateUserMessageItem(userMessage)
+                    ResponseItem.CreateUserMessageItem(userRequest),
                 };
+
+
+                for (int i = 0; i < executionTaskResult.Count; i++)
+                {
+                    ToolExecutionResult? toolCallResponse = executionTaskResult[i];
+                    var callId = $"tool_call_{i}";
+                    inputItems.Add(ResponseItem.CreateFunctionCallItem(
+                        callId, 
+                        toolCallResponse.ToolName, 
+                        BinaryData.FromString(toolCallResponse.Parameters)));
+                    inputItems.Add(ResponseItem.CreateFunctionCallOutputItem(callId, toolCallResponse.Summary));
+                }
+
+                var dumpAllPrompt = Dump(inputItems);
 
                 var options = new ResponseCreationOptions
                 {
@@ -317,7 +329,7 @@ public class ResponseApiSchemaGuidedReasoner
 
                 // Display the NextStep information - always show this
                 var currentPlan = nextStep.PlanRemainingStepsBrief?.FirstOrDefault() ?? "No plan specified";
-                var toolName = nextStep.NextStep?.GetType().Name.Replace("ToolCall", "") ?? "unknown";
+                var toolName = nextStep.Function?.GetType().Name.Replace("ToolCall", "") ?? "unknown";
 
                 // **Show the NextStep tool call details - always visible even in non-verbose mode**
                 AnsiConsole.MarkupLine($"[cyan]  Next Step:[/] [yellow]{Markup.Escape(toolName)}[/] - {Markup.Escape(currentPlan)}");
@@ -325,7 +337,7 @@ public class ResponseApiSchemaGuidedReasoner
                 // Show NextStep serialized output - always visible
                 try
                 {
-                    var nextStepJson = JsonConvert.SerializeObject(nextStep.NextStep, Formatting.Indented);
+                    var nextStepJson = JsonConvert.SerializeObject(nextStep.Function, Formatting.Indented);
                     AnsiConsole.MarkupLine("[dim]  Tool parameters:[/]");
                     AnsiConsole.WriteLine(Markup.Escape(nextStepJson));
                 }
@@ -335,7 +347,7 @@ public class ResponseApiSchemaGuidedReasoner
                     AnsiConsole.MarkupLine($"[dim]    (Unable to serialize NextStep for {Markup.Escape(toolName)})[/]");
                 }
 
-                if (nextStep.NextStep is ReportTaskCompletionToolCall completionParameter)
+                if (nextStep.Function is ReportTaskCompletionToolCall completionParameter)
                 {
                     if (VerboseOutput)
                     {
@@ -347,17 +359,17 @@ public class ResponseApiSchemaGuidedReasoner
                 }
 
                 // Ensure a tool was provided and dispatch it
-                if (nextStep.NextStep == null)
+                if (nextStep.Function == null)
                 {
                     throw new InvalidOperationException("LLM did not provide a NextStepToolToCall in the NextStep response.");
                 }
 
                 // Manually dispatch the tool function
-                var businessResult = await _functionFactory.DispatchToolFunction(nextStep.NextStep);
+                var businessResult = await _functionFactory.DispatchToolFunction(nextStep.Function);
 
                 // Add execution result to the list for next iteration
                 var resultSummary = businessResult.Summary;
-                executionTaskResult.Add(new ToolExecutionResult(toolName, resultSummary));
+                executionTaskResult.Add(new ToolExecutionResult(toolName, JsonConvert.SerializeObject(nextStep.Function), resultSummary));
 
                 // Show result
                 if (VerboseOutput)
@@ -397,6 +409,27 @@ public class ResponseApiSchemaGuidedReasoner
         return "Task completed after maximum reasoning steps";
     }
 
+    private string Dump(List<ResponseItem> inputItems)
+    {
+        StringBuilder sb = new StringBuilder();
+        foreach (var item in inputItems)
+        {
+            if (item is MessageResponseItem mri)
+            {
+                sb.AppendLine($"[{mri.Role}] {string.Join("", mri.Content.Select(c => c.Text))}");
+            }
+            else if (item is FunctionCallResponseItem fcri)
+            {
+                sb.AppendLine($"[FunctionCall: {fcri.FunctionName}] {fcri.FunctionArguments.ToString()}");
+            }
+            else if (item is FunctionCallOutputResponseItem fco)
+            {
+                sb.AppendLine($"[FunctionCallOutput: {fco.CallId}] {fco.FunctionOutput.ToString()}");
+            }
+        }
+        return sb.ToString();
+    }
+
     /// <summary>
     /// **Displays detailed token usage statistics from a Response API call**
     /// </summary>
@@ -416,44 +449,6 @@ public class ResponseApiSchemaGuidedReasoner
         {
             AnsiConsole.MarkupLine($"[fuchsia]    └─ Reasoning: {usage.OutputTokenDetails.ReasoningTokenCount}[/]");
         }
-    }
-
-    /// <summary>
-    /// **Builds the user message combining the original request and executed tasks**
-    /// </summary>
-    private string BuildUserMessage(string userRequest, List<ToolExecutionResult> executedTasks)
-    {
-        var userMessage = $"User Request: {userRequest}";
-
-        if (executedTasks.Count > 0)
-        {
-            userMessage += "\n\nExecuted Tasks:";
-            foreach (var task in executedTasks)
-            {
-                userMessage += $"\n- {task.ToolName}: {task.Summary}";
-            }
-        }
-
-        return userMessage;
-    }
-
-    /// <summary>
-    /// **Temporary fallback using Semantic Kernel until Response API types are available**
-    ///
-    /// This method will be removed once the Response API types are stable.
-    /// It provides identical functionality to the Response API version but uses SK.
-    /// </summary>
-    private async Task<(NextStepDescription NextStep, string AssistantRaw)> GetNextStepFromLLMFallback(
-        string userRequest,
-        List<ToolExecutionResult> executedTasks)
-    {
-        // This is a temporary implementation
-        // TODO: Remove this method when Response API types become available
-
-        throw new NotImplementedException(
-            "Response API types are not yet available in the current SDK version. " +
-            "This reasoner requires OpenAI SDK with Response API support. " +
-            "Please use the standard SchemaGuidedReasoner until the Response API is stable.");
     }
 }
 

@@ -129,5 +129,5 @@ public class IssueInvoiceToolCall : ToolCall
     /// <summary>
     /// Type discriminator for polymorphic deserialization
     /// </summary>
-    public override string Type => "issue_invoice_tool_call";
+    public override string Type => "IssueInvoice";
 }

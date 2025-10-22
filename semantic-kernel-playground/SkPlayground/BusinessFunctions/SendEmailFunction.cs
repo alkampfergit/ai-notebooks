@@ -102,5 +102,5 @@ public class SendEmailToolCall : ToolCall
     /// <summary>
     /// Type discriminator for polymorphic deserialization
     /// </summary>
-    public override string Type => "send_email_tool_call";
+    public override string Type => "SendEmail";
 }

@@ -292,5 +292,5 @@ public sealed class ExecuteSqlQueryToolCall : ToolCall
     [Description("Optional identifier to use for storing the query result. If omitted a unique id is generated.")]
     public string? ResultId { get; set; }
 
-    public override string Type => "ExecuteSqlQueryToolCall";
+    public override string Type => "ExecuteSqlQuery";
 }
