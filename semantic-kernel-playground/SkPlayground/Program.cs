@@ -97,14 +97,44 @@ class Program
         var endpoint = Dotenv.Get("AZURE_ENDPOINT");
         var deploymentId = "gpt-5-nano";
 
+        // **Always create a Semantic Kernel instance**
+        // This is required even for Response API mode because BusinessFunctionFactory needs it
+        // for functions like ExecuteSqlQueryFunction that use the kernel for natural language translation
+        AnsiConsole.Status()
+            .Start("[yellow]Initializing Semantic Kernel...[/]", ctx =>
+            {
+                // Setup kernel with Azure OpenAI configuration
+                var kernelBuilder = Kernel.CreateBuilder();
+                kernelBuilder.Services.AddLogging(l => l
+                    .SetMinimumLevel(LogLevel.Warning)
+                    .AddConsole()
+                );
+
+                var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+
+                // Configure Azure OpenAI connection
+                kernelBuilder.AddAzureOpenAIChatCompletion(
+                   deploymentName: deploymentId,
+                   apiKey: apiKey,
+                   endpoint: endpoint
+                );
+
+                kernel = kernelBuilder.Build();
+                ctx.Status("[green]Semantic Kernel initialized![/]");
+            });
+
         if (useResponseApi)
         {
             // **Initialize Direct OpenAI API Reasoner**
+            // Note: Still uses kernel for business functions that need LLM capabilities
             AnsiConsole.Status()
                 .Start("[yellow]Initializing Direct OpenAI API Reasoner...[/]", ctx =>
                 {
                     var databaseService = new DatabaseService();
-                    var businessFunctionFactory = SchemaGuidedReasonerFactory.CreateDefaultBusinessFunctionFactory(databaseService);
+                    // Pass the kernel to the factory so business functions can use LLM capabilities
+                    var businessFunctionFactory = SchemaGuidedReasonerFactory.CreateDefaultBusinessFunctionFactory(
+                        databaseService,
+                        kernel);
                     var options = SchemaGuidedReasonerFactory.CreateDefaultOptions(databaseService);
 
                     try
@@ -133,38 +163,21 @@ class Program
 
             var outputMode = verboseOutput ? "verbose" : "concise";
             AnsiConsole.MarkupLine($"[green]✓[/] Direct OpenAI API reasoner initialized successfully! [grey]({outputMode} output)[/]");
-            AnsiConsole.MarkupLine($"[yellow]ℹ[/]  [grey]Using direct OpenAI Chat API - bypassing Semantic Kernel for lower overhead[/]");
+            AnsiConsole.MarkupLine($"[yellow]ℹ[/]  [grey]Using direct OpenAI Chat API for reasoning - Semantic Kernel available for business functions[/]");
             AnsiConsole.WriteLine();
         }
         else
         {
             // **Initialize Semantic Kernel Reasoner (Standard)**
             AnsiConsole.Status()
-                .Start("[yellow]Initializing Semantic Kernel...[/]", ctx =>
+                .Start("[yellow]Initializing Semantic Kernel Reasoner...[/]", ctx =>
                 {
-                    // Setup kernel with Azure OpenAI configuration
-                    var kernelBuilder = Kernel.CreateBuilder();
-                    kernelBuilder.Services.AddLogging(l => l
-                        .SetMinimumLevel(LogLevel.Warning)
-                        .AddConsole()
-                    );
-
-                    var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
-
-                    // Configure Azure OpenAI connection
-                    kernelBuilder.AddAzureOpenAIChatCompletion(
-                       deploymentName: deploymentId,
-                       apiKey: apiKey,
-                       endpoint: endpoint
-                    );
-
-                    kernel = kernelBuilder.Build();
-
                     var databaseService = new DatabaseService();
-                    reasoner = new SchemaGuidedReasoner(kernel, databaseService)
+                    reasoner = new SchemaGuidedReasoner(kernel!, databaseService)
                     {
                         VerboseOutput = verboseOutput
                     };
+                    ctx.Status("[green]Semantic Kernel reasoner ready![/]");
                 });
 
             var outputMode = verboseOutput ? "verbose" : "concise";

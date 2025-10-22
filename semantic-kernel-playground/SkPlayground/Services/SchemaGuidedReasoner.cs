@@ -403,7 +403,7 @@ public static class SchemaGuidedReasonerFactory
         if (kernel is null) throw new ArgumentNullException(nameof(kernel));
         if (databaseService is null) throw new ArgumentNullException(nameof(databaseService));
 
-        var businessFunctionFactory = CreateDefaultBusinessFunctionFactory(databaseService, sqlServerService);
+        var businessFunctionFactory = CreateDefaultBusinessFunctionFactory(databaseService, kernel, sqlServerService);
         var options = CreateDefaultOptions(databaseService);
         return new SchemaGuidedReasoner(kernel, businessFunctionFactory, options);
     }
@@ -411,8 +411,13 @@ public static class SchemaGuidedReasonerFactory
     /// <summary>
     /// Builds the default BusinessFunctionFactory used by the playground scenario.
     /// </summary>
+    /// <param name="databaseService">The database service instance</param>
+    /// <param name="kernel">The Semantic Kernel instance (optional, creates minimal kernel if not provided)</param>
+    /// <param name="sqlServerService">The SQL Server service instance (optional, creates new if not provided)</param>
+    /// <returns>A configured BusinessFunctionFactory with default tools</returns>
     internal static BusinessFunctionFactory CreateDefaultBusinessFunctionFactory(
         DatabaseService databaseService,
+        Kernel? kernel = null,
         SqlServerService? sqlServerService = null)
     {
         if (databaseService is null) throw new ArgumentNullException(nameof(databaseService));
@@ -428,12 +433,13 @@ public static class SchemaGuidedReasonerFactory
             typeof(CreateRuleToolCall),
         };
 
-        // Create a minimal kernel for the factory (since we don't have access to the real one here)
-        // This is a limitation of the factory pattern - ideally it should receive kernel from caller
-        var tempKernel = Kernel.CreateBuilder().Build();
-        var loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Warning));
+        // Use provided kernel or create a minimal one
+        // Note: A minimal kernel won't have LLM capabilities configured
+        var factoryKernel = kernel ?? Kernel.CreateBuilder().Build();
+        var loggerFactory = (factoryKernel.Services.GetService(typeof(ILoggerFactory)) as ILoggerFactory)
+            ?? LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Warning));
 
-        return new BusinessFunctionFactory(databaseService, sqlServerService, tempKernel, loggerFactory, toolList);
+        return new BusinessFunctionFactory(databaseService, sqlServerService, factoryKernel, loggerFactory, toolList);
     }
 
     /// <summary>
