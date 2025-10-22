@@ -45,7 +45,7 @@ public sealed class GetSqlDatabaseListFunction : BusinessFunction<GetSqlDatabase
 
         // Retrieve the database list from SQL Server
         var databaseList = await _sqlServerService
-            .GetDatabaseListAsync(parameters.RefreshCache, cancellationToken)
+            .GetDatabaseListAsync(false, cancellationToken)
             .ConfigureAwait(false);
 
         // Create a typed DatabaseList object for state storage
@@ -65,7 +65,6 @@ public sealed class GetSqlDatabaseListFunction : BusinessFunction<GetSqlDatabase
         return new BusinessFunctionResult(new
         {
             databases = databaseList,
-            cached = !parameters.RefreshCache
         }, summary);
     }
 }
@@ -76,8 +75,5 @@ public sealed class GetSqlDatabaseListFunction : BusinessFunction<GetSqlDatabase
 [Description("Retrieve the list of databases from the SQL Server instance")]
 public sealed class GetSqlDatabaseListToolCall : ToolCall
 {
-    [Description("When true, forces refreshing the cached database list")]
-    public bool RefreshCache { get; set; }
-
     public override string Type => "get_sql_database_list_tool_call";
 }

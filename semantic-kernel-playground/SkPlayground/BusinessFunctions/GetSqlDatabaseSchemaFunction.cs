@@ -67,7 +67,7 @@ public sealed class GetSqlDatabaseSchemaFunction : BusinessFunction<GetSqlDataba
 
         // Retrieve the database schema from SQL Server
         var schema = await _sqlServerService
-            .GetDatabaseSchemaAsync(parameters.DatabaseName, parameters.RefreshCache, cancellationToken)
+            .GetDatabaseSchemaAsync(parameters.DatabaseName, false, cancellationToken)
             .ConfigureAwait(false);
 
         // Add the schema to the collection
@@ -87,15 +87,12 @@ public sealed class GetSqlDatabaseSchemaFunction : BusinessFunction<GetSqlDataba
 /// <summary>
 /// Parameters required to obtain a database schema.
 /// </summary>
-[Description("Retrieve tables and columns for a SQL Server database")]
+[Description("Retrieve Schema for a given Database name")]
 public sealed class GetSqlDatabaseSchemaToolCall : ToolCall
 {
     [Description("Name of the database to inspect")]
     [Required]
     public required string DatabaseName { get; set; }
-
-    [Description("When true, forces refreshing the schema cache")]
-    public bool RefreshCache { get; set; }
 
     public override string Type => "get_sql_database_schema_tool_call";
 }

@@ -238,7 +238,15 @@ public class ResponseApiSchemaGuidedReasoner
                     ReasoningOptions = new ResponseReasoningOptions()
                     {
                         ReasoningEffortLevel = this.ReasoningEffortLevel
-                    }
+                    },
+                    TextOptions = new ResponseTextOptions
+                    {
+                        TextFormat = ResponseTextFormat.CreateJsonSchemaFormat(
+                        jsonSchemaFormatName: "NextStep",
+                        jsonSchema: BinaryData.FromString(schemaStr),
+                        jsonSchemaFormatDescription: "Schema for NextStep with polymorphic ToolCall support",
+                        jsonSchemaIsStrict: true)
+                    },
                 };
 
                 OpenAIResponse response = await responseClient.CreateResponseAsync(inputItems, options);

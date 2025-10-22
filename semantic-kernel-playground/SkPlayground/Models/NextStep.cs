@@ -16,7 +16,7 @@ public class NextStep
     [Description("Indicates if the task is completed")]
     public bool TaskCompleted { get; set; } = false;
 
-    [Description("Tool to call for next action")]
+    [Description("Next step of the workflow to execute to move on.")]
     public required ToolCall NextStepToolToCall { get; set; }
 }
 
