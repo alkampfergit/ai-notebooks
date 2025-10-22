@@ -479,7 +479,8 @@ class Program
         };
 
         // **Create a specialized BusinessFunctionFactory with only SQL-related functions**
-        var sqlFunctionFactory = new BusinessFunctionFactory(databaseService, sqlServerService, sqlToolTypes);
+        var loggerFactory = kernel.Services.GetRequiredService<ILoggerFactory>();
+        var sqlFunctionFactory = new BusinessFunctionFactory(databaseService, sqlServerService, kernel, loggerFactory, sqlToolTypes);
 
         // **Create custom options for SQL workflow**
         var sqlOptions = new SchemaGuidedReasonerOptions

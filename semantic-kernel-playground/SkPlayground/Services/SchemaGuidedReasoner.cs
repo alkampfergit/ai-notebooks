@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
@@ -426,7 +427,13 @@ public static class SchemaGuidedReasonerFactory
             typeof(VoidInvoiceToolCall),
             typeof(CreateRuleToolCall),
         };
-        return new BusinessFunctionFactory(databaseService, sqlServerService, toolList);
+
+        // Create a minimal kernel for the factory (since we don't have access to the real one here)
+        // This is a limitation of the factory pattern - ideally it should receive kernel from caller
+        var tempKernel = Kernel.CreateBuilder().Build();
+        var loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Warning));
+
+        return new BusinessFunctionFactory(databaseService, sqlServerService, tempKernel, loggerFactory, toolList);
     }
 
     /// <summary>

@@ -1,3 +1,6 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.SemanticKernel;
 using SkPlayground.BusinessFunctions;
 using SkPlayground.Services;
 using System.Linq;
@@ -33,7 +36,14 @@ public class DynamicToolSelectionTests : SemanticKernelTestBase
     public void Setup()
     {
         _databaseService = new DatabaseService();
-        _factory = new BusinessFunctionFactory(_databaseService, new SqlServerService(), new Type[]
+        var kernelBuilder = Kernel.CreateBuilder();
+        kernelBuilder.Services.AddLogging(l => l
+            .SetMinimumLevel(LogLevel.Warning)
+            .AddConsole()
+        );
+        var kernel = kernelBuilder.Build();
+        var loggerFactory = kernel.Services.GetRequiredService<ILoggerFactory>();
+        _factory = new BusinessFunctionFactory(_databaseService, new SqlServerService(), kernel, loggerFactory, new Type[]
          {
             typeof(ReportTaskCompletionToolCall),
             typeof(SendEmailToolCall),

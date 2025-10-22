@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.SemanticKernel;
 using SkPlayground.Models;
 using SkPlayground.Services;
 using SkPlayground.Utils;
@@ -52,6 +54,8 @@ public class BusinessFunctionFactory
     private readonly PolymorphicSchemaManager<NextStep, ToolCall> _schemaManager;
     private readonly DatabaseService _databaseService;
     private readonly SqlServerService _sqlServerService;
+    private readonly Kernel _kernel;
+    private readonly ILoggerFactory _loggerFactory;
 
     /// <summary>
     /// **Constructor that initializes business functions with polymorphic schema support**.
@@ -62,19 +66,25 @@ public class BusinessFunctionFactory
     /// </summary>
     /// <param name="databaseService">Database service instance for all functions</param>
     /// <param name="sqlServerService">SQL Server service instance for SQL-related functions</param>
+    /// <param name="kernel">Semantic Kernel instance for LLM operations</param>
+    /// <param name="loggerFactory">Logger factory for creating typed loggers</param>
     /// <param name="toolCallTypes">Array of ToolCall types to include in the factory. If null or empty, includes all available types.</param>
     public BusinessFunctionFactory(
         DatabaseService databaseService,
         SqlServerService sqlServerService,
+        Kernel kernel,
+        ILoggerFactory loggerFactory,
         Type[] toolCallTypes)
     {
         _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
         _sqlServerService = sqlServerService ?? throw new ArgumentNullException(nameof(sqlServerService));
+        _kernel = kernel ?? throw new ArgumentNullException(nameof(kernel));
+        _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         if (toolCallTypes?.Any() != true)
         {
             throw new ArgumentException("At least one ToolCall type must be provided", nameof(toolCallTypes));
         }
-        
+
         // **Initialize PolymorphicSchemaManager with specified ToolCall derived types**
         _schemaManager = new PolymorphicSchemaManager<NextStep, ToolCall>("type").AddDerivedTypes(toolCallTypes);
 
@@ -179,7 +189,7 @@ public class BusinessFunctionFactory
     ///
     /// This method uses reflection to create instances of BusinessFunction types,
     /// analyzing their constructor parameters and providing the appropriate dependencies
-    /// (DatabaseService, SqlServerService, or no dependencies).
+    /// (DatabaseService, SqlServerService, Kernel, ILogger, or no dependencies).
     /// </summary>
     /// <param name="businessFunctionType">The BusinessFunction type to instantiate</param>
     /// <returns>An instance of the BusinessFunction</returns>
@@ -207,6 +217,19 @@ public class BusinessFunctionFactory
             else if (paramType == typeof(SqlServerService))
             {
                 args[i] = _sqlServerService;
+            }
+            else if (paramType == typeof(Kernel))
+            {
+                args[i] = _kernel;
+            }
+            else if (paramType.IsGenericType && paramType.GetGenericTypeDefinition() == typeof(ILogger<>))
+            {
+                // Create typed logger using the generic type argument
+                var loggerType = paramType.GetGenericArguments()[0];
+                var createLoggerMethod = typeof(LoggerFactoryExtensions)
+                    .GetMethod(nameof(LoggerFactoryExtensions.CreateLogger), new[] { typeof(ILoggerFactory) })!
+                    .MakeGenericMethod(loggerType);
+                args[i] = createLoggerMethod.Invoke(null, new object[] { _loggerFactory });
             }
             else
             {
