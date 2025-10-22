@@ -45,7 +45,7 @@ public class ResponseApiSchemaGuidedReasoner
     /// - Medium: Balanced reasoning and speed
     /// - High: More thorough reasoning, slower responses
     /// </summary>
-    public ResponseReasoningEffortLevel ReasoningEffortLevel { get; set; } = ResponseReasoningEffortLevel.Low;
+    public ResponseReasoningEffortLevel ReasoningEffortLevel { get; set; } = ResponseReasoningEffortLevel.Medium;
 
     private record ToolExecutionResult(string ToolName, string Summary);
 
@@ -317,7 +317,7 @@ public class ResponseApiSchemaGuidedReasoner
 
                 // Display the NextStep information - always show this
                 var currentPlan = nextStep.PlanRemainingStepsBrief?.FirstOrDefault() ?? "No plan specified";
-                var toolName = nextStep.NextStepToolToCall?.GetType().Name.Replace("ToolCall", "") ?? "unknown";
+                var toolName = nextStep.NextStep?.GetType().Name.Replace("ToolCall", "") ?? "unknown";
 
                 // **Show the NextStep tool call details - always visible even in non-verbose mode**
                 AnsiConsole.MarkupLine($"[cyan]  Next Step:[/] [yellow]{Markup.Escape(toolName)}[/] - {Markup.Escape(currentPlan)}");
@@ -325,7 +325,7 @@ public class ResponseApiSchemaGuidedReasoner
                 // Show NextStep serialized output - always visible
                 try
                 {
-                    var nextStepJson = JsonConvert.SerializeObject(nextStep.NextStepToolToCall, Formatting.Indented);
+                    var nextStepJson = JsonConvert.SerializeObject(nextStep.NextStep, Formatting.Indented);
                     AnsiConsole.MarkupLine("[dim]  Tool parameters:[/]");
                     AnsiConsole.WriteLine(Markup.Escape(nextStepJson));
                 }
@@ -335,7 +335,7 @@ public class ResponseApiSchemaGuidedReasoner
                     AnsiConsole.MarkupLine($"[dim]    (Unable to serialize NextStep for {Markup.Escape(toolName)})[/]");
                 }
 
-                if (nextStep.NextStepToolToCall is ReportTaskCompletionToolCall completionParameter)
+                if (nextStep.NextStep is ReportTaskCompletionToolCall completionParameter)
                 {
                     if (VerboseOutput)
                     {
@@ -347,13 +347,13 @@ public class ResponseApiSchemaGuidedReasoner
                 }
 
                 // Ensure a tool was provided and dispatch it
-                if (nextStep.NextStepToolToCall == null)
+                if (nextStep.NextStep == null)
                 {
                     throw new InvalidOperationException("LLM did not provide a NextStepToolToCall in the NextStep response.");
                 }
 
                 // Manually dispatch the tool function
-                var businessResult = await _functionFactory.DispatchToolFunction(nextStep.NextStepToolToCall);
+                var businessResult = await _functionFactory.DispatchToolFunction(nextStep.NextStep);
 
                 // Add execution result to the list for next iteration
                 var resultSummary = businessResult.Summary;
@@ -443,7 +443,7 @@ public class ResponseApiSchemaGuidedReasoner
     /// This method will be removed once the Response API types are stable.
     /// It provides identical functionality to the Response API version but uses SK.
     /// </summary>
-    private async Task<(NextStep NextStep, string AssistantRaw)> GetNextStepFromLLMFallback(
+    private async Task<(NextStepDescription NextStep, string AssistantRaw)> GetNextStepFromLLMFallback(
         string userRequest,
         List<ToolExecutionResult> executedTasks)
     {

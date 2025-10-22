@@ -194,16 +194,16 @@ public class ResponseApiTests : SemanticKernelTestBase
 
             // **Assert**: Verify the deserialized NextStep object
             Assert.That(nextStep, Is.Not.Null, "Should deserialize to NextStep object");
-            Assert.That(nextStep.NextStepToolToCall, Is.Not.Null, "ToolCall should not be null");
+            Assert.That(nextStep.NextStep, Is.Not.Null, "ToolCall should not be null");
             Assert.That(nextStep.CurrentState, Is.Not.Null.And.Not.Empty, "CurrentState should be populated");
             Assert.That(nextStep.PlanRemainingStepsBrief, Is.Not.Null.And.Not.Empty, "PlanRemainingStepsBrief should be populated");
             Assert.That(nextStep.TaskCompleted, Is.False, "TaskCompleted should be false as requested");
 
             // **Assert**: Verify polymorphic deserialization - should be a SendEmailToolCall
-            Assert.That(nextStep.NextStepToolToCall, Is.TypeOf<SendEmailToolCall>(),
+            Assert.That(nextStep.NextStep, Is.TypeOf<SendEmailToolCall>(),
                 "ToolCall should deserialize as SendEmailToolCall type");
 
-            var sendEmailCall = nextStep.NextStepToolToCall as SendEmailToolCall;
+            var sendEmailCall = nextStep.NextStep as SendEmailToolCall;
             Assert.That(sendEmailCall, Is.Not.Null, "Should be able to cast ToolCall to SendEmailToolCall");
             Assert.That(sendEmailCall!.Subject, Is.Not.Null.And.Not.Empty, "Email subject should not be empty");
             Assert.That(sendEmailCall.Message, Is.Not.Null.And.Not.Empty, "Email message should not be empty");

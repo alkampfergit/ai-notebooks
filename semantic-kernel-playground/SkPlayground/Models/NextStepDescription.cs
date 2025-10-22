@@ -4,20 +4,20 @@ using System.ComponentModel.DataAnnotations;
 
 namespace SkPlayground.Models;
 
-[Description("Represents the next step in a task workflow")]
-public class NextStep
+[Description("Next step to execute with summary")]
+public class NextStepDescription
 {
+    [Description("What to execute next to move on in the workflow")]
+    public required ToolCall NextStep { get; set; }
+
     [Description("Current status of the workflow")]
     public required string CurrentState { get; set; }
 
-    [Description("Brief list of next step planned")]
+    [Description("Brief list of next step planned with corresponding tool name")]
     public required List<string> PlanRemainingStepsBrief { get; set; }
 
     [Description("Indicates if the task is completed")]
     public bool TaskCompleted { get; set; } = false;
-
-    [Description("Next step of the workflow to execute to move on.")]
-    public required ToolCall NextStepToolToCall { get; set; }
 }
 
 public abstract class ToolCall

@@ -203,6 +203,7 @@ class Program
                     "Original Python Tasks (SGR Demo)",
                     "Simple Email Task",
                     "Customer Support Workflow",
+                    "Search table in database",
                     "SQL Database + Excel Export",
                     "Exit"
                 ]));
@@ -227,7 +228,10 @@ class Program
                 await RunCustomerSupportWorkflowExample();
                 break;
             case "sql_database_+_excel_export":
-                await RunSqlExcelExportExample();
+                await RunSqlExample("Please give me a summary of all the orders grouped by year and customer code in the database northwind exported in excel");
+                break;
+            case "search_table_in_database":
+                await RunSqlExample("Is there a table order in the northwind database?");
                 break;
             case "exit":
                 return;
@@ -459,7 +463,7 @@ class Program
     /// Creates a specialized reasoner with only SQL and Excel functions
     /// Shows how to use schema-guided reasoning for data extraction and export workflows
     /// </summary>
-    private static async Task RunSqlExcelExportExample()
+    private static async Task RunSqlExample(string userRequest)
     {
         // **Initialize a fresh StateManager instance for this scenario execution**
         StateManager.Start();
@@ -485,7 +489,7 @@ class Program
         var sqlToolTypes = new Type[]
         {
             typeof(ReportTaskCompletionToolCall),
-            typeof(GetSqlDatabaseListToolCall),
+            typeof(GetDatabaseNamesFromServer),
             typeof(GetSqlDatabaseSchemaToolCall),
             typeof(ExecuteSqlQueryToolCall),
             typeof(ExportSqlQueryResultToolCall)
@@ -506,23 +510,21 @@ class Program
 
 IMPORTANT: You must always respond with structured JSON that includes:
 1. Current state analysis
-2. List of remaining steps briefly described and include corresponding tool if applicable
+2. List of remaining steps briefly described with tool name
 3. Whether the task is completed
-4. The specific tool call to execute next
+4. NextStep based on list of remaining steps and current state analysis
+
+IMPORTANT: You can call the tool for database list only one time.
 
 ## Available Tools:
 {toolsSummary}
 
 Guidelines:
-- Always explore available databases first using get_sql_database_list
+- Do not repeat call to retrieve database list or specific database schema if you have already done so
 - Get the schema of the target database before writing queries
-- Write efficient SQL queries that answer the user's question
-- After executing a query, export the results to Excel using export_sql_query_result
-- Use report_task_completion when all steps are done";
+- User can specify query in natural language or it can give you T-Sql use the correspoind tool";
             }
         };
-
-        var userRequest = "Please give me a summary of all the orders grouped by year and customer code in the database northwind exported in excel";
 
         AnsiConsole.MarkupLine("[dim]User Request:[/]");
         AnsiConsole.Write(

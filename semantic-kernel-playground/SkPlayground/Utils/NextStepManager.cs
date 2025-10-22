@@ -139,7 +139,7 @@ public class NextStepManager
     private string GenerateSchemaInternal(IEnumerable<Type> typesToInclude)
     {
         var generator = new JsonSchemaGenerator(_schemaSettings);
-        var schema = generator.Generate(typeof(NextStep));
+        var schema = generator.Generate(typeof(NextStepDescription));
 
         // Ensure root schema is an object and has all required properties
         schema.Type = JsonObjectType.Object;
@@ -185,7 +185,7 @@ public class NextStepManager
         }
 
         // Ensure required properties are present
-        var required = new[] { "CurrentState", "PlanRemainingStepsBrief", "TaskCompleted", "NextStepToolToCall" };
+        var required = new[] { "CurrentState", "PlanRemainingStepsBrief", "TaskCompleted", "NextStep" };
         foreach (var prop in required)
         {
             if (!schema.RequiredProperties.Contains(prop))
@@ -348,14 +348,14 @@ public class NextStepManager
     /// </summary>
     /// <param name="json">JSON string to deserialize</param>
     /// <returns>Deserialized NextStep with correctly typed ToolCall property</returns>
-    public NextStep? DeserializeFromJson(string json)
+    public NextStepDescription? DeserializeFromJson(string json)
     {
         if (_derivedToolCallTypes.Count == 0)
         {
             throw new InvalidOperationException("No derived ToolCall types have been added. Use AddDerivedType<T>() or AddDerivedTypes() first.");
         }
 
-        return JsonConvert.DeserializeObject<NextStep>(json, _jsonSettings);
+        return JsonConvert.DeserializeObject<NextStepDescription>(json, _jsonSettings);
     }
 
     /// <summary>

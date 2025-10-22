@@ -491,6 +491,8 @@ public class PolymorphicSchemaManager<TContainer, TPolymorphicBase>
     /// <returns>Discriminator value string</returns>
     public static string GetDiscriminatorValue(Type type)
     {
+        return type.Name;
+
         // Convert PascalCase to snake_case: "SendEmailToolCall" -> "send_email_tool_call"
         var name = type.Name;
         var result = string.Empty;

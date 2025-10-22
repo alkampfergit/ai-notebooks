@@ -4,7 +4,7 @@ using OpenAI.Chat;
 using SkPlayground.Utils;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using ActualNextStep = SkPlayground.Models.NextStep;
+using ActualNextStep = SkPlayground.Models.NextStepDescription;
 using ActualToolCall = SkPlayground.Models.ToolCall;
 
 namespace SkPlaygroundTests;
@@ -99,7 +99,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         // **Assert**: Navigate to the NextStepToolToCall property in the schema (PascalCase)
         var schemaObject = schemaNode!.AsObject();
         var properties = schemaObject["properties"]?.AsObject();
-        var toolCallProperty = properties!["NextStepToolToCall"]?.AsObject();
+        var toolCallProperty = properties!["NextStep"]?.AsObject();
 
         Assert.That(toolCallProperty, Is.Not.Null, "NextStepToolToCall property should be present in schema");
 
@@ -163,7 +163,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         // **Assert**: Verify anyOf contains only specified types
         var schemaObject = schemaNode!.AsObject();
         var properties = schemaObject["properties"]?.AsObject();
-        var toolCallProperty = properties!["NextStepToolToCall"]?.AsObject();
+        var toolCallProperty = properties!["NextStep"]?.AsObject();
         var anyOfArray = toolCallProperty!["anyOf"]?.AsArray();
 
         Assert.That(anyOfArray!.Count, Is.EqualTo(2), "anyOf array should contain exactly 2 types");
@@ -191,7 +191,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
             "currentState": "Processing email request",
             "planRemainingStepsBrief": ["Send confirmation email", "Update customer record"],
             "taskCompleted": false,
-            "nextStepToolToCall": {
+            "NextStep": {
                 "type": "send_email_tool_call",
                 "subject": "Order Confirmation",
                 "message": "Your order has been processed",
@@ -210,9 +210,9 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         Assert.That(result.TaskCompleted, Is.False, "TaskCompleted should be correctly deserialized");
 
         // **Assert**: Verify polymorphic property is correctly typed
-        Assert.That(result.NextStepToolToCall, Is.InstanceOf<SkPlayground.BusinessFunctions.SendEmailToolCall>(), "ToolCall should be deserialized as SendEmailToolCall");
+        Assert.That(result.NextStep, Is.InstanceOf<SkPlayground.BusinessFunctions.SendEmailToolCall>(), "ToolCall should be deserialized as SendEmailToolCall");
 
-        var emailCall = result.NextStepToolToCall as SkPlayground.BusinessFunctions.SendEmailToolCall;
+        var emailCall = result.NextStep as SkPlayground.BusinessFunctions.SendEmailToolCall;
         Assert.That(emailCall, Is.Not.Null, "Should be able to cast ToolCall to SendEmailToolCall");
         Assert.That(emailCall!.Subject, Is.EqualTo("Order Confirmation"), "Subject should be correctly deserialized");
         Assert.That(emailCall.Message, Is.EqualTo("Your order has been processed"), "Message should be correctly deserialized");
@@ -236,7 +236,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
             "currentState": "Processing request",
             "planRemainingStepsBrief": ["Process request"],
             "taskCompleted": false,
-            "nextStepToolToCall": {
+            "NextStep": {
                 "type": "unknown_tool_call",
                 "someProperty": "value"
             }
@@ -265,7 +265,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
     {
         // **Act & Assert**: Verify polymorphic property was identified
         Assert.That(_manager.PolymorphicProperty, Is.Not.Null, "Polymorphic property should be identified");
-        Assert.That(_manager.PolymorphicProperty.Name, Is.EqualTo("NextStepToolToCall"), "Property name should be 'ToolCall'");
+        Assert.That(_manager.PolymorphicProperty.Name, Is.EqualTo("NextStep"), "Property name should be 'ToolCall'");
         Assert.That(_manager.PolymorphicProperty.PropertyType, Is.EqualTo(typeof(ActualToolCall)), "Property type should be ToolCall");
     }
 
@@ -418,7 +418,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
 
         // **Assert**: Verify NextStepToolToCall property has anyOf with only SendEmail
         Assert.That(root.TryGetProperty("properties", out var properties), Is.True, "Schema should have 'properties'");
-        Assert.That(properties.TryGetProperty("NextStepToolToCall", out var toolCallProp), Is.True, "Schema should have 'NextStepToolToCall' property");
+        Assert.That(properties.TryGetProperty("NextStep", out var toolCallProp), Is.True, "Schema should have 'NextStepToolToCall' property");
         Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "NextStepToolToCall property should have 'anyOf'");
 
         var anyOfArray = anyOf.EnumerateArray().ToList();
@@ -478,7 +478,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
 
         // **Assert**: Navigate to NextStepToolToCall property
         Assert.That(root.TryGetProperty("properties", out var properties), Is.True, "Schema should have 'properties'");
-        Assert.That(properties.TryGetProperty("NextStepToolToCall", out var toolCallProp), Is.True, "Schema should have 'NextStepToolToCall' property");
+        Assert.That(properties.TryGetProperty("NextStep", out var toolCallProp), Is.True, "Schema should have 'NextStepToolToCall' property");
 
         // **Assert**: Verify NextStepToolToCall property has anyOf with all configured types
         Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "NextStepToolToCall property should have 'anyOf'");
@@ -508,7 +508,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
             "currentState": "Retrieving customer information",
             "planRemainingStepsBrief": ["Get customer data", "Process results"],
             "taskCompleted": false,
-            "nextStepToolToCall": {
+            "NextStep": {
                 "type": "get_customer_data_tool_call",
                 "email": "customer@example.com"
             }
@@ -521,9 +521,9 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         // **Assert**: Verify deserialization succeeded
         Assert.That(nextStep, Is.Not.Null, "Should deserialize NextStep");
         Assert.That(nextStep!.CurrentState, Is.EqualTo("Retrieving customer information"));
-        Assert.That(nextStep.NextStepToolToCall, Is.TypeOf<SkPlayground.BusinessFunctions.GetCustomerDataToolCall>(), "ToolCall should be GetCustomerDataToolCall");
+        Assert.That(nextStep.NextStep, Is.TypeOf<SkPlayground.BusinessFunctions.GetCustomerDataToolCall>(), "ToolCall should be GetCustomerDataToolCall");
 
-        var getCustomerCall = nextStep.NextStepToolToCall as SkPlayground.BusinessFunctions.GetCustomerDataToolCall;
+        var getCustomerCall = nextStep.NextStep as SkPlayground.BusinessFunctions.GetCustomerDataToolCall;
         Assert.That(getCustomerCall, Is.Not.Null, "Should cast to GetCustomerDataToolCall");
         Assert.That(getCustomerCall!.Email, Is.EqualTo("customer@example.com"));
     }
@@ -574,7 +574,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
 
         // **Assert**: Verify anyOf only has 2 references
         Assert.That(root.TryGetProperty("properties", out var properties), Is.True, "Schema should have 'properties'");
-        Assert.That(properties.TryGetProperty("NextStepToolToCall", out var toolCallProp), Is.True, "Schema should have 'NextStepToolToCall' property");
+        Assert.That(properties.TryGetProperty("NextStep", out var toolCallProp), Is.True, "Schema should have 'NextStepToolToCall' property");
         Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "NextStepToolToCall should have 'anyOf'");
 
         var anyOfArray = anyOf.EnumerateArray().ToList();
@@ -601,7 +601,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
 
         // **Assert**: Verify anyOf has only 1 reference
         Assert.That(root.TryGetProperty("properties", out var properties), Is.True, "Schema should have 'properties'");
-        Assert.That(properties.TryGetProperty("NextStepToolToCall", out var toolCallProp), Is.True, "Schema should have 'NextStepToolToCall' property");
+        Assert.That(properties.TryGetProperty("NextStep", out var toolCallProp), Is.True, "Schema should have 'NextStepToolToCall' property");
         Assert.That(toolCallProp.TryGetProperty("anyOf", out var anyOf), Is.True, "NextStepToolToCall should have 'anyOf'");
 
         var anyOfArray = anyOf.EnumerateArray().ToList();
@@ -673,7 +673,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
             "currentState": "Test",
             "planRemainingStepsBrief": ["Step 1"],
             "taskCompleted": false,
-            "nextStepToolToCall": {
+            "NextStep": {
                 "type": "send_email_tool_call",
                 "subject": "Test",
                 "message": "Test Message",
@@ -688,7 +688,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
             "currentState": "Test",
             "planRemainingStepsBrief": ["Step 1"],
             "taskCompleted": false,
-            "nextStepToolToCall": {
+            "NextStep": {
                 "type": "get_customer_data_tool_call",
                 "email": "customer@example.com"
             }
@@ -904,9 +904,9 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
             Assert.That(nextStep!.CurrentState, Is.Not.Null.And.Not.Empty, "CurrentState should be populated");
             Assert.That(nextStep.PlanRemainingStepsBrief, Is.Not.Null.And.Not.Empty, "PlanRemainingStepsBrief should be populated");
             Assert.That(nextStep.TaskCompleted, Is.False, "TaskCompleted should be false as requested");
-            Assert.That(nextStep.NextStepToolToCall, Is.InstanceOf<SkPlayground.BusinessFunctions.SendEmailToolCall>(), "ToolCall should be SendEmailToolCall");
+            Assert.That(nextStep.NextStep, Is.InstanceOf<SkPlayground.BusinessFunctions.SendEmailToolCall>(), "ToolCall should be SendEmailToolCall");
 
-            var sendEmailCall = nextStep.NextStepToolToCall as SkPlayground.BusinessFunctions.SendEmailToolCall;
+            var sendEmailCall = nextStep.NextStep as SkPlayground.BusinessFunctions.SendEmailToolCall;
             Assert.That(sendEmailCall, Is.Not.Null, "Should be able to cast ToolCall to SendEmailToolCall");
             Assert.That(sendEmailCall!.Subject, Is.Not.Null.And.Not.Empty, "Email subject should not be empty");
             Assert.That(sendEmailCall.Message, Is.Not.Null.And.Not.Empty, "Email message should not be empty");

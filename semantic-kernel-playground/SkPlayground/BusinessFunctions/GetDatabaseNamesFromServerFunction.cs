@@ -33,7 +33,7 @@ public sealed class GetSqlDatabaseListFunction : BusinessFunction<GetSqlDatabase
     }
 
     protected override async Task<BusinessFunctionResult> ExecuteAsync(
-        GetSqlDatabaseListToolCall parameters,
+        GetDatabaseNamesFromServer parameters,
         CancellationToken cancellationToken = default)
     {
         // Check if database list already exists in state manager
@@ -72,8 +72,8 @@ public sealed class GetSqlDatabaseListFunction : BusinessFunction<GetSqlDatabase
 /// <summary>
 /// Parameters required to retrieve the list of SQL Server databases.
 /// </summary>
-[Description("Retrieve the list of databases from the SQL Server instance")]
-public sealed class GetSqlDatabaseListToolCall : ToolCall
+[Description("Retrieve the list of database names from the SQL Server instance")]
+public sealed class GetDatabaseNamesFromServer : ToolCall
 {
-    public override string Type => "get_sql_database_list_tool_call";
+    public override string Type => nameof(GetDatabaseNamesFromServer);
 }

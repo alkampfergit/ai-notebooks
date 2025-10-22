@@ -94,5 +94,5 @@ public sealed class GetSqlDatabaseSchemaToolCall : ToolCall
     [Required]
     public required string DatabaseName { get; set; }
 
-    public override string Type => "get_sql_database_schema_tool_call";
+    public override string Type => "GetSqlDatabaseSchemaToolCall";
 }

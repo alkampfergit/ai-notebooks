@@ -51,7 +51,7 @@ public class FunctionInformations
 public class BusinessFunctionFactory
 {
     private readonly Dictionary<string, FunctionInformations> _functions;
-    private readonly PolymorphicSchemaManager<NextStep, ToolCall> _schemaManager;
+    private readonly PolymorphicSchemaManager<NextStepDescription, ToolCall> _schemaManager;
     private readonly DatabaseService _databaseService;
     private readonly SqlServerService _sqlServerService;
     private readonly Kernel _kernel;
@@ -86,7 +86,7 @@ public class BusinessFunctionFactory
         }
 
         // **Initialize PolymorphicSchemaManager with specified ToolCall derived types**
-        _schemaManager = new PolymorphicSchemaManager<NextStep, ToolCall>("type").AddDerivedTypes(toolCallTypes);
+        _schemaManager = new PolymorphicSchemaManager<NextStepDescription, ToolCall>("type").AddDerivedTypes(toolCallTypes);
 
         _functions = new Dictionary<string, FunctionInformations>();
 
@@ -337,7 +337,7 @@ public class BusinessFunctionFactory
     /// </summary>
     /// <param name="json">JSON string to deserialize</param>
     /// <returns>NextStep object with correctly typed ToolCall property</returns>
-    public NextStep? DeserializeNextStep(string json)
+    public NextStepDescription? DeserializeNextStep(string json)
     {
         // **Use PolymorphicSchemaManager for proper polymorphic deserialization**
         // This automatically handles discriminator-based type resolution for ToolCall property
@@ -352,5 +352,5 @@ public class BusinessFunctionFactory
     /// - Access polymorphic deserialization capabilities
     /// - Perform schema validation and type checking
     /// </summary>
-    public PolymorphicSchemaManager<NextStep, ToolCall> SchemaManager => _schemaManager;
+    public PolymorphicSchemaManager<NextStepDescription, ToolCall> SchemaManager => _schemaManager;
 }
