@@ -549,4 +549,291 @@ public class StateManagerTests
             Assert.That(StateManager.ContainsMemoryKey($"key{i}"), Is.True);
         }
     }
+
+    #region HasMemoryType<T> Tests
+
+    [Test]
+    public void HasMemoryType_WhenStateNotInitialized_ShouldReturnFalse()
+    {
+        // Arrange - no state initialization
+
+        // Act
+        var result = StateManager.HasMemoryType<DatabaseList>();
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void HasMemoryType_WhenStateInitializedButEmpty_ShouldReturnFalse()
+    {
+        // Arrange
+        StateManager.Start();
+
+        // Act
+        var result = StateManager.HasMemoryType<DatabaseList>();
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void HasMemoryType_WhenTypeExists_ShouldReturnTrue()
+    {
+        // Arrange
+        StateManager.Start();
+        var databaseList = new DatabaseList
+        {
+            Databases = new List<string> { "DB1", "DB2" },
+            RetrievedAtUtc = DateTime.UtcNow
+        };
+        StateManager.SetMemoryValue("db_list", databaseList);
+
+        // Act
+        var result = StateManager.HasMemoryType<DatabaseList>();
+
+        // Assert
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public void HasMemoryType_WhenTypeDoesNotExist_ShouldReturnFalse()
+    {
+        // Arrange
+        StateManager.Start();
+        StateManager.SetMemoryValue("customer", new Customer
+        {
+            Name = "John",
+            Surname = "Doe",
+            Email = "john@example.com"
+        });
+
+        // Act
+        var result = StateManager.HasMemoryType<DatabaseList>();
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void HasMemoryType_WithMultipleDifferentTypes_ShouldReturnTrueForExistingTypes()
+    {
+        // Arrange
+        StateManager.Start();
+
+        var databaseList = new DatabaseList
+        {
+            Databases = new List<string> { "DB1", "DB2" },
+            RetrievedAtUtc = DateTime.UtcNow
+        };
+
+        var customer = new Customer
+        {
+            Name = "Jane",
+            Surname = "Smith",
+            Email = "jane@example.com"
+        };
+
+        StateManager.SetMemoryValue("db_list", databaseList);
+        StateManager.SetMemoryValue("customer", customer);
+        StateManager.SetMemoryValue("simple_string", "Hello World");
+        StateManager.SetMemoryValue("number", 42);
+
+        // Act & Assert
+        Assert.That(StateManager.HasMemoryType<DatabaseList>(), Is.True);
+        Assert.That(StateManager.HasMemoryType<Customer>(), Is.True);
+        Assert.That(StateManager.HasMemoryType<string>(), Is.True);
+        Assert.That(StateManager.HasMemoryType<int>(), Is.True);
+        Assert.That(StateManager.HasMemoryType<DatabaseSchemaCollection>(), Is.False);
+    }
+
+    [Test]
+    public void HasMemoryType_WithMultipleItemsOfSameType_ShouldReturnTrue()
+    {
+        // Arrange
+        StateManager.Start();
+
+        var customer1 = new Customer
+        {
+            Name = "John",
+            Surname = "Doe",
+            Email = "john@example.com"
+        };
+
+        var customer2 = new Customer
+        {
+            Name = "Jane",
+            Surname = "Smith",
+            Email = "jane@example.com"
+        };
+
+        StateManager.SetMemoryValue("customer1", customer1);
+        StateManager.SetMemoryValue("customer2", customer2);
+
+        // Act
+        var result = StateManager.HasMemoryType<Customer>();
+
+        // Assert
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public void HasMemoryType_AfterRemovingAllItemsOfType_ShouldReturnFalse()
+    {
+        // Arrange
+        StateManager.Start();
+
+        var databaseList = new DatabaseList
+        {
+            Databases = new List<string> { "DB1" },
+            RetrievedAtUtc = DateTime.UtcNow
+        };
+
+        StateManager.SetMemoryValue("db_list", databaseList);
+        Assert.That(StateManager.HasMemoryType<DatabaseList>(), Is.True);
+
+        // Act
+        StateManager.RemoveMemoryValue("db_list");
+
+        // Assert
+        Assert.That(StateManager.HasMemoryType<DatabaseList>(), Is.False);
+    }
+
+    [Test]
+    public void HasMemoryType_AfterClearingMemory_ShouldReturnFalse()
+    {
+        // Arrange
+        StateManager.Start();
+
+        var databaseList = new DatabaseList
+        {
+            Databases = new List<string> { "DB1" },
+            RetrievedAtUtc = DateTime.UtcNow
+        };
+
+        StateManager.SetMemoryValue("db_list", databaseList);
+        Assert.That(StateManager.HasMemoryType<DatabaseList>(), Is.True);
+
+        // Act
+        StateManager.ClearMemory();
+
+        // Assert
+        Assert.That(StateManager.HasMemoryType<DatabaseList>(), Is.False);
+    }
+
+    [Test]
+    public void HasMemoryType_WithInheritedTypes_ShouldRespectTypeHierarchy()
+    {
+        // Arrange
+        StateManager.Start();
+
+        var customer = new Customer
+        {
+            Name = "John",
+            Surname = "Doe",
+            Email = "john@example.com"
+        };
+
+        StateManager.SetMemoryValue("customer", customer);
+
+        // Act & Assert
+        // Customer should be found as Customer
+        Assert.That(StateManager.HasMemoryType<Customer>(), Is.True);
+
+        // Customer should also be found as object (base class)
+        Assert.That(StateManager.HasMemoryType<object>(), Is.True);
+    }
+
+    [Test]
+    public void HasMemoryType_WithCollectionTypes_ShouldWorkCorrectly()
+    {
+        // Arrange
+        StateManager.Start();
+
+        var schemaCollection = new DatabaseSchemaCollection();
+        var schema = new SqlDatabaseSchema(
+            "TestDB",
+            new List<SqlTableSchema>
+            {
+                new SqlTableSchema("dbo", "Users", new List<SqlColumnSchema>
+                {
+                    new SqlColumnSchema("Id", "int", false, 1),
+                    new SqlColumnSchema("Name", "varchar", false, 2)
+                })
+            });
+        schemaCollection.AddSchema(schema);
+
+        StateManager.SetMemoryValue("schema_collection", schemaCollection);
+
+        // Act
+        var hasDatabaseSchemaCollection = StateManager.HasMemoryType<DatabaseSchemaCollection>();
+        var hasSqlQueryResultCollection = StateManager.HasMemoryType<SqlQueryResultCollection>();
+
+        // Assert
+        Assert.That(hasDatabaseSchemaCollection, Is.True);
+        Assert.That(hasSqlQueryResultCollection, Is.False);
+    }
+
+    [Test]
+    public void HasMemoryType_WithNullValues_ShouldHandleGracefully()
+    {
+        // Arrange
+        StateManager.Start();
+        StateManager.SetMemoryValue("null_customer", (Customer?)null);
+        StateManager.SetMemoryValue("valid_customer", new Customer
+        {
+            Name = "John",
+            Surname = "Doe",
+            Email = "john@example.com"
+        });
+
+        // Act
+        var hasCustomer = StateManager.HasMemoryType<Customer>();
+
+        // Assert
+        // Should still return true because there's at least one valid Customer
+        Assert.That(hasCustomer, Is.True);
+    }
+
+    [Test]
+    public void HasMemoryType_WithPrimitiveTypes_ShouldWorkCorrectly()
+    {
+        // Arrange
+        StateManager.Start();
+        StateManager.SetMemoryValue("string_value", "test");
+        StateManager.SetMemoryValue("int_value", 123);
+        StateManager.SetMemoryValue("bool_value", true);
+        StateManager.SetMemoryValue("double_value", 3.14);
+
+        // Act & Assert
+        Assert.That(StateManager.HasMemoryType<string>(), Is.True);
+        Assert.That(StateManager.HasMemoryType<int>(), Is.True);
+        Assert.That(StateManager.HasMemoryType<bool>(), Is.True);
+        Assert.That(StateManager.HasMemoryType<double>(), Is.True);
+        Assert.That(StateManager.HasMemoryType<decimal>(), Is.False);
+        Assert.That(StateManager.HasMemoryType<long>(), Is.False);
+    }
+
+    [Test]
+    public void HasMemoryType_AfterStateCleared_ShouldReturnFalse()
+    {
+        // Arrange
+        StateManager.Start();
+        var databaseList = new DatabaseList
+        {
+            Databases = new List<string> { "DB1" },
+            RetrievedAtUtc = DateTime.UtcNow
+        };
+        StateManager.SetMemoryValue("db_list", databaseList);
+        Assert.That(StateManager.HasMemoryType<DatabaseList>(), Is.True);
+
+        // Act
+        StateManager.Clear();
+
+        // Assert
+        Assert.That(StateManager.HasMemoryType<DatabaseList>(), Is.False);
+    }
+
+    #endregion
 }
+

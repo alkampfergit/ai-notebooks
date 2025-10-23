@@ -1,5 +1,6 @@
 using SkPlayground.Models;
 using System.Collections.Concurrent;
+using System.Security.Cryptography.X509Certificates;
 
 namespace SkPlayground.Services;
 
@@ -178,6 +179,18 @@ public static class StateManager
             return true;
         }
         value = default;
+        return false;
+    }
+
+    public static bool HasMemoryType<T>() 
+    {
+        foreach (var item in _asyncLocalState.Value?.Memory ?? new ConcurrentDictionary<string, object>())
+        {
+            if (item.Value is T)
+            {
+                return true;
+            }
+        }
         return false;
     }
 

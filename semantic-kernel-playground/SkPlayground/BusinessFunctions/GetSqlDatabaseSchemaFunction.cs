@@ -88,10 +88,10 @@ public sealed class GetSqlDatabaseSchemaFunction : BusinessFunction<GetSqlDataba
 /// <summary>
 /// Parameters required to obtain a database schema.
 /// </summary>
-[Description("Retrieve Schema for a given Database name")]
+[Description("Retrieve Schema, table names and columns for a given Database name")]
 public sealed class GetSqlDatabaseSchemaToolCall : ToolCall
 {
-    [Description("Name of the database to inspect")]
+    [Description("Name of the database to inspect.")]
     [Required]
     public required string DatabaseName { get; set; }
 

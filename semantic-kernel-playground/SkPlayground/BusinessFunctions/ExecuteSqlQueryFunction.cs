@@ -1,13 +1,12 @@
 #pragma warning disable OPENAI001
 
-using System.ComponentModel;
-using System.ComponentModel.DataAnnotations;
-using System.Linq;
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using SkPlayground.Models;
 using SkPlayground.Services;
+using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 
 namespace SkPlayground.BusinessFunctions;
 
@@ -44,6 +43,11 @@ public sealed class ExecuteSqlQueryFunction : BusinessFunction<ExecuteSqlQueryTo
     /// </summary>
     private const string SchemaCollectionStateKey = "database_schema_collection";
 
+    /// <summary>
+    /// State manager key for storing and retrieving the SQL query result collection.
+    /// </summary>
+    private const string QueryResultCollectionStateKey = "sql_query_result_collection";
+
     public ExecuteSqlQueryFunction(
         SqlServerService sqlServerService,
         Kernel kernel,
@@ -61,43 +65,61 @@ public sealed class ExecuteSqlQueryFunction : BusinessFunction<ExecuteSqlQueryTo
         // Determine the final SQL query to execute
         string sqlQueryToExecute;
 
-        if (!string.IsNullOrWhiteSpace(parameters.SqlQuery))
-        {
-            // Mode 1: Direct T-SQL execution
-            sqlQueryToExecute = parameters.SqlQuery;
-            _logger.LogInformation(
-                "Executing direct T-SQL query on database '{DatabaseName}'",
-                parameters.DatabaseName);
-        }
-        else if (!string.IsNullOrWhiteSpace(parameters.QueryDescription))
-        {
-            // Mode 2: Natural language to T-SQL translation
-            _logger.LogInformation(
-                "Translating natural language query to T-SQL for database '{DatabaseName}'",
-                parameters.DatabaseName);
+        // Mode 2: Natural language to T-SQL translation
+        _logger.LogInformation(
+            "Translating natural language query to T-SQL for database '{DatabaseName}'",
+            parameters.DatabaseName);
 
-            sqlQueryToExecute = await TranslateNaturalLanguageToSqlAsync(
-                parameters.DatabaseName,
-                parameters.QueryDescription,
-                cancellationToken).ConfigureAwait(false);
+        sqlQueryToExecute = await TranslateNaturalLanguageToSqlAsync(
+            parameters.DatabaseName,
+            parameters.QueryDescription,
+            cancellationToken).ConfigureAwait(false);
 
-            _logger.LogInformation(
-                "Generated T-SQL query: {SqlQuery}",
-                sqlQueryToExecute);
-        }
-        else
-        {
-            throw new InvalidOperationException(
-                "Either SqlQuery or QueryDescription must be provided.");
-        }
+        _logger.LogInformation(
+            "Generated T-SQL query: {SqlQuery}",
+            sqlQueryToExecute);
 
         // Execute the query
         var executionResult = await _sqlServerService.ExecuteSqlQueryAsync(
             parameters.DatabaseName,
             sqlQueryToExecute,
-            parameters.MaxPreviewRows,
+            4000,
             parameters.ResultId,
             cancellationToken).ConfigureAwait(false);
+
+        // Retrieve or create the query result collection from state manager
+        SqlQueryResultCollection resultCollection;
+        if (StateManager.TryGetMemoryValue<SqlQueryResultCollection>(
+            QueryResultCollectionStateKey,
+            out var existingCollection) && existingCollection != null)
+        {
+            resultCollection = existingCollection;
+
+            // Check if result with this ID already exists
+            if (resultCollection.ContainsResult(executionResult.ResultId))
+            {
+                _logger.LogWarning(
+                    "Query result with ID '{ResultId}' already exists in state manager. " +
+                    "It will be overwritten with the new result.",
+                    executionResult.ResultId);
+            }
+        }
+        else
+        {
+            // Create a new collection if none exists
+            resultCollection = new SqlQueryResultCollection();
+        }
+
+        // Add the execution result to the collection
+        resultCollection.AddResult(executionResult);
+
+        // Store the updated collection back in the state manager
+        StateManager.SetMemoryValue(QueryResultCollectionStateKey, resultCollection);
+
+        _logger.LogInformation(
+            "Stored query result '{ResultId}' in state manager. Collection now contains {Count} result(s).",
+            executionResult.ResultId,
+            resultCollection.Count);
 
         string summary;
         if (executionResult.Tables.Count == 0)
@@ -272,22 +294,15 @@ Generate the T-SQL query:";
 ///
 /// **Note:** Either `SqlQuery` OR `QueryDescription` must be provided, but not both.
 /// </remarks>
-[Description("Execute a SQL statement against a SQL Server database, either directly or by translating a natural language description")]
+[Description("Execute a query on a database and store result in the context")]
 public sealed class ExecuteSqlQueryToolCall : ToolCall
 {
     [Description("Name of the database where the query should run")]
     [Required]
     public required string DatabaseName { get; set; }
 
-    [Description("SQL text to execute. Must be valid T-SQL for SQL Server. Either SqlQuery or QueryDescription must be provided.")]
-    public string? SqlQuery { get; set; }
-
     [Description("Natural language description of the query to execute. The system will translate this to T-SQL using the database schema. Either SqlQuery or QueryDescription must be provided.")]
     public string? QueryDescription { get; set; }
-
-    [Description("Maximum number of preview rows per result set returned in the response")]
-    [Range(1, 500)]
-    public int MaxPreviewRows { get; set; } = 50;
 
     [Description("Optional identifier to use for storing the query result. If omitted a unique id is generated.")]
     public string? ResultId { get; set; }

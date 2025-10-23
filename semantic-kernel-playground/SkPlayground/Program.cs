@@ -510,13 +510,25 @@ class Program
 
 IMPORTANT: You must always respond with structured JSON that includes:
 1. Current state analysis
-2. List of remaining steps briefly described with tool name
+2. List of remaining steps to execute to complete the task
 3. Whether the task is completed
-4. NextStep based on list of remaining steps and current state analysis
+4. Function to call, it contains parameter to execute the first remaining step
 
-Please check carefully the status of the system to determin function already called to plan for next function to call.
+## IMPORTANT
+- Please check carefully the status of the system to create the most relevant next function to call
+- You should examine carefully what function were already called and their results
+- Answer to the user only when you have the response to user question or you cannot proceed further 
+
 ## Available Tools:
 {toolsSummary}
+
+## General rules
+- If you want to check available databases use GetDatabaseNamesFromServer
+- If you need to know table names and columns use GetSqlDatabaseSchema
+- You can use the ExecuteSqlQuery function to execute a query expressed in natural language.
+- If you need to export a query you need to execute first with ExecuteSqlQuery giving a resultId then call the exportSqlQueryResult function with the resultId obtained.
+- When there are not anymore steps to execute, you can use the ReportTaskCompletion function to report the final result to the user. Tell if the process was successful or not.
+
 ";
             }
         };

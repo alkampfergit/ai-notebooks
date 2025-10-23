@@ -47,14 +47,14 @@ public class ReportTaskCompletionFunction : BusinessFunction<ReportTaskCompletio
 /// Contains all the necessary information required to report
 /// task completion with appropriate summary details.
 /// </summary>
-[Description("Conclude the process with a summary")]
+[Description("Return a summary to the user after the process is completed")]
 public class ReportTaskCompletionToolCall : ToolCall
 {
     /// <summary>
     /// **Summary of the completed task** - provides a comprehensive
     /// overview of what was accomplished during the workflow execution.
     /// </summary>
-    [Description("A summary of the completed task")]
+    [Description("Summary of execution of the task")]
     [Required]
     public required string Summary { get; set; }
 

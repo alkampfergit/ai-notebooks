@@ -227,9 +227,13 @@ public class ResponseApiSchemaGuidedReasoner
                 // use the new response api.
                 var inputItems = new List<ResponseItem> {
                     ResponseItem.CreateSystemMessageItem(systemPrompt) ,
-                    ResponseItem.CreateUserMessageItem(userRequest),
+                    ResponseItem.CreateUserMessageItem($"UserQuestion: {userRequest}"),
                 };
 
+                if (executionTaskResult.Count > 0) 
+                {
+                    inputItems.Add(ResponseItem.CreateAssistantMessageItem("Function called so far:\n"));
+                }
 
                 for (int i = 0; i < executionTaskResult.Count; i++)
                 {

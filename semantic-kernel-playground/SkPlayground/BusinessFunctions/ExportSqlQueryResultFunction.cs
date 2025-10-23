@@ -17,6 +17,12 @@ public sealed class ExportSqlQueryResultFunction : BusinessFunction<ExportSqlQue
         _sqlServerService = sqlServerService;
     }
 
+    public override bool IsAvailable()
+    {
+        //is available only if we have at least one executed query result
+        return StateManager.HasMemoryType<SqlQueryResultCollection>();
+    }
+
     protected override async Task<BusinessFunctionResult> ExecuteAsync(
         ExportSqlQueryResultToolCall parameters,
         CancellationToken cancellationToken = default)
@@ -33,7 +39,7 @@ public sealed class ExportSqlQueryResultFunction : BusinessFunction<ExportSqlQue
 /// <summary>
 /// Parameters for exporting a query result to Excel.
 /// </summary>
-[Description("Export a stored SQL query result to an Excel file")]
+[Description("Export an already executed query result to an Excel file")]
 public sealed class ExportSqlQueryResultToolCall : ToolCall
 {
     [Description("Identifier of the query result to export")]
