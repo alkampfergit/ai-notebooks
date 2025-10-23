@@ -7,7 +7,7 @@ namespace SkPlayground.Models;
 [Description("Next step to execute with summary")]
 public class NextStep
 {
-    [Description("Function to execute, null if the task is completed")]
+    [Description("execute first remaining step")]
     public required ToolCall Function { get; set; }
 
     [Description("Current status of the workflow")]

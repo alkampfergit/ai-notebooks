@@ -96,6 +96,16 @@ public class ResponseApiSchemaGuidedReasoner
     public TokenUsageStats CurrentSessionStats { get; private set; } = new();
 
     /// <summary>
+    /// Counter for tracking LLM call numbers for file naming
+    /// </summary>
+    private int _llmCallCounter = 0;
+
+    /// <summary>
+    /// Base directory for dumping LLM calls (llm_calls subfolder)
+    /// </summary>
+    private string _llmCallsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "llm_calls");
+
+    /// <summary>
     /// Initializes the Response API reasoner with Azure OpenAI credentials and configuration.
     /// </summary>
     public ResponseApiSchemaGuidedReasoner(
@@ -160,6 +170,10 @@ public class ResponseApiSchemaGuidedReasoner
     {
         // Reset session stats for new reasoning session
         CurrentSessionStats = new TokenUsageStats();
+        
+        // Reset LLM call counter and ensure the llm_calls directory exists
+        _llmCallCounter = 0;
+        EnsureLlmCallsDirectory();
 
         var executionTaskResult = new List<ToolExecutionResult>();
         string? previousResponseId = null; // Track conversation continuity
@@ -248,6 +262,9 @@ public class ResponseApiSchemaGuidedReasoner
 
                 var dumpAllPrompt = Dump(inputItems);
 
+                // Increment call counter for this LLM call
+                _llmCallCounter++;
+
                 var options = new ResponseCreationOptions
                 {
                     PreviousResponseId = null, //do not use conversation id for now
@@ -268,6 +285,9 @@ public class ResponseApiSchemaGuidedReasoner
                 OpenAIResponse response = await responseClient.CreateResponseAsync(inputItems, options);
 
                 // conversationId = response.Id;
+
+                // Dump the LLM call details to files
+                await DumpLlmCallAsync(_llmCallCounter, dumpAllPrompt, schemaStr, response);
 
                 // **Track token usage it is different for the classic API **
                 if (response.Usage != null)
@@ -452,6 +472,62 @@ public class ResponseApiSchemaGuidedReasoner
         if (usage.OutputTokenDetails?.ReasoningTokenCount > 0)
         {
             AnsiConsole.MarkupLine($"[fuchsia]    └─ Reasoning: {usage.OutputTokenDetails.ReasoningTokenCount}[/]");
+        }
+    }
+
+    /// <summary>
+    /// Ensures the llm_calls directory exists
+    /// </summary>
+    private void EnsureLlmCallsDirectory()
+    {
+        if (!Directory.Exists(_llmCallsDirectory))
+        {
+            Directory.CreateDirectory(_llmCallsDirectory);
+        }
+    }
+
+    /// <summary>
+    /// Dumps the LLM call details to three separate files:
+    /// - {number:D3}-prompt.txt: The prompt from dumpAllPrompt
+    /// - {number:D3}-schema.json: The JSON schema used
+    /// - {number:D3}-response.json: The full JSON response
+    /// </summary>
+    private async Task DumpLlmCallAsync(int callNumber, string prompt, string schema, OpenAIResponse response)
+    {
+        try
+        {
+            var prefix = callNumber.ToString("D3");
+
+            // 1. Dump prompt
+            var promptFile = Path.Combine(_llmCallsDirectory, $"{prefix}-prompt.txt");
+            await File.WriteAllTextAsync(promptFile, prompt);
+
+            // 2. Dump schema
+            var schemaFile = Path.Combine(_llmCallsDirectory, $"{prefix}-schema.json");
+            await File.WriteAllTextAsync(schemaFile, schema);
+
+            // 3. Dump response - extract the full JSON from the response
+            var responseFile = Path.Combine(_llmCallsDirectory, $"{prefix}-response.json");
+            var responseMessage = response.OutputItems.OfType<MessageResponseItem>().FirstOrDefault();
+            if (responseMessage != null)
+            {
+                var responseJson = string.Join("\n", responseMessage.Content.Select(c => c.Text));
+                await File.WriteAllTextAsync(responseFile, responseJson);
+            }
+            else
+            {
+                // Fallback: serialize the entire response if no message item found
+                var fullResponse = JsonConvert.SerializeObject(response, Formatting.Indented);
+                await File.WriteAllTextAsync(responseFile, fullResponse);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log the error but don't fail the reasoning process
+            if (VerboseOutput)
+            {
+                AnsiConsole.MarkupLine($"[yellow]Warning: Failed to dump LLM call {callNumber}: {Markup.Escape(ex.Message)}[/]");
+            }
         }
     }
 }
