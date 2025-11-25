@@ -1,0 +1,64 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
+
+#!csharp
+
+#!import ../dotenv.cs
+#r "nuget: Microsoft.SemanticKernel"
+#r "nuget: Microsoft.Extensions.Logging, 9.*"
+#r "nuget: Microsoft.Extensions.Logging.Console, 9.*"
+#r "nuget: Microsoft.Extensions.Logging.Debug, 9.*"
+
+#!csharp
+
+using Microsoft.SemanticKernel;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+var kernelBuilder = Kernel.CreateBuilder();
+kernelBuilder.Services.AddLogging(l => l
+    .SetMinimumLevel(LogLevel.Information)
+    .AddConsole()
+    .AddDebug()
+);
+
+var deployment = Dotenv.Get("OPENAI_DEFAULT_DEPLOYMENT");
+kernelBuilder.Services.AddAzureOpenAIChatCompletion(
+    "gpt-5-mini", 
+    Dotenv.Get("OPENAI_API_BASE"),
+    Dotenv.Get("OPENAI_API_KEY"),
+    serviceId: "default",
+    modelId: "gpt-5-mini");
+
+#!csharp
+
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+using Azure.AI.OpenAI;
+
+string prompt = "Maria ha 4 casse di mele, ogni cassa ha 12 mele. Andando al mercato le cade una cassa, poi regala due mele a guido. Quante mele le rimangono?";
+
+KernelArguments ka = new();
+ka.ExecutionSettings = new Dictionary<string, PromptExecutionSettings>()
+{
+    ["default"] = new OpenAIPromptExecutionSettings()
+    {
+        ReasoningEffort = "high",
+    }
+};
+
+var kernel = kernelBuilder.Build();
+var result = await kernel.InvokePromptAsync(prompt, arguments: ka);
+Console.WriteLine(result);
+
+#!csharp
+
+if (result.Metadata.TryGetValue("Usage", out var usage)) 
+{
+    Console.WriteLine("Usage: {0}", usage.GetType().FullName);
+    if (usage is OpenAI.Chat.ChatTokenUsage cu) 
+    {
+        Console.WriteLine("Reasoning token count: {0}",cu.OutputTokenDetails.ReasoningTokenCount);
+        Console.WriteLine("Usage total token {0}, completion tokens {1} prompt tokens {2}", cu.TotalTokenCount, cu.OutputTokenCount, cu.InputTokenCount);
+    }
+}
