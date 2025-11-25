@@ -17,6 +17,8 @@ __pycache__/
 **/downloads/
 **/azure-di-output/
 
+kernel-memory-extraction/localvision/
+
 **/node_modules/
 
 **/.vs/** 
