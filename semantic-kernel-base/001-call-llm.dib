@@ -2,6 +2,12 @@
 
 {"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
 
+#!markdown
+
+# Esempio base
+
+Questo esempio serve per vedere come usare SK per chiamare un modello.
+
 #!csharp
 
 #!import ../dotenv.cs
@@ -33,6 +39,33 @@ kernelBuilder.Services.AddAzureOpenAIChatCompletion(
     modelId: deployment);
 
 #!csharp
+
+var kernel = kernelBuilder.Build();
+var result = await kernel.InvokePromptAsync("Which is the capital of France. Answer as pirate Barbossa!!!");
+Console.WriteLine(result);
+
+#!markdown
+
+# New model for GPT5
+
+Gpt-5 introduced a new response model and a new way of interacting with the api with different parameters
+
+#!csharp
+
+var kernelBuilder = Kernel.CreateBuilder();
+kernelBuilder.Services.AddLogging(l => l
+    .SetMinimumLevel(LogLevel.Trace)
+    .AddConsole()
+    .AddDebug()
+);
+
+var deployment = Dotenv.Get("OPENAI_DEFAULT_DEPLOYMENT");
+kernelBuilder.Services.AddAzureOpenAIChatCompletion(
+    "gpt-5", 
+    Dotenv.Get("OPENAI_API_BASE"),
+    Dotenv.Get("OPENAI_API_KEY"),
+    serviceId: "default",
+    modelId: "gpt-5");
 
 var kernel = kernelBuilder.Build();
 var result = await kernel.InvokePromptAsync("Which is the capital of France. Answer as pirate Barbossa!!!");
