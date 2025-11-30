@@ -12,7 +12,7 @@ namespace DocExtraction.Examples;
 
 public static class AzureDocIntelligence
 {
-    private const string DefaultPdfPath = "/Users/gianmariaricci/Downloads/manualeDreame2.pdf";
+    private const string DefaultPdfPath = "C:\\temp\\manualeDreame2.pdf";
 
     public static async Task RunAsync()
     {

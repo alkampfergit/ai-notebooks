@@ -29,7 +29,7 @@ public class ImageDescriptionSchema
 
 public static class LlmImageDescription
 {
-    private const string DefaultPdfPath = "/Users/gianmariaricci/Downloads/animals.pdf";
+    private const string DefaultPdfPath = "C:\\temp\\animals.pdf";
 
     public static async Task RunAsync()
     {

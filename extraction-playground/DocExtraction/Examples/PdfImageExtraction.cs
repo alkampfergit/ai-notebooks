@@ -9,7 +9,7 @@ public static class PdfImageExtraction
     public static void Run()
     {
         // Ask user for PDF file path with default value
-        var defaultPath = "/Users/gianmariaricci/Downloads/manualeDreame2.pdf";
+        var defaultPath = "C:\\temp\\manualedreame2.pdf";
         var filePath = AnsiConsole.Prompt(
             new TextPrompt<string>("Enter the [green]PDF file path[/]:")
                 .DefaultValue(defaultPath)

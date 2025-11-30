@@ -9,7 +9,7 @@ namespace DocExtraction.Examples;
 
 public static class PdfEmbeddingExample
 {
-    private const string DefaultPdfPath = "/Users/gianmariaricci/Downloads/animals.pdf";
+    private const string DefaultPdfPath = "C:\\temp\\animals.pdf";
     private const string VectorDbFileName = "vectordb.json";
 
     public static async Task RunAsync()
