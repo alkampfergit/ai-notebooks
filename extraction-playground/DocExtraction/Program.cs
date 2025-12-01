@@ -22,6 +22,7 @@ while (true)
                 "Hello World Example",
                 "PDF Image Extraction",
                 "LLM Image Description (GPT based)",
+                "Local LLM Image Description (Gemma via Semantic Kernel)",
                 "Azure Document Intelligence",
                 "PDF Embedding (Render + Azure Embeddings)",
                 "Exit"
@@ -40,6 +41,9 @@ while (true)
             break;
         case "LLM Image Description (GPT based)":
             await LlmImageDescription.RunAsync();
+            break;
+        case "Local LLM Image Description (Gemma via Semantic Kernel)":
+            await LocalLlmImageDescription.RunAsync();
             break;
         case "Azure Document Intelligence":
             await AzureDocIntelligence.RunAsync();
