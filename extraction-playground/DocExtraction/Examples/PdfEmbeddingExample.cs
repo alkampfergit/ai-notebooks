@@ -284,16 +284,17 @@ public static class PdfEmbeddingExample
                 var textInput = new List<string> { textQuery };
                 var textRequestOptions = new EmbeddingsOptions(textInput)
                 {
-                    Model = "Cohere-embed-v3-multilingual"
+                    Model = "Cohere-embed-v3-multilingual",
+                    InputType = EmbeddingInputType.Query
                 };
 
-                // Use EmbeddingsClient for text embeddings
+                // Use EmbeddingsClient for text embeddingsgit
                 var embeddingsClient = new EmbeddingsClient(
                     new Uri(azureInferenceEndpoint),
                     new AzureKeyCredential(azureInferenceCredential)
                 );
 
-                var textResponse = embeddingsClient.Embed(textRequestOptions);
+                var textResponse = await embeddingsClient.EmbedAsync(textRequestOptions);
 
                 // Convert BinaryData embedding to float array
                 var embeddingBinaryData = textResponse.Value.Data[0].Embedding;
