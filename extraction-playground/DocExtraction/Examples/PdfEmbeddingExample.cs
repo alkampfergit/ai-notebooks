@@ -1,15 +1,50 @@
 using Azure;
 using Azure.AI.Inference;
 using Azure.Core;
+using Azure.Core.Pipeline;
 using Spectre.Console;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Rendering.Skia;
 
 namespace DocExtraction.Examples;
 
+/// <summary>
+/// Custom HTTP policy to add the extra-parameters header to handle Azure embedding API parameter validation.
+/// 
+/// This addresses the "Extra Parameters ['stream'] Not Allowed" error that emerged in Azure's embedding API
+/// (January 2026). The API now rejects unknown parameters by default. This policy adds the "extra-parameters" 
+/// header with value "drop" to instruct the API to silently remove unknown parameters instead of throwing errors.
+/// 
+/// Valid values for parameter handling:
+/// - "error" (default): Returns 400 error if extra parameters exist
+/// - "drop": Silently removes unknown parameters (recommended)
+/// - "pass-through": Forwards unknown parameters to the underlying model
+/// </summary>
+internal class ExtraParametersPolicy : HttpPipelinePolicy
+{
+    private readonly string _parameterHandling;
+
+    public ExtraParametersPolicy(string parameterHandling = "drop")
+    {
+        _parameterHandling = parameterHandling;
+    }
+
+    public override void Process(HttpMessage message, ReadOnlyMemory<HttpPipelinePolicy> pipeline)
+    {
+        message.Request.Headers.Add("extra-parameters", _parameterHandling);
+        ProcessNext(message, pipeline);
+    }
+
+    public override ValueTask ProcessAsync(HttpMessage message, ReadOnlyMemory<HttpPipelinePolicy> pipeline)
+    {
+        message.Request.Headers.Add("extra-parameters", _parameterHandling);
+        return ProcessNextAsync(message, pipeline);
+    }
+}
+
 public static class PdfEmbeddingExample
 {
-    private const string DefaultPdfPath = "/Users/gianmariaricci/Downloads/animals.pdf";
+    private const string DefaultPdfPath = "S:\\OneDrive\\develop\\CorsiPresentazioni\\20251202 - WPC\\animals.pdf";
     private const string VectorDbFileName = "vectordb.json";
 
     public static async Task RunAsync()
@@ -133,7 +168,7 @@ public static class PdfEmbeddingExample
                     {
                         var task = ctx.AddTask("[green]Rendering PDF pages[/]", maxValue: pageCount);
 
-                        for (int pageNumber = 1; pageNumber <= pageCount; pageNumber++)
+                        for (int pageNumber = 1; pageNumber <= 4; pageNumber++)
                         {
                             var outputFileName = Path.Combine(rendersDirectory, $"page_{pageNumber:D3}.png");
 
@@ -162,12 +197,13 @@ public static class PdfEmbeddingExample
             }
 
             // Step 2: Initialize Azure Embedding Client
-            var azureInferenceEndpoint = Dotenv.Get("AZURE_EMBEDDING_DEPLOYMENT");
+            var azureInferenceEndpoint = Dotenv.Get("AZURE_EMBEDDING_ENDPOINT");
             var azureInferenceCredential = Dotenv.Get("AZURE_EMBEDDING_KEY");
+            var azureInferenceModel = Dotenv.Get("AZURE_EMBEDDING_MODEL") ?? "Cohere-embed-v3-multilingual";
 
             if (string.IsNullOrEmpty(azureInferenceEndpoint) || string.IsNullOrEmpty(azureInferenceCredential))
             {
-                AnsiConsole.MarkupLine("[yellow]Warning: AZURE_EMBEDDING_DEPLOYMENT and AZURE_EMBEDDING_KEY not set in environment[/]");
+                AnsiConsole.MarkupLine("[yellow]Warning: AZURE_EMBEDDING_ENDPOINT and AZURE_EMBEDDING_KEY not set in environment[/]");
                 AnsiConsole.MarkupLine("[yellow]Skipping embedding generation (set these variables to enable)[/]");
                 AnsiConsole.WriteLine();
 
@@ -176,9 +212,13 @@ public static class PdfEmbeddingExample
                 throw new InvalidOperationException("Azure credentials not configured");
             }
 
+            var clientOptions = new AzureAIInferenceClientOptions();
+            clientOptions.AddPolicy(new ExtraParametersPolicy("drop"), HttpPipelinePosition.PerCall);
+            
             var client = new ImageEmbeddingsClient(
                 new Uri(azureInferenceEndpoint),
-                new AzureKeyCredential(azureInferenceCredential)
+                new AzureKeyCredential(azureInferenceCredential), 
+                clientOptions
             );
 
             AnsiConsole.MarkupLine("[green]Azure embedding client initialized[/]");
@@ -210,7 +250,7 @@ public static class PdfEmbeddingExample
                         var input = new List<ImageEmbeddingInput> { imageInput };
                         var requestOptions = new ImageEmbeddingsOptions(input)
                         {
-                            Model = "Cohere-embed-v3-multilingual"
+                            Model = azureInferenceModel,
                         };
 
                         var response = client.Embed(requestOptions);
@@ -288,9 +328,13 @@ public static class PdfEmbeddingExample
                 };
 
                 // Use EmbeddingsClient for text embeddings
+                var embeddingsClientOptions = new AzureAIInferenceClientOptions();
+                embeddingsClientOptions.AddPolicy(new ExtraParametersPolicy("drop"), HttpPipelinePosition.PerCall);
+                
                 var embeddingsClient = new EmbeddingsClient(
                     new Uri(azureInferenceEndpoint),
-                    new AzureKeyCredential(azureInferenceCredential)
+                    new AzureKeyCredential(azureInferenceCredential),
+                    embeddingsClientOptions
                 );
 
                 var textResponse = embeddingsClient.Embed(textRequestOptions);
