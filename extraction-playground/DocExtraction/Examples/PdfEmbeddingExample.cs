@@ -327,8 +327,10 @@ public static class PdfEmbeddingExample
                     Model = "Cohere-embed-v3-multilingual"
                 };
 
+                textRequestOptions.InputType = EmbeddingInputType.Text;
+
                 // Use EmbeddingsClient for text embeddings
-                var embeddingsClientOptions = new AzureAIInferenceClientOptions();
+                var embeddingsClientOptions = new AzureAIInferenceClientOptions()
                 embeddingsClientOptions.AddPolicy(new ExtraParametersPolicy("drop"), HttpPipelinePosition.PerCall);
                 
                 var embeddingsClient = new EmbeddingsClient(

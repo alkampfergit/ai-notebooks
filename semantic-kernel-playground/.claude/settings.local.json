@@ -13,7 +13,9 @@
       "Bash(find:*)",
       "Bash(dotnet build:*)",
       "Bash(git checkout SkPlaygroundTests/NextStepManagerTests.cs)",
-      "Bash(dotnet list SkPlaygroundTests/SkPlaygroundTests.csproj package)"
+      "Bash(dotnet list SkPlaygroundTests/SkPlaygroundTests.csproj package)",
+      "Bash(mkdir -p Alkampfer.Sgr/Models Alkampfer.Sgr/Utils Alkampfer.Sgr/BusinessFunctions)",
+      "Bash(mkdir -p Alkampfer.Sgr.Playground/Models Alkampfer.Sgr.Playground/BusinessFunctions Alkampfer.Sgr.Playground/Services Alkampfer.Sgr.Playground/Utils Alkampfer.Sgr.Playground/SqlScenario/SqlServer/SqlUtils)"
     ],
     "deny": [],
     "ask": []
