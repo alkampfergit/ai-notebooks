@@ -6,6 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <RootNamespace>Alkampfer.Sgr.Tests</RootNamespace>
+    <AssemblyName>Alkampfer.Sgr.Tests</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
