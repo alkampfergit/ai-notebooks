@@ -8,13 +8,14 @@ using Newtonsoft.Json;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
-using SkPlayground.Utils;
+using Alkampfer.Sgr.Utils;
+using Alkampfer.Sgr.Playground.Utils;
 using Newtonsoft.Json.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NUnit.Framework.Internal;
 
-namespace SkPlaygroundTests;
+namespace Alkampfer.Sgr.Tests;
 
 public class PolimorphicSchemaTests : SemanticKernelTestBase
 {

@@ -5,7 +5,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.ComponentModel.DataAnnotations;
 
-namespace SkPlaygroundTests;
+namespace Alkampfer.Sgr.Tests;
 
 /// <summary>
 /// Unified manager for PetOwner schema generation and polymorphic deserialization.

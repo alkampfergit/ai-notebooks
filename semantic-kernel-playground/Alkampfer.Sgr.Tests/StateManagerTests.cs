@@ -1,7 +1,8 @@
-using SkPlayground.Services;
-using SkPlayground.Models;
+using Alkampfer.Sgr.Services;
+using Alkampfer.Sgr.Models;
+using Alkampfer.Sgr.Playground.Models;
 
-namespace SkPlaygroundTests;
+namespace Alkampfer.Sgr.Tests;
 
 [TestFixture]
 public class StateManagerTests

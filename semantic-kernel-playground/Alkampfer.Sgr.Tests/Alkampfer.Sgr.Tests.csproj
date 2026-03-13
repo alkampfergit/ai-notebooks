@@ -35,7 +35,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SkPlayground\SkPlayground.csproj" />
     <ProjectReference Include="..\Alkampfer.Sgr\Alkampfer.Sgr.csproj" />
     <ProjectReference Include="..\Alkampfer.Sgr.Playground\Alkampfer.Sgr.Playground.csproj" />
   </ItemGroup>

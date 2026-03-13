@@ -1,8 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using SkPlayground.Utils;
+using Alkampfer.Sgr.Utils;
 
-namespace SkPlaygroundTests;
+namespace Alkampfer.Sgr.Tests;
 
 /// <summary>
 /// **Tests for PolymorphicSchemaManager Description attribute handling**

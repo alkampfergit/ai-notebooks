@@ -1,13 +1,14 @@
 using NUnit.Framework;
 using System.Text.Json;
-using SkPlayground.Utils;
-using SkPlayground.Models;
-using SkPlayground.BusinessFunctions;
+using Alkampfer.Sgr.Utils;
+using Alkampfer.Sgr.Playground.Utils;
+using Alkampfer.Sgr.Models;
+using Alkampfer.Sgr.Playground.BusinessFunctions;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using OpenAI.Chat;
 
-namespace SkPlaygroundTests;
+namespace Alkampfer.Sgr.Tests;
 
 /// <summary>
 /// Tests for NextStepManager polymorphic schema generation and deserialization functionality

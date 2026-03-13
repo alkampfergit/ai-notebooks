@@ -1,13 +1,14 @@
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using OpenAI.Chat;
-using SkPlayground.Utils;
+using Alkampfer.Sgr.Utils;
+using Alkampfer.Sgr.Playground.Utils;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using ActualNextStep = SkPlayground.Models.NextStep;
-using ActualToolCall = SkPlayground.Models.ToolCall;
+using ActualNextStep = Alkampfer.Sgr.Models.NextStep;
+using ActualToolCall = Alkampfer.Sgr.Models.ToolCall;
 
-namespace SkPlaygroundTests;
+namespace Alkampfer.Sgr.Tests;
 
 /// <summary>
 /// **Tests for generic PolymorphicSchemaManager functionality**
@@ -38,9 +39,9 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
     {
         // Create manager with NextStep as container and ToolCall as polymorphic base
         _manager = new PolymorphicSchemaManager<ActualNextStep, ActualToolCall>()
-            .AddDerivedType<SkPlayground.BusinessFunctions.SendEmailToolCall>()
-            .AddDerivedType<SkPlayground.BusinessFunctions.GetCustomerDataToolCall>()
-            .AddDerivedType<SkPlayground.BusinessFunctions.IssueInvoiceToolCall>();
+            .AddDerivedType<Alkampfer.Sgr.Playground.BusinessFunctions.SendEmailToolCall>()
+            .AddDerivedType<Alkampfer.Sgr.Playground.BusinessFunctions.GetCustomerDataToolCall>()
+            .AddDerivedType<Alkampfer.Sgr.Playground.BusinessFunctions.IssueInvoiceToolCall>();
     }
 
     /// <summary>
@@ -152,8 +153,8 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
     {
         // **Arrange**: Specify only SendEmail and IssueInvoice types
         var includedTypes = new[] {
-            typeof(SkPlayground.BusinessFunctions.SendEmailToolCall),
-            typeof(SkPlayground.BusinessFunctions.IssueInvoiceToolCall)
+            typeof(Alkampfer.Sgr.Playground.BusinessFunctions.SendEmailToolCall),
+            typeof(Alkampfer.Sgr.Playground.BusinessFunctions.IssueInvoiceToolCall)
         };
 
         // **Act**: Generate schema with specific types
@@ -210,9 +211,9 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         Assert.That(result.TaskCompleted, Is.False, "TaskCompleted should be correctly deserialized");
 
         // **Assert**: Verify polymorphic property is correctly typed
-        Assert.That(result.Function, Is.InstanceOf<SkPlayground.BusinessFunctions.SendEmailToolCall>(), "ToolCall should be deserialized as SendEmailToolCall");
+        Assert.That(result.Function, Is.InstanceOf<Alkampfer.Sgr.Playground.BusinessFunctions.SendEmailToolCall>(), "ToolCall should be deserialized as SendEmailToolCall");
 
-        var emailCall = result.Function as SkPlayground.BusinessFunctions.SendEmailToolCall;
+        var emailCall = result.Function as Alkampfer.Sgr.Playground.BusinessFunctions.SendEmailToolCall;
         Assert.That(emailCall, Is.Not.Null, "Should be able to cast ToolCall to SendEmailToolCall");
         Assert.That(emailCall!.Subject, Is.EqualTo("Order Confirmation"), "Subject should be correctly deserialized");
         Assert.That(emailCall.Message, Is.EqualTo("Your order has been processed"), "Message should be correctly deserialized");
@@ -299,9 +300,9 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
     public void GetDiscriminatorValue_ShouldConvertPascalCaseToSnakeCase()
     {
         // **Act & Assert**: Verify discriminator conversion
-        var sendEmailDiscriminator = PolymorphicSchemaManager<ActualNextStep, ActualToolCall>.GetDiscriminatorValue(typeof(SkPlayground.BusinessFunctions.SendEmailToolCall));
-        var getCustomerDiscriminator = PolymorphicSchemaManager<ActualNextStep, ActualToolCall>.GetDiscriminatorValue(typeof(SkPlayground.BusinessFunctions.GetCustomerDataToolCall));
-        var issueInvoiceDiscriminator = PolymorphicSchemaManager<ActualNextStep, ActualToolCall>.GetDiscriminatorValue(typeof(SkPlayground.BusinessFunctions.IssueInvoiceToolCall));
+        var sendEmailDiscriminator = PolymorphicSchemaManager<ActualNextStep, ActualToolCall>.GetDiscriminatorValue(typeof(Alkampfer.Sgr.Playground.BusinessFunctions.SendEmailToolCall));
+        var getCustomerDiscriminator = PolymorphicSchemaManager<ActualNextStep, ActualToolCall>.GetDiscriminatorValue(typeof(Alkampfer.Sgr.Playground.BusinessFunctions.GetCustomerDataToolCall));
+        var issueInvoiceDiscriminator = PolymorphicSchemaManager<ActualNextStep, ActualToolCall>.GetDiscriminatorValue(typeof(Alkampfer.Sgr.Playground.BusinessFunctions.IssueInvoiceToolCall));
 
         Assert.That(sendEmailDiscriminator, Is.EqualTo("SendEmailToolCall"), "SendEmailToolCall should convert to send_email_tool_call");
         Assert.That(getCustomerDiscriminator, Is.EqualTo("GetCustomerDataToolCall"), "GetCustomerDataToolCall should convert to get_customer_data_tool_call");
@@ -404,7 +405,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
     {
         // **Arrange**: Create manager with only SendEmail
         var manager = new PolymorphicSchemaManager<ActualNextStep, ActualToolCall>()
-            .AddDerivedType<SkPlayground.BusinessFunctions.SendEmailToolCall>();
+            .AddDerivedType<Alkampfer.Sgr.Playground.BusinessFunctions.SendEmailToolCall>();
 
         // **Act**: Generate schema
         var schemaJson = manager.GenerateSchema();
@@ -521,9 +522,9 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         // **Assert**: Verify deserialization succeeded
         Assert.That(nextStep, Is.Not.Null, "Should deserialize NextStep");
         Assert.That(nextStep!.CurrentState, Is.EqualTo("Retrieving customer information"));
-        Assert.That(nextStep.Function, Is.TypeOf<SkPlayground.BusinessFunctions.GetCustomerDataToolCall>(), "ToolCall should be GetCustomerDataToolCall");
+        Assert.That(nextStep.Function, Is.TypeOf<Alkampfer.Sgr.Playground.BusinessFunctions.GetCustomerDataToolCall>(), "ToolCall should be GetCustomerDataToolCall");
 
-        var getCustomerCall = nextStep.Function as SkPlayground.BusinessFunctions.GetCustomerDataToolCall;
+        var getCustomerCall = nextStep.Function as Alkampfer.Sgr.Playground.BusinessFunctions.GetCustomerDataToolCall;
         Assert.That(getCustomerCall, Is.Not.Null, "Should cast to GetCustomerDataToolCall");
         Assert.That(getCustomerCall!.Email, Is.EqualTo("customer@example.com"));
     }
@@ -537,12 +538,12 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
     {
         // **Arrange**: Create manager with only SendEmail support
         var sendEmailOnlyManager = new PolymorphicSchemaManager<ActualNextStep, ActualToolCall>()
-            .AddDerivedType<SkPlayground.BusinessFunctions.SendEmailToolCall>();
+            .AddDerivedType<Alkampfer.Sgr.Playground.BusinessFunctions.SendEmailToolCall>();
         var sendEmailSchema = sendEmailOnlyManager.GenerateSchema();
 
         // **Arrange**: Create manager with only GetCustomerData support
         var getCustomerOnlyManager = new PolymorphicSchemaManager<ActualNextStep, ActualToolCall>()
-            .AddDerivedType<SkPlayground.BusinessFunctions.GetCustomerDataToolCall>();
+            .AddDerivedType<Alkampfer.Sgr.Playground.BusinessFunctions.GetCustomerDataToolCall>();
         var getCustomerSchema = getCustomerOnlyManager.GenerateSchema();
 
         // **Assert**: Verify both schemas are different but valid
@@ -561,7 +562,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
     public void GenerateSchema_WithSpecificTypes_OnlyIncludesSpecifiedTypes()
     {
         // **Act**: Generate schema with only specific types
-        var specifiedTypes = new[] { typeof(SkPlayground.BusinessFunctions.SendEmailToolCall), typeof(SkPlayground.BusinessFunctions.GetCustomerDataToolCall) };
+        var specifiedTypes = new[] { typeof(Alkampfer.Sgr.Playground.BusinessFunctions.SendEmailToolCall), typeof(Alkampfer.Sgr.Playground.BusinessFunctions.GetCustomerDataToolCall) };
         var schemaJson = _manager.GenerateSchema(specifiedTypes);
         var schemaObj = JsonDocument.Parse(schemaJson);
         var root = schemaObj.RootElement;
@@ -589,7 +590,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
     public void GenerateSchema_WithSpecificTypes_CanIncludeSendEmailOnly()
     {
         // **Act**: Generate schema with only SendEmail
-        var sendEmailOnlyTypes = new[] { typeof(SkPlayground.BusinessFunctions.SendEmailToolCall) };
+        var sendEmailOnlyTypes = new[] { typeof(Alkampfer.Sgr.Playground.BusinessFunctions.SendEmailToolCall) };
         var schemaJson = _manager.GenerateSchema(sendEmailOnlyTypes);
         var schemaObj = JsonDocument.Parse(schemaJson);
         var root = schemaObj.RootElement;
@@ -616,7 +617,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
     public void GenerateSchema_WithSpecificTypes_CanIncludeBothTypes()
     {
         // **Act**: Generate schema with both types explicitly specified
-        var bothTypes = new[] { typeof(SkPlayground.BusinessFunctions.SendEmailToolCall), typeof(SkPlayground.BusinessFunctions.GetCustomerDataToolCall) };
+        var bothTypes = new[] { typeof(Alkampfer.Sgr.Playground.BusinessFunctions.SendEmailToolCall), typeof(Alkampfer.Sgr.Playground.BusinessFunctions.GetCustomerDataToolCall) };
         var schemaJson = _manager.GenerateSchema(bothTypes);
 
         // **Act**: Generate default schema for comparison
@@ -635,10 +636,10 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
     {
         // **Arrange**: Create manager with only SendEmail configured
         var manager = new PolymorphicSchemaManager<ActualNextStep, ActualToolCall>()
-            .AddDerivedType<SkPlayground.BusinessFunctions.SendEmailToolCall>();
+            .AddDerivedType<Alkampfer.Sgr.Playground.BusinessFunctions.SendEmailToolCall>();
 
         // **Act & Assert**: Try to generate schema including unconfigured type
-        var unconfiguredTypes = new[] { typeof(SkPlayground.BusinessFunctions.SendEmailToolCall), typeof(SkPlayground.BusinessFunctions.GetCustomerDataToolCall) };
+        var unconfiguredTypes = new[] { typeof(Alkampfer.Sgr.Playground.BusinessFunctions.SendEmailToolCall), typeof(Alkampfer.Sgr.Playground.BusinessFunctions.GetCustomerDataToolCall) };
 
         Assert.Throws<ArgumentException>(() => manager.GenerateSchema(unconfiguredTypes),
             "Should throw when trying to include unconfigured type");
@@ -664,7 +665,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
     public void GenerateSchema_WithSpecificTypes_DeserializationStillWorksForAllConfiguredTypes()
     {
         // **Arrange**: Generate schema with only SendEmail
-        var sendEmailOnlyTypes = new[] { typeof(SkPlayground.BusinessFunctions.SendEmailToolCall) };
+        var sendEmailOnlyTypes = new[] { typeof(Alkampfer.Sgr.Playground.BusinessFunctions.SendEmailToolCall) };
         var schemaJson = _manager.GenerateSchema(sendEmailOnlyTypes);
 
         // **Arrange**: Prepare test JSON for both types
@@ -725,7 +726,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
     public void SchemaCaching_WorksWithSelectiveGeneration()
     {
         // **Act**: Generate selective schemas multiple times
-        var sendEmailOnly = new[] { typeof(SkPlayground.BusinessFunctions.SendEmailToolCall) };
+        var sendEmailOnly = new[] { typeof(Alkampfer.Sgr.Playground.BusinessFunctions.SendEmailToolCall) };
         var schema1 = _manager.GenerateSchema(sendEmailOnly);
         var schema2 = _manager.GenerateSchema(sendEmailOnly);
 
@@ -733,7 +734,7 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
         Assert.That(schema1, Is.EqualTo(schema2), "Selective schema generation should be consistent");
 
         // **Act**: Different selection should produce different schema
-        var bothTypes = new[] { typeof(SkPlayground.BusinessFunctions.SendEmailToolCall), typeof(SkPlayground.BusinessFunctions.GetCustomerDataToolCall) };
+        var bothTypes = new[] { typeof(Alkampfer.Sgr.Playground.BusinessFunctions.SendEmailToolCall), typeof(Alkampfer.Sgr.Playground.BusinessFunctions.GetCustomerDataToolCall) };
         var schema3 = _manager.GenerateSchema(bothTypes);
 
         // **Assert**: Different type selections should produce different schemas
@@ -749,12 +750,12 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
     {
         // **Arrange**: Create two managers with types added in different orders
         var manager1 = new PolymorphicSchemaManager<ActualNextStep, ActualToolCall>()
-            .AddDerivedType<SkPlayground.BusinessFunctions.SendEmailToolCall>()
-            .AddDerivedType<SkPlayground.BusinessFunctions.GetCustomerDataToolCall>();
+            .AddDerivedType<Alkampfer.Sgr.Playground.BusinessFunctions.SendEmailToolCall>()
+            .AddDerivedType<Alkampfer.Sgr.Playground.BusinessFunctions.GetCustomerDataToolCall>();
 
         var manager2 = new PolymorphicSchemaManager<ActualNextStep, ActualToolCall>()
-            .AddDerivedType<SkPlayground.BusinessFunctions.GetCustomerDataToolCall>()
-            .AddDerivedType<SkPlayground.BusinessFunctions.SendEmailToolCall>();
+            .AddDerivedType<Alkampfer.Sgr.Playground.BusinessFunctions.GetCustomerDataToolCall>()
+            .AddDerivedType<Alkampfer.Sgr.Playground.BusinessFunctions.SendEmailToolCall>();
 
         // **Act**: Generate schemas
         var schema1 = manager1.GenerateSchema();
@@ -904,9 +905,9 @@ public class PolymorphicSchemaManagerTests : SemanticKernelTestBase
             Assert.That(nextStep!.CurrentState, Is.Not.Null.And.Not.Empty, "CurrentState should be populated");
             Assert.That(nextStep.PlanRemainingStepsBrief, Is.Not.Null.And.Not.Empty, "PlanRemainingStepsBrief should be populated");
             Assert.That(nextStep.TaskCompleted, Is.False, "TaskCompleted should be false as requested");
-            Assert.That(nextStep.Function, Is.InstanceOf<SkPlayground.BusinessFunctions.SendEmailToolCall>(), "ToolCall should be SendEmailToolCall");
+            Assert.That(nextStep.Function, Is.InstanceOf<Alkampfer.Sgr.Playground.BusinessFunctions.SendEmailToolCall>(), "ToolCall should be SendEmailToolCall");
 
-            var sendEmailCall = nextStep.Function as SkPlayground.BusinessFunctions.SendEmailToolCall;
+            var sendEmailCall = nextStep.Function as Alkampfer.Sgr.Playground.BusinessFunctions.SendEmailToolCall;
             Assert.That(sendEmailCall, Is.Not.Null, "Should be able to cast ToolCall to SendEmailToolCall");
             Assert.That(sendEmailCall!.Subject, Is.Not.Null.And.Not.Empty, "Email subject should not be empty");
             Assert.That(sendEmailCall.Message, Is.Not.Null.And.Not.Empty, "Email message should not be empty");

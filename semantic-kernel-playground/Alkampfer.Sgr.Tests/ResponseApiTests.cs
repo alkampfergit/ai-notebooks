@@ -1,6 +1,7 @@
 using NUnit.Framework;
-using SkPlayground.Utils;
-using SkPlayground.BusinessFunctions;
+using Alkampfer.Sgr.Utils;
+using Alkampfer.Sgr.Playground.Utils;
+using Alkampfer.Sgr.Playground.BusinessFunctions;
 using Azure.AI.OpenAI;
  using System;
 using System.Collections.Generic;
@@ -12,7 +13,7 @@ using System.ClientModel;
 using Spectre.Console;
 using OpenAI.Containers;
 
-namespace SkPlaygroundTests;
+namespace Alkampfer.Sgr.Tests;
 
 #pragma warning disable OPENAI001
 

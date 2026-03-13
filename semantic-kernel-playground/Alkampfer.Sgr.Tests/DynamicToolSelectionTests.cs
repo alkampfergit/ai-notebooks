@@ -1,11 +1,12 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
-using SkPlayground.BusinessFunctions;
-using SkPlayground.Services;
+using Alkampfer.Sgr.Playground.BusinessFunctions;
+using Alkampfer.Sgr.Services;
+using Alkampfer.Sgr.Playground.Services;
 using System.Linq;
 
-namespace SkPlaygroundTests;
+namespace Alkampfer.Sgr.Tests;
 
 /// <summary>
 /// **Tests for dynamic tool selection functionality**

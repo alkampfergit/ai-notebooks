@@ -3,11 +3,12 @@ using NJsonSchema.Generation;
 using NJsonSchema.NewtonsoftJson.Generation;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
-using SkPlayground.Utils;
+using Alkampfer.Sgr.Utils;
+using Alkampfer.Sgr.Playground.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace SkPlaygroundTests;
+namespace Alkampfer.Sgr.Tests;
 
 public abstract class SemanticKernelTestBase
 {
